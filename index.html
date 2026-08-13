@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SFS Business Management System</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="loginPage" class="login-page">
+  <div class="login-card">
+    <img src="logo.png" class="login-logo" alt="Standard Fluid Systems">
+    <h1>Business Management System</h1>
+    <p class="muted">Inventory • Sales • Delivery Challans • Reports</p>
+    <form id="loginForm">
+      <label>Username</label><input id="username" required placeholder="Enter username">
+      <label>Password</label><input id="password" type="password" required placeholder="Enter password">
+      <button class="primary full" type="submit">Login</button>
+      <p id="loginError" class="error"></p>
+    </form>
+    <div class="demo-note">Demo login: <b>admin</b> / <b>admin123</b></div>
+  </div>
+</div>
+
+<div id="appPage" class="app hidden">
+  <aside class="sidebar">
+    <div class="logo-wrap"><img src="logo.png" alt="Standard Fluid Systems"></div>
+    <nav>
+      <a class="active" href="#" data-page="dashboard">⌂ <span>Dashboard</span></a>
+      <a href="#" data-page="products">▣ <span>Products</span></a>
+      <a href="#" data-page="inward">↓ <span>Inward</span></a>
+      <a href="#" data-page="challan">▰ <span>Delivery Challan</span></a>
+      <a href="#" data-page="invoices">▤ <span>Invoices</span></a>
+      <a href="#" data-page="purchases">▥ <span>Purchases</span></a>
+      <a href="#" data-page="customers">♙ <span>Customers</span></a>
+      <a href="#" data-page="suppliers">♧ <span>Suppliers</span></a>
+      <a href="#" data-page="reports">◫ <span>Reports</span></a>
+      <a href="#" data-page="movement">↕ <span>Stock Movement</span></a>
+      <a href="#" data-page="users">⚙ <span>Users & Roles</span></a>
+      <a href="#" data-page="settings">⚙ <span>Settings</span></a>
+    </nav>
+    <button id="logoutBtn" class="logout">↪ Logout</button>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button id="menuBtn" class="menu">☰</button>
+      <div><h2 id="pageTitle">Dashboard</h2><p id="pageSubtitle">Overview of your business</p></div>
+      <div class="user"><div class="avatar">A</div><div><b>Admin</b><small>Administrator</small></div></div>
+    </header>
+    <section id="content" class="content"></section>
+  </main>
+</div>
+
+<!-- Product Modal -->
+<div id="productModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div><h3 id="modalTitle">Add Product</h3><p>Enter product master information.</p></div>
+      <button id="closeModal" class="icon-btn">×</button>
+    </div>
+    <form id="productForm">
+      <input type="hidden" id="editIndex">
+      <div class="form-grid">
+        <div><label>Model / Part No. *</label><input id="pModel" required></div>
+        <div><label>Description *</label><input id="pDescription" required></div>
+        <div><label>Category *</label>
+          <select id="pCategory" required>
+            <option value="">Select Category</option>
+            <option>Airline Equipment</option><option>Valves</option><option>Cylinder</option>
+            <option>Fittings/Tubing</option><option>Others</option>
+          </select>
+        </div>
+        <div><label>Brand</label><input id="pBrand"></div>
+        <div><label>Unit</label><select id="pUnit"><option>Pcs</option><option>Mtr</option><option>Set</option><option>Kg</option><option>Other</option></select></div>
+        <div><label>Location</label><input id="pLocation" placeholder="e.g. A-01-01"></div>
+        <div><label>Cost Price</label><input id="pCost" type="number" min="0" step="0.01"></div>
+        <div><label>Sale Price</label><input id="pSale" type="number" min="0" step="0.01"></div>
+        <div class="full-field"><label>Product Image</label><input id="pImage" type="file" accept="image/*"><small>Optional. The image is stored locally in this prototype.</small></div>
+        <div class="full-field"><label>Remarks</label><textarea id="pRemarks" rows="3"></textarea></div>
+        <div><label>Status</label><select id="pStatus"><option>Active</option><option>Inactive</option></select></div>
+      </div>
+      <div class="modal-actions"><button type="button" id="cancelProduct" class="secondary">Cancel</button><button class="primary" type="submit">Save Product</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
