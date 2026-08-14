@@ -1,6 +1,6 @@
-SFS STOCK2 INWARD DESIGN / PROTOTYPE
+SFS STOCK2 INWARD WORKING PROTOTYPE
 
-Files in this package:
+Files:
 index.html
 styles.css
 app.js
@@ -8,17 +8,16 @@ logo.png
 STOCK2_Products.csv
 STOCK2_Stock_Transactions.csv
 
-Inward page:
+Working in this prototype:
 - New Inward form
-- Inward number
-- Date
 - Product selection
-- Quantity
-- Source Type: Import / Local Purchase / Customer Return / Transfer In / Other
-- Supplier / Source
-- Supplier reference
-- Purchase cost
-- Remarks
-- Live stock preview: Current + Inward = New Stock
+- Live Current + Qty = New Stock preview
+- Save Inward
+- Product Current Stock increases immediately in this browser
+- Inward entry appears in Inward list
+- A new IN stock movement is added to the product history
+- Data persists in browser localStorage
 
-This is the front-end prototype. The Save button does not yet write to Google Sheet/backend.
+Important:
+This is still a browser-local prototype. It does NOT yet write to Google Sheets or a shared database, so changes are only visible in the same browser/device.
+Next phase: connect this exact workflow to Google Apps Script/Google Sheet backend for shared multi-user data.
