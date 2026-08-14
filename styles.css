@@ -4,3 +4,5 @@
 
 .inward-card{width:min(780px,96vw)}.stock-preview{margin-top:18px;background:#f5f9fe;border:1px solid #dfe9f4;border-radius:10px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:12px}.stock-preview>div{min-width:110px;text-align:center}.stock-preview span{display:block;color:#7d8b9a;font-size:10px;margin-bottom:4px}.stock-preview b{font-size:20px}.stock-preview .arrow{min-width:auto;font-size:18px;color:#789}.new-stock{background:#eaf5ff;border-radius:8px;padding:8px 12px}.new-stock b{color:#1769d1}@media(max-width:650px){.stock-preview{flex-wrap:wrap}.stock-preview>div{flex:1}}
 .inward-table td,.inward-table th{vertical-align:middle}
+
+.action{border:0;border-radius:6px;padding:6px 8px;cursor:pointer;font-size:11px}.del{background:#ffe9e9;color:#c33}

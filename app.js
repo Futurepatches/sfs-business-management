@@ -140,8 +140,8 @@ function renderInward(){
         <div class="detail-item"><span>Saved Entries</span><b>${inwardRecords.length}</b></div>
       </div>
       <div style="margin-top:18px" class="table-wrap">
-        <table><thead><tr><th>Inward No.</th><th>Date</th><th>Product</th><th>Qty</th><th>Source Type</th><th>Supplier/Source</th><th>User</th></tr></thead>
-        <tbody>${inwardRecords.length?inwardRecords.slice().reverse().map(x=>`<tr><td>${esc(x.number)}</td><td>${esc(x.date)}</td><td>${esc(x.model)}</td><td>+${esc(x.qty)}</td><td>${esc(x.sourceType)}</td><td>${esc(x.source)}</td><td>${esc(x.user)}</td></tr>`).join(""):`<tr><td colspan="7" class="empty">No new inward records yet.</td></tr>`}</tbody></table>
+        <table><thead><tr><th>Inward No.</th><th>Date</th><th>Product</th><th>Qty</th><th>Source Type</th><th>Supplier/Source</th><th>User</th><th>Action</th></tr></thead>
+        <tbody>${inwardRecords.length?inwardRecords.slice().reverse().map(x=>`<tr><td>${esc(x.number)}</td><td>${esc(x.date)}</td><td>${esc(x.model)}</td><td>+${esc(x.qty)}</td><td>${esc(x.sourceType)}</td><td>${esc(x.source)}</td><td>${esc(x.user)}</td><td><button class="action del" onclick='reverseInward(${JSON.stringify(x.number)})'>Reverse</button></td></tr>`).join(""):`<tr><td colspan="8" class="empty">No new inward records yet.</td></tr>`}</tbody></table>
       </div>
     </div></div>`;
   q("newInwardBtn").onclick=openInward;
@@ -246,3 +246,44 @@ async function setup(){
   if(localStorage.getItem("sfsLoggedIn")==="1"){q("loginScreen").classList.add("hidden");q("appShell").classList.remove("hidden");await loadProducts();setupInward();setupProductDetail()}
 }
 setup();
+
+window.reverseInward=function(number){
+  const idx=inwardRecords.findIndex(x=>x.number===number);
+  if(idx<0){toast("Inward record not found.");return}
+  const entry=inwardRecords[idx];
+  if(entry.reversed){toast("This inward is already reversed.");return}
+  if(!confirm(`Reverse ${entry.number}?\n\nProduct: ${entry.model}\nQuantity: ${entry.qty}\n\nStock will be reduced by ${entry.qty}.`)) return;
+
+  const p=products.find(x=>x["Product ID"]===entry.productId);
+  if(!p){toast("Product not found.");return}
+  const current=Number(p["Current Stock"]||0);
+  const qty=Number(entry.qty||0);
+
+  if(current<qty){
+    alert(`Cannot reverse ${entry.number}.\nCurrent stock (${current}) is less than the inward quantity (${qty}).`);
+    return;
+  }
+
+  p["Current Stock"]=String(current-qty);
+  entry.reversed=true;
+  entry.reversedAt=new Date().toISOString();
+
+  transactions.push({
+    "Transaction ID":"TX-REV-"+Date.now(),
+    "Date / Reference":new Date().toISOString().slice(0,10),
+    "Type":"REVERSAL",
+    "Product ID":entry.productId,
+    "Model / Part No.":entry.model,
+    "Quantity (+/-)":String(-qty),
+    "Source / Destination":"Office",
+    "Reference Type":"Inward Reversal",
+    "Reference No.":entry.number,
+    "Customer / Supplier":entry.source,
+    "User":"Admin",
+    "Remarks":"Reversal of test/incorrect inward"
+  });
+
+  saveLocalState();
+  renderInward();
+  toast(`${entry.number} reversed. Stock reduced by ${qty}.`);
+};
