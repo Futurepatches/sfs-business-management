@@ -1,6 +1,6 @@
-SFS STOCK2 PRODUCT DETAIL VERSION
+SFS STOCK2 INWARD DESIGN / PROTOTYPE
 
-Replace/upload these files in the NEW GitHub repository root:
+Files in this package:
 index.html
 styles.css
 app.js
@@ -8,6 +8,17 @@ logo.png
 STOCK2_Products.csv
 STOCK2_Stock_Transactions.csv
 
-Login: admin / admin123
+Inward page:
+- New Inward form
+- Inward number
+- Date
+- Product selection
+- Quantity
+- Source Type: Import / Local Purchase / Customer Return / Transfer In / Other
+- Supplier / Source
+- Supplier reference
+- Purchase cost
+- Remarks
+- Live stock preview: Current + Inward = New Stock
 
-Products -> View opens product details and historical STOCK2 movements.
+This is the front-end prototype. The Save button does not yet write to Google Sheet/backend.

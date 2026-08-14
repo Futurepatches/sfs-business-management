@@ -21,3 +21,81 @@ function showPage(page){document.querySelectorAll(".nav").forEach(n=>n.classList
 function renderDashboard(){const total=products.reduce((a,p)=>a+(parseFloat(p["Current Stock"])||0),0);q("content").innerHTML=`<div class="cards"><div class="card blue"><span>Total Products</span><b>${products.length.toLocaleString()}</b><small>STOCK2</small></div><div class="card green"><span>Current Stock</span><b>${total.toLocaleString()}</b><small>From STOCK2</small></div><div class="card orange"><span>Categories</span><b>5</b><small>Configured categories</small></div><div class="card red"><span>Historical Movements</span><b>${transactions.length.toLocaleString()}</b><small>STOCK2 history</small></div></div><div class="panel" style="margin-top:16px;padding:22px"><h3>Categories</h3><p style="color:#7d8b9a">Airline Equipment • Valves • Cylinder • Fittings/Tubing • Others</p></div>`}
 async function setup(){q("loginForm").onsubmit=async e=>{e.preventDefault();if(q("username").value==="admin"&&q("password").value==="admin123"){localStorage.setItem("sfsLoggedIn","1");q("loginScreen").classList.add("hidden");q("appShell").classList.remove("hidden");await loadProducts();await loadTransactions();renderDashboard()}else q("loginError").textContent="Invalid username or password."};q("logoutBtn").onclick=()=>{localStorage.removeItem("sfsLoggedIn");location.reload()};q("menuBtn").onclick=()=>document.querySelector(".sidebar").classList.toggle("open");document.querySelectorAll(".nav").forEach(n=>n.onclick=()=>{showPage(n.dataset.page);document.querySelector(".sidebar").classList.remove("open")});setupModal();if(localStorage.getItem("sfsLoggedIn")==="1"){q("loginScreen").classList.add("hidden");q("appShell").classList.remove("hidden");await loadProducts();await loadTransactions();renderDashboard()}}
 setup();
+
+// ---------- INWARD MODULE (front-end prototype) ----------
+function inwardProductOptions(){
+  return '<option value="">Select Product</option>' +
+    products.map(p => `<option value="${esc(p["Product ID"])}">${esc(p["Model / Part No."])} — ${esc(p["Description"] || "")}</option>`).join("");
+}
+function nextInwardNumber(){
+  const n = Number(localStorage.getItem("sfsInwardCounter") || "0") + 1;
+  localStorage.setItem("sfsInwardCounter", String(n));
+  return "IN-" + String(n).padStart(6,"0");
+}
+function renderInward(){
+  q("content").innerHTML = `
+    <div class="panel">
+      <div class="table-top">
+        <div>
+          <b>Inward / Goods Received</b>
+          <div style="color:#7d8b9a;font-size:11px">Every item received into the office is recorded here.</div>
+        </div>
+        <button class="primary" id="newInwardBtn">＋ New Inward</button>
+      </div>
+      <div style="padding:16px">
+        <div class="inward-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="detail-item"><span>Source Types</span><b>Import • Local Purchase • Return</b></div>
+          <div class="detail-item"><span>Stock Rule</span><b>Posted Inward → Stock +</b></div>
+          <div class="detail-item"><span>Current Mode</span><b>Prototype / Preview</b></div>
+        </div>
+        <div class="empty" style="padding:35px 10px">No new inward records yet. Historical STOCK2 movements are kept separately.</div>
+      </div>
+    </div>`;
+  q("newInwardBtn").onclick=()=>openInward();
+}
+function openInward(){
+  q("iNumber").value = nextInwardNumber();
+  q("iDate").value = new Date().toISOString().slice(0,10);
+  q("iProduct").innerHTML = inwardProductOptions();
+  q("iQty").value = ""; q("iUnit").value=""; q("iSourceType").value="";
+  q("iSource").value=""; q("iReference").value=""; q("iCost").value=""; q("iRemarks").value="";
+  updateInwardPreview(); q("inwardModal").classList.remove("hidden");
+}
+function closeInward(){ q("inwardModal").classList.add("hidden"); }
+function updateInwardPreview(){
+  const p = products.find(x => x["Product ID"] === q("iProduct").value);
+  const current = Number(p?.["Current Stock"] || 0);
+  const qty = Number(q("iQty").value || 0);
+  q("iUnit").value = p?.["Unit"] || "";
+  q("iCurrentStock").textContent = current.toLocaleString();
+  q("iPreviewQty").textContent = qty.toLocaleString();
+  q("iNewStock").textContent = (current + qty).toLocaleString();
+}
+function setupInward(){
+  q("closeInward").onclick=closeInward;
+  q("cancelInward").onclick=closeInward;
+  q("inwardModal").onclick=e=>{if(e.target===q("inwardModal"))closeInward()};
+  q("iProduct").onchange=updateInwardPreview;
+  q("iQty").oninput=updateInwardPreview;
+  q("inwardForm").onsubmit=e=>{
+    e.preventDefault();
+    const p=products.find(x=>x["Product ID"]===q("iProduct").value);
+    if(!p){toast("Select a product.");return}
+    if(Number(q("iQty").value)<=0){toast("Enter a valid quantity.");return}
+    toast("Inward captured in prototype. Database stock update comes next.");
+    closeInward();
+  };
+}
+const originalShowPage = showPage;
+showPage = function(page){
+  if(page==="inward"){
+    document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===page));
+    q("pageTitle").textContent=pageInfo.inward[0]; q("pageSubtitle").textContent=pageInfo.inward[1];
+    renderInward();
+    return;
+  }
+  originalShowPage(page);
+};
+
+// Re-run setup for inward once DOM exists.
+setTimeout(()=>setupInward(), 0);

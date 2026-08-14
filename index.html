@@ -74,6 +74,52 @@
   </div>
 </div>
 
+
+<div id="inwardModal" class="modal hidden">
+  <div class="modal-card inward-card">
+    <div class="modal-head">
+      <div><h3 id="inwardTitle">New Inward</h3><small>Record goods received into the office</small></div>
+      <button id="closeInward" class="x">×</button>
+    </div>
+    <form id="inwardForm">
+      <div class="form-grid">
+        <div><label>Inward No.</label><input id="iNumber" readonly></div>
+        <div><label>Date *</label><input id="iDate" type="date" required></div>
+        <div class="wide"><label>Product / Model *</label>
+          <select id="iProduct" required></select>
+        </div>
+        <div><label>Quantity *</label><input id="iQty" type="number" min="1" step="1" required></div>
+        <div><label>Unit</label><input id="iUnit" readonly></div>
+        <div><label>Source Type *</label>
+          <select id="iSourceType" required>
+            <option value="">Select Type</option>
+            <option>Import</option>
+            <option>Local Purchase</option>
+            <option>Customer Return</option>
+            <option>Transfer In</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div><label>Supplier / Source *</label><input id="iSource" required placeholder="Supplier or source"></div>
+        <div><label>Supplier Reference</label><input id="iReference" placeholder="Invoice / challan / reference"></div>
+        <div><label>Purchase Cost</label><input id="iCost" type="number" min="0" step="0.01"></div>
+        <div class="wide"><label>Remarks</label><textarea id="iRemarks"></textarea></div>
+      </div>
+      <div class="stock-preview">
+        <div><span>Current Stock</span><b id="iCurrentStock">0</b></div>
+        <div class="arrow">＋</div>
+        <div><span>Inward Qty</span><b id="iPreviewQty">0</b></div>
+        <div class="arrow">＝</div>
+        <div class="new-stock"><span>New Stock</span><b id="iNewStock">0</b></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="cancelInward" class="secondary">Cancel</button>
+        <button class="primary" type="submit">Save Inward</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="productDetailModal" class="modal hidden">
   <div class="modal-card detail-card">
     <div class="modal-head">
