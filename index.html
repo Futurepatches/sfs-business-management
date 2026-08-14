@@ -74,6 +74,33 @@
   </div>
 </div>
 
+<div id="productDetailModal" class="modal hidden">
+  <div class="modal-card detail-card">
+    <div class="modal-head">
+      <div><h3 id="detailTitle">Product Details</h3><small>STOCK2 product information and historical movement</small></div>
+      <button id="closeDetail" class="x">×</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-grid">
+        <div class="detail-item"><span>Model / Part No.</span><b id="dModel">—</b></div>
+        <div class="detail-item"><span>Description</span><b id="dDescription">—</b></div>
+        <div class="detail-item"><span>Category</span><b id="dCategory">—</b></div>
+        <div class="detail-item"><span>Brand</span><b id="dBrand">—</b></div>
+        <div class="detail-item"><span>Unit</span><b id="dUnit">—</b></div>
+        <div class="detail-item"><span>Location</span><b id="dLocation">—</b></div>
+        <div class="detail-item"><span>Cost Price</span><b id="dCost">—</b></div>
+        <div class="detail-item"><span>Sale Price</span><b id="dSale">—</b></div>
+        <div class="detail-item highlight"><span>Current Stock</span><b id="dStock">—</b></div>
+        <div class="detail-item"><span>Status</span><b id="dStatus">—</b></div>
+      </div>
+      <div class="history-head"><h4>Stock History</h4><span id="historyCount">0 movements</span></div>
+      <div class="table-wrap history-wrap">
+        <table><thead><tr><th>Date / Ref</th><th>Type</th><th>Qty</th><th>Source / Destination</th><th>Reference Type</th><th>Reference No.</th><th>User</th></tr></thead>
+        <tbody id="historyBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 <script src="app.js"></script>
 </body>
