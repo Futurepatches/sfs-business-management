@@ -1,153 +1,118 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Standard Fluid Systems — Business Management</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SFS Business Management</title>
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-<div id="loginScreen" class="screen login-screen">
+<div id="login" class="login-screen">
   <div class="login-card">
-    <img src="logo.png" alt="Standard Fluid Systems" class="login-logo">
-    <h1>Business Management System</h1>
-    <p>Inventory • Sales • Delivery Challans • Reports</p>
-    <form id="loginForm">
-      <label>Username</label><input id="username" required>
-      <label>Password</label><input id="password" type="password" required>
-      <button type="submit" class="primary full">Login</button>
-      <div id="loginError" class="error"></div>
-    </form>
-    <div class="demo">Demo: <b>admin</b> / <b>admin123</b></div>
+    <div class="brand"><img src="logo.png" onerror="this.style.display='none'"><div><b>SFS</b><span>Business Management</span></div></div>
+    <h2>Sign in</h2><input id="loginUser" placeholder="Username"><input id="loginPass" type="password" placeholder="Password">
+    <button class="btn primary full" onclick="doLogin()">Login</button><div id="loginError" class="error"></div>
+    <small>Demo login: admin / admin123</small>
   </div>
 </div>
 
-<div id="appShell" class="hidden">
-  <aside class="sidebar">
-    <div class="brand"><img src="logo.png" alt="SFS"></div>
-    <nav>
-      <button class="nav active" data-page="dashboard">⌂ <span>Dashboard</span></button>
-      <button class="nav" data-page="products">▣ <span>Products</span></button>
-      <button class="nav" data-page="inward">↓ <span>Inward</span></button>
-      <button class="nav" data-page="challan">▰ <span>Delivery Challan</span></button>
-      <button class="nav" data-page="invoices">▤ <span>Invoices</span></button>
-      <button class="nav" data-page="purchases">▥ <span>Purchases</span></button>
-      <button class="nav" data-page="customers">♙ <span>Customers</span></button>
-      <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
-      <button class="nav" data-page="reports">◫ <span>Reports</span></button>
-      <button class="nav" data-page="movement">↕ <span>Stock Movement</span></button>
-      <button class="nav" data-page="users">⚙ <span>Users & Roles</span></button>
-      <button class="nav" data-page="settings">⚙ <span>Settings</span></button>
-    </nav>
-    <button id="logoutBtn" class="logout">↪ Logout</button>
-  </aside>
+<div id="shell" class="shell hidden">
+<aside class="sidebar">
+  <div class="side-brand"><img src="logo.png" onerror="this.style.display='none'"><div><b>SFS</b><small>Business Management</small></div></div>
+  <button class="nav active" data-page="dashboard">Dashboard</button>
+  <button class="nav" data-page="products">Products</button>
+  <button class="nav" data-page="inward">Inward / Purchase</button>
+  <button class="nav" data-page="dc">Delivery Challans</button>
+  <button class="nav" data-page="invoices">Invoices</button>
+  <button class="nav" data-page="customers">Customers</button>
+  <button class="nav" data-page="suppliers">Suppliers</button>
+  <button class="nav" data-page="reports">Reports</button>
+  <button class="nav" data-page="settings">Settings</button>
+  <div class="side-foot"><span id="who">Admin</span><button class="logout" onclick="logout()">Logout</button></div>
+</aside>
 
-  <main>
-    <header class="topbar">
-      <button id="menuBtn" class="menu">☰</button>
-      <div><h2 id="pageTitle">Dashboard</h2><small id="pageSubtitle">Overview of your business</small></div>
-      <div class="user"><span class="avatar">A</span><div><b>Admin</b><small>Administrator</small></div></div>
-    </header>
-    <div id="content" class="content"></div>
-  </main>
-</div>
+<main class="main">
+<header class="topbar"><div><h1 id="title">Dashboard</h1><p>Inventory • Purchases • Sales • Documents</p></div><button class="btn ghost" onclick="loadLive()">↻ Refresh</button></header>
 
-<div id="productModal" class="modal hidden">
-  <div class="modal-card">
-    <div class="modal-head"><div><h3 id="modalTitle">Add Product</h3><small>Product master information</small></div><button id="closeModal" class="x">×</button></div>
-    <form id="productForm">
-      <input type="hidden" id="editId">
-      <div class="form-grid">
-        <div><label>Model / Part No. *</label><input id="pModel" required></div>
-        <div><label>Description *</label><input id="pDescription" required></div>
-        <div><label>Category *</label><select id="pCategory" required></select></div>
-        <div><label>Brand</label><input id="pBrand"></div>
-        <div><label>Unit</label><select id="pUnit"><option>Pcs</option><option>Mtr</option><option>Set</option><option>Kg</option><option>Other</option></select></div>
-        <div><label>Location</label><input id="pLocation"></div>
-        <div><label>Cost Price</label><input id="pCost" type="number" min="0" step="0.01"></div>
-        <div><label>Sale Price</label><input id="pSale" type="number" min="0" step="0.01"></div>
-        <div class="wide"><label>Remarks</label><textarea id="pRemarks"></textarea></div>
-        <div><label>Status</label><select id="pStatus"><option>Active</option><option>Inactive</option></select></div>
-      </div>
-      <div class="modal-actions"><button type="button" id="cancelProduct" class="secondary">Cancel</button><button class="primary" type="submit">Save Product</button></div>
-    </form>
+<section id="dashboard" class="page">
+  <div class="cards">
+    <div class="card"><span>Products</span><strong id="dProducts">0</strong></div>
+    <div class="card"><span>Current Stock</span><strong id="dStock">0</strong></div>
+    <div class="card"><span>Imported / Inward</span><strong id="dImport">—</strong></div>
+    <div class="card"><span>Returns</span><strong id="dReturn">—</strong></div>
   </div>
-</div>
+  <div class="panel"><div class="panel-head"><h3>Sales by Category</h3><span class="muted">5 categories</span></div>
+    <div class="cat-grid" id="catGrid"></div>
+  </div>
+  <div class="panel"><h3>Data connection</h3><p id="status" class="muted">Loading live stock…</p></div>
+</section>
 
+<section id="products" class="page hidden">
+  <div class="toolbar"><input id="pSearch" placeholder="Search Model / Description / Location" oninput="renderProducts()"><select id="pCat" onchange="renderProducts()"><option value="">All Categories</option></select><button class="btn primary" onclick="productForm()">+ Add Product</button></div>
+  <div class="panel"><div class="table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Location</th><th>Description</th><th>Category</th><th>Stock</th></tr></thead><tbody id="pRows"></tbody></table></div></div>
+</section>
 
-<div id="inwardModal" class="modal hidden">
-  <div class="modal-card inward-card">
-    <div class="modal-head">
-      <div><h3 id="inwardTitle">New Inward</h3><small>Record goods received into the office</small></div>
-      <button id="closeInward" class="x">×</button>
+<section id="inward" class="page hidden">
+  <div class="panel"><div class="panel-head"><h3>Inward / Purchase</h3><span class="badge">Stock +</span></div>
+    <p class="muted">Use this for imported stock and locally purchased items. Every entry becomes a stock transaction.</p>
+    <div class="form-grid">
+      <label>Date<input id="inDate" type="date"></label><label>Source Type<select id="inType"><option>Import</option><option>Local Purchase</option><option>Opening</option><option>Return</option></select></label>
+      <label>Model / Part No.<input id="inModel" list="modelList" oninput="fillModel('inModel','inDesc')"></label><label>Quantity<input id="inQty" type="number" min="0" step="any"></label>
+      <label>Supplier<input id="inSupplier"></label><label>Supplier Reference<input id="inRef"></label>
+      <label>Purchase Cost<input id="inCost" type="number" min="0" step="any"></label><label>Remarks<input id="inRemarks"></label>
+    </div><button class="btn primary" onclick="saveInward()">Save Inward</button>
+  </div>
+</section>
+
+<section id="dc" class="page hidden">
+  <div class="panel">
+    <div class="panel-head"><h3>Delivery Challan</h3><span class="badge">Stock −</span></div>
+    <div class="form-grid">
+      <label>Challan #<input id="dcNo" placeholder="SFS-248"></label><label>Date<input id="dcDate" type="date"></label>
+      <label>Customer<input id="dcCustomer"></label><label>Customer ID<input id="dcCustomerId"></label>
+      <label>PO #<input id="dcPO"></label><label>PO Date<input id="dcPODate" type="date"></label>
+      <label>STN<input id="dcSTN"></label><label>NTN<input id="dcNTN"></label>
+      <label class="wide">Delivery Address<input id="dcAddress"></label>
     </div>
-    <form id="inwardForm">
-      <div class="form-grid">
-        <div><label>Inward No.</label><input id="iNumber" readonly></div>
-        <div><label>Date *</label><input id="iDate" type="date" required></div>
-        <div class="wide"><label>Product / Model *</label>
-          <select id="iProduct" required></select>
-        </div>
-        <div><label>Quantity *</label><input id="iQty" type="number" min="1" step="1" required></div>
-        <div><label>Unit</label><input id="iUnit" readonly></div>
-        <div><label>Source Type *</label>
-          <select id="iSourceType" required>
-            <option value="">Select Type</option>
-            <option>Import</option>
-            <option>Local Purchase</option>
-            <option>Customer Return</option>
-            <option>Transfer In</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div><label>Supplier / Source *</label><input id="iSource" required placeholder="Supplier or source"></div>
-        <div><label>Supplier Reference</label><input id="iReference" placeholder="Invoice / challan / reference"></div>
-        <div><label>Purchase Cost</label><input id="iCost" type="number" min="0" step="0.01"></div>
-        <div class="wide"><label>Remarks</label><textarea id="iRemarks"></textarea></div>
-      </div>
-      <div class="stock-preview">
-        <div><span>Current Stock</span><b id="iCurrentStock">0</b></div>
-        <div class="arrow">＋</div>
-        <div><span>Inward Qty</span><b id="iPreviewQty">0</b></div>
-        <div class="arrow">＝</div>
-        <div class="new-stock"><span>New Stock</span><b id="iNewStock">0</b></div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="cancelInward" class="secondary">Cancel</button>
-        <button class="primary" type="submit">Save Inward</button>
-      </div>
-    </form>
+    <div class="line-head"><b>Items</b><button class="btn small" onclick="addDcLine()">+ Add Item</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Item Code</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dcLines"></tbody></table></div>
+    <div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save & Print</button></div>
   </div>
-</div>
+</section>
 
-<div id="productDetailModal" class="modal hidden">
-  <div class="modal-card detail-card">
-    <div class="modal-head">
-      <div><h3 id="detailTitle">Product Details</h3><small>STOCK2 product information and historical movement</small></div>
-      <button id="closeDetail" class="x">×</button>
+<section id="invoices" class="page hidden">
+  <div class="panel">
+    <div class="panel-head"><h3>Invoice</h3><span class="badge">Sale</span></div>
+    <div class="form-grid">
+      <label>Invoice #<input id="invNo" placeholder="2009"></label><label>Date<input id="invDate" type="date"></label>
+      <label>Customer<input id="invCustomer"></label><label>PO #<input id="invPO"></label>
+      <label>PO Date<input id="invPODate" type="date"></label><label>Delivery Challan #<input id="invDC"></label>
+      <label>DC Date<input id="invDCDate" type="date"></label><label>STN<input id="invSTN"></label>
+      <label>NTN<input id="invNTN"></label>
     </div>
-    <div class="detail-body">
-      <div class="detail-grid">
-        <div class="detail-item"><span>Model / Part No.</span><b id="dModel">—</b></div>
-        <div class="detail-item"><span>Description</span><b id="dDescription">—</b></div>
-        <div class="detail-item"><span>Category</span><b id="dCategory">—</b></div>
-        <div class="detail-item"><span>Brand</span><b id="dBrand">—</b></div>
-        <div class="detail-item"><span>Unit</span><b id="dUnit">—</b></div>
-        <div class="detail-item"><span>Location</span><b id="dLocation">—</b></div>
-        <div class="detail-item"><span>Cost Price</span><b id="dCost">—</b></div>
-        <div class="detail-item"><span>Sale Price</span><b id="dSale">—</b></div>
-        <div class="detail-item highlight"><span>Current Stock</span><b id="dStock">—</b></div>
-        <div class="detail-item"><span>Status</span><b id="dStatus">—</b></div>
-      </div>
-      <div class="history-head"><h4>Stock History</h4><span id="historyCount">0 movements</span></div>
-      <div class="table-wrap history-wrap">
-        <table><thead><tr><th>Date / Ref</th><th>Type</th><th>Qty</th><th>Source / Destination</th><th>Reference Type</th><th>Reference No.</th><th>User</th></tr></thead>
-        <tbody id="historyBody"></tbody></table>
-      </div>
-    </div>
+    <div class="line-head"><b>Items</b><button class="btn small" onclick="addInvLine()">+ Add Item</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Item Code</th><th>Qty</th><th>Rate / Unit</th><th>Amount</th><th></th></tr></thead><tbody id="invLines"></tbody></table></div>
+    <div class="total-box">Total: <b id="invTotal">0.00</b></div>
+    <div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save & Print</button></div>
   </div>
-</div>
-<div id="toast" class="toast"></div>
+</section>
+
+<section id="customers" class="page hidden"><div class="panel"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="simpleForm('Customer')">+ Add Customer</button></div><div id="customerList" class="empty">No saved customers yet.</div></div></section>
+<section id="suppliers" class="page hidden"><div class="panel"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="simpleForm('Supplier')">+ Add Supplier</button></div><div id="supplierList" class="empty">No saved suppliers yet.</div></div></section>
+
+<section id="reports" class="page hidden">
+  <div class="panel"><div class="panel-head"><h3>Sales Reports</h3><div><select id="reportYear"><option>2026</option><option>2025</option><option>2024</option></select><button class="btn small" onclick="renderReports()">Refresh</button></div></div>
+  <div class="report-grid" id="reportGrid"></div></div>
+  <div class="panel"><h3>Stock Movement</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Model</th><th>Qty</th><th>Reference</th><th>Party</th></tr></thead><tbody id="movementRows"></tbody></table></div></div>
+</section>
+
+<section id="settings" class="page hidden"><div class="panel"><h3>System Settings</h3><p class="muted">The live source is read-only. New staff entries require a separate Google Sheet + Apps Script backend. This keeps the original live inventory safe.</p>
+<div class="form-grid"><label>Apps Script Web App URL<input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec"></label><label>API Token<input id="apiToken" type="password"></label></div><button class="btn primary" onclick="saveSettings()">Save Settings</button><hr><p><b>Original source:</b> existing SFS Live Google Sheet (read-only).</p></div></section>
+
+</main></div>
+
+<datalist id="modelList"></datalist>
+<div id="modal" class="modal hidden"><div class="modal-card"><div class="modal-head"><h3 id="mTitle"></h3><button onclick="closeModal()">×</button></div><div id="mBody"></div></div></div>
+<div id="printArea" class="print-area"></div>
 <script src="app.js"></script>
-</body>
-</html>
+</body></html>
