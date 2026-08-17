@@ -1,42 +1,43 @@
-SFS BUSINESS MANAGEMENT – COMPLETE PACKAGE
-==============================================
+SFS BUSINESS MANAGEMENT - COMPLETE WORKING PACKAGE
 
-What is included:
-- Products / live stock connection
-- Product Model / Part No. is clickable; no View button
-- Existing product image URLs are preserved/read from the live source
-- Five categories
-- Inward / Purchase entry
-- Delivery Challan entry + print preview
-- Invoice entry + print preview
-- Customer / Supplier records
-- Reports / movement area
-- Google Apps Script backend (Code.gs)
-- Safe migration: original live Google Sheet remains read-only
+This package is designed around:
+- Original SFS live Google Sheet as READ-ONLY source.
+- Separate Google Sheet database for new transactions.
+- Google Apps Script backend.
+- GitHub Pages frontend.
 
-IMPORTANT:
-The old live inventory is the source of truth for the existing stock. The app reads:
-Stock gid 1719776219
-Import gid 1389271409
-Return gid 1032386368
+FILES:
+Code.gs       -> paste into the bound Apps Script project of the NEW database sheet.
+index.html    -> GitHub Pages frontend.
+styles.css    -> frontend styling.
+app.js        -> frontend logic.
+logo.png      -> copy the existing SFS logo from your repository.
 
-DO NOT give the old published sheet write access.
+IMPORTANT SETUP:
+1. Keep the original live inventory sheet untouched.
+2. Create/open the separate SFS Business Management DATABASE Google Sheet.
+3. Extensions -> Apps Script.
+4. Replace Code.gs with this Code.gs.
+5. Save.
+6. Run setupDatabase once and authorize.
+7. Deploy -> New deployment -> Web app.
+   Execute as: Me
+   Who has access: Anyone
+8. Copy the Web App URL.
+9. In GitHub Pages software, Settings -> paste the Web App URL -> Save Settings.
+10. Login with initial admin: admin / admin123.
+11. Immediately change the admin password from Settings -> Change My Password.
+12. Admin can create staff accounts from Users / Staff.
 
-For permanent staff entry:
-1. Create a NEW blank Google Sheet.
-2. Extensions > Apps Script.
-3. Paste Code.gs.
-4. Change API_TOKEN to a private value.
-5. Run setupDatabase() once.
-6. Deploy as Web App.
-7. Put the /exec URL + same token into Settings in the web app.
+SECURITY NOTE:
+This version removes the need for a frontend API secret token. Authentication is performed by the Apps Script backend. Do not put passwords or Google credentials in GitHub files.
 
-The Apps Script copies the live Stock/Import/Return data into separate tabs and creates the new database tabs.
-It also keeps product image URLs and Model/Part No. associations.
+SOURCE:
+The Code.gs contains the three published read-only source CSV URLs already used by the current SFS stock site. It refreshes SourceStock/SourceImports/SourceReturns and syncs Products without modifying the original source.
 
-Company document format:
-- Delivery Challan layout follows the supplied SFS / Metier Challan structure.
-- Invoice layout follows the supplied SFS / Metier Invoice structure.
-- Company header/address information from the supplied files is included in the print templates.
+STOCK LOGIC:
+Current stock = original source current stock + new IN transactions - new OUT transactions.
+Delivery Challan creates OUT stock transaction. Invoice records the sale/ledger but does NOT reduce stock a second time.
 
-The GitHub Pages frontend can be hosted free. Google Apps Script can provide the write-back database without paid hosting.
+PRODUCT IMAGES:
+Existing source image URLs are preserved when available. New product images can be uploaded through Add Product; Apps Script stores them in a Google Drive folder named SFS Product Images.
