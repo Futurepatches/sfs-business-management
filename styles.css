@@ -1,2 +1,54 @@
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f7fb;color:#14213d}button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:none!important}.login-screen{min-height:100vh;display:grid;place-items:center;background:#eef3f9}.login-card{width:min(430px,92vw);background:#fff;padding:32px;border-radius:16px;box-shadow:0 12px 40px #0001;text-align:center}.login-logo{width:170px;max-height:70px;object-fit:contain}.login-card h1{font-size:24px;margin:14px 0 22px}.login-card input{display:block;width:100%;padding:12px;margin:10px 0;border:1px solid #ccd5e2;border-radius:8px}.error{color:#b42318;margin:10px 0;min-height:20px}.btn{border:0;border-radius:8px;padding:10px 15px;background:#e7edf5;color:#14213d}.btn.primary{background:#173a70;color:#fff}.btn.ghost{background:#fff;border:1px solid #ccd5e2}.btn.small{padding:6px 9px;font-size:13px}.full{width:100%}#app{display:flex;min-height:100vh}aside{width:235px;background:#102f5e;color:#fff;padding:16px;display:flex;flex-direction:column}.brand{display:flex;align-items:center;gap:8px;padding:4px 6px 20px}.brand img{width:48px;height:34px;object-fit:contain}.brand b{font-size:22px;display:block}.brand small{opacity:.85}.navbtn{width:100%;text-align:left;background:transparent;color:#fff;border:0;border-radius:8px;padding:12px 10px;margin:2px 0}.navbtn.active,.navbtn:hover{background:#2859a0}.userbox{margin-top:auto;border-top:1px solid #ffffff33;padding-top:14px}.userbox small{display:block;opacity:.8;margin:4px 0 10px}main{flex:1;min-width:0}header{height:80px;background:#fff;border-bottom:1px solid #dce3ed;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}header h1{margin:0;font-size:27px}header p{margin:3px 0;color:#6b7890}.wrap{padding:22px}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card,.panel{background:#fff;border:1px solid #e1e7ef;border-radius:12px;padding:16px}.card span{display:block;color:#68758a;font-size:13px}.card strong{display:block;font-size:26px;margin-top:8px}.panel{margin-top:16px}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.toolbar input{flex:1;min-width:220px}.input,.toolbar input,.toolbar select,.form-grid input,.form-grid select,.form-grid textarea{padding:10px;border:1px solid #ccd5e2;border-radius:7px;background:#fff}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e7ebf0;text-align:left;vertical-align:top}th{background:#f7f9fc;font-size:13px}.thumb{width:48px;height:48px;object-fit:contain}.model-link{color:#1557a6;text-decoration:underline;cursor:pointer;font-weight:700}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.form-grid label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:700}.form-grid .wide{grid-column:1/-1}.actions{display:flex;gap:8px;margin-top:14px}.catgrid,.reportgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.cat{border:1px solid #e0e7f0;border-radius:10px;padding:14px}.cat b{display:block;font-size:22px;margin:8px 0}.muted{color:#6b7890}.badge{background:#e9f1ff;padding:5px 9px;border-radius:999px;font-size:12px}.modal{position:fixed;inset:0;background:#0007;display:grid;place-items:center;padding:20px;z-index:20}.modal-card{background:#fff;border-radius:12px;width:min(850px,95vw);max-height:90vh;overflow:auto;padding:18px}.modal-head{display:flex;justify-content:space-between;align-items:center}.modal-head button{border:0;background:transparent;font-size:26px}.detail{display:grid;grid-template-columns:180px 1fr;gap:20px}.detail img{width:170px;height:170px;object-fit:contain;border:1px solid #ddd;border-radius:8px}.kv{background:#f7f9fc;padding:10px;border-radius:7px;margin:4px 0}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.right{text-align:right}@media(max-width:900px){aside{width:190px}.cards{grid-template-columns:repeat(2,1fr)}.catgrid,.reportgrid{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){#app{display:block}aside{width:100%}nav{display:grid;grid-template-columns:1fr 1fr}header{padding:12px}.wrap{padding:12px}.form-grid,.detail{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}}
 @media print{body>*:not(#printArea){display:none!important}#printArea{display:block}.print-doc{padding:18mm;font-size:12px}.print-doc h1{text-align:center}.print-doc .company{text-align:center;border-bottom:2px solid #111;padding-bottom:10px}.print-doc table{margin-top:15px}.print-doc th,.print-doc td{border:1px solid #111;padding:6px}.print-doc .meta{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:12px 0}.footer{margin-top:40px}}
+
+.party-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.party-card{background:#fff;border:1px solid #dbe3ef;border-radius:14px;padding:18px;box-shadow:0 5px 18px rgba(16,47,94,.06)}
+.party-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid #edf1f6;padding-bottom:12px;margin-bottom:12px}
+.party-top h4{margin:0 0 4px;font-size:17px}
+.party-id{font-size:12px;color:#718096}
+.status-pill{font-size:11px;padding:4px 8px;border-radius:999px;background:#e8f5e9;color:#176b2c}
+.party-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.party-meta div{background:#f7f9fc;border-radius:8px;padding:8px}
+.party-meta b,.party-meta span{display:block}
+.party-meta b{font-size:11px;color:#64748b;margin-bottom:3px}
+.party-meta span{font-size:13px;word-break:break-word}
+.party-meta .wide{grid-column:1/-1}
+.empty-state{padding:35px;text-align:center;color:#64748b}
+.setting-status{background:#eef6ff;border:1px solid #cfe1fb;padding:12px;border-radius:10px;margin:15px 0;color:#214f88}
+
+/* Exact-format A4 print layouts based on the supplied SFS DC and Invoice workbooks. */
+#printArea{display:none}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important}
+  .print-doc{width:210mm;min-height:297mm;background:#fff;color:#111;padding:10mm 5mm 7mm;font-family:Arial,Helvetica,sans-serif;position:relative}
+  .doc-head{display:flex;align-items:flex-start;justify-content:space-between;height:30mm}
+  .doc-head img{object-fit:contain}
+  .dc-head img{width:100mm;height:20mm;object-position:left top}
+  .invoice-head img{width:105mm;height:28mm;object-position:left top}
+  .doc-title{font-family:Georgia,serif;font-size:25mm;line-height:.8;color:#666;letter-spacing:-2px}
+  .agent{position:absolute;right:7mm;top:24mm;text-align:center;font-size:8pt}
+  .agent b{font-size:14pt;border:1px solid #ddd;padding:1px 10px}
+  .party-head{display:grid;grid-template-columns:1fr 56mm;gap:7mm;margin-top:2mm;margin-bottom:4mm;font-size:10pt;line-height:1.4}
+  .party-head strong{display:block;font-family:Georgia,serif;font-style:italic;font-size:16pt;margin:2mm 0}
+  .meta{text-align:right;line-height:1.55}
+  .invoice-meta{display:grid;grid-template-columns:1fr 1fr;gap:3mm 8mm;margin:1mm 0 7mm;font-size:10pt}
+  .invoice-meta .wide{grid-column:1/-1}
+  .invoice-meta .tax{grid-column:2;text-align:right}
+  .doc-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt}
+  .doc-table th,.doc-table td{border:1px solid #222;padding:2.2mm;vertical-align:top}
+  .doc-table th{background:#f1f1f1;text-align:center;font-weight:700}
+  .doc-table th:nth-child(1){width:9mm}.doc-table th:nth-child(2){width:auto}.doc-table th:nth-child(3){width:30mm}.doc-table th:nth-child(4){width:14mm}.doc-table th:nth-child(5){width:25mm}.doc-table th:nth-child(6){width:30mm}
+  .doc-table td:not(.desc){text-align:center}
+  .doc-table tbody td{height:12mm}
+  .doc-table .desc{text-align:left}
+  .doc-table tfoot td{height:auto;text-align:right}
+  .total-label{font-weight:700}
+  .words{font-style:italic;text-align:left!important;vertical-align:middle!important}
+  .thank{text-align:center;font-weight:700;margin-top:1mm}
+  .receiver{margin-left:auto;width:50mm;text-align:center;margin-top:2mm}.receiver span{display:block;border-bottom:2px solid #111;height:12mm}
+  .code-desc{font-size:9pt;margin-top:7mm;position:relative}.code-desc span{float:right;font-style:italic;font-size:12pt}
+  .doc-footer{position:absolute;bottom:7mm;left:10mm;right:10mm;text-align:center;font-size:7.5pt;line-height:1.35;border-top:0}
+  .doc-footer b{font-size:11pt}
+}
