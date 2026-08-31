@@ -1,86 +1,1008 @@
-const DEFAULT_API=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';const CATS=['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];let S={session:sessionStorage.sfsSession||'',user:null,products:[],customers:[],suppliers:[],tx:[],api:(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||''};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function nav(){const items=[['dashboard','Dashboard'],['products','Products'],['inward','Inward / Purchase'],['dc','Delivery Challans'],['invoices','Invoices'],['customers','Customers'],['suppliers','Suppliers'],['reports','Reports'],['settings','Settings']];if(S.user?.role==='ADMIN')items.push(['users','Users / Staff']);$('nav').innerHTML=items.map(x=>`<button class="navbtn ${x[0]==='dashboard'?'active':''}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('');}
-async function api(action,data={}){if(!S.api)return {ok:false,error:'Backend URL not configured'};const r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,session:S.session,...data})});return r.json();}
-async function login(){const user=$('loginUser').value.trim(),pass=$('loginPass').value;const url=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';if(!url){$('loginError').textContent='System connection is not configured.';return}S.api=url;localStorage.sfsApiUrl=url;const r=await api('login',{username:user,password:pass});if(!r.ok){$('loginError').textContent=r.error||'Invalid username or password';return}S.session=r.session;S.user=r.user;sessionStorage.sfsSession=S.session;enter()}
-async function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=S.user.name;$('role').textContent=S.user.role;nav();await refresh();}
-function logout(){if(S.session)api('logout').catch(()=>{});sessionStorage.clear();location.reload()}
-async function refresh(){const r=await api('bootstrap');if(!r.ok){if(r.error==='Unauthorized'){logout();return}alert(r.error||'Could not load data');return}S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];renderCurrent();}
-function showPage(p,btn){document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');$('pageTitle').textContent=btn?btn.textContent:p;$('content').innerHTML=pages[p]?pages[p]():'';if(p==='dashboard')renderDashboard();if(p==='products')renderProducts();if(p==='inward')renderInward();if(p==='dc')renderDC();if(p==='invoices')renderInvoice();if(p==='customers')renderCustomers();if(p==='suppliers')renderSuppliers();if(p==='reports')renderReports();if(p==='settings')renderSettings();if(p==='users')renderUsers();}
-function renderCurrent(){const active=document.querySelector('.navbtn.active');showPage(active?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||'dashboard',active)}
-const pages={dashboard:()=>`<div class="wrap" id="dash"></div>`,products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0.01"></label><label>Supplier<input id="isupplier"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost<input id="icost" type="number" min="0"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button></div></div>`,dc:()=>`<div class="wrap"><div class="panel"><h3>Delivery Challan</h3><div class="form-grid"><label>Challan #<input id="dcno"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save & Print</button></div></div></div>`,invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<input id="ivdc"></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save & Print</button></div></div></div>`,customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry"><option>2026</option><option>2025</option><option>2024</option></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">The original live inventory remains read-only. This software writes only to the separate database.</p><div class="setting-status"><b>Database:</b> Connected through the configured backend.</div><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${S.user?.role==='ADMIN'?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`};
-function renderDashboard(){$('dash').innerHTML=`<div class="cards"><div class="card"><span>Products</span><strong>${S.products.length}</strong></div><div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div><div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div><div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div></div><div class="panel"><h3>Categories</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${S.products.filter(p=>p.Category===c).length}</b><small class="muted">Products</small></div>`).join('')}</div></div>`}
-function renderProducts(){let q=($('ps')?.value||'').toLowerCase(),c=$('pc')?.value||'';let a=S.products.filter(p=>[p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q)&&( !c||p.Category===c));$('prows').innerHTML=a.slice(0,1000).map(p=>`<tr><td>${p['Product Image']?`<img class="thumb" src="${esc(p['Product Image'])}">`:'—'}</td><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td>${esc(p.Category)}</td><td>${esc(p.Location)}</td><td>${p.currentStock}</td></tr>`).join('')||'<tr><td colspan="6">No products found.</td></tr>'}
-function productDetail(em){const m=decodeURIComponent(em),p=S.products.find(x=>x['Model / Part No.']===m);if(!p)return;modal('Product Details — '+m,`<div class="detail"><div>${p['Product Image']?`<img src="${esc(p['Product Image'])}">`:'No image'}</div><div class="detail-grid"><div class="kv"><b>Model</b><br>${esc(p['Model / Part No.'])}</div><div class="kv"><b>Description</b><br>${esc(p.Description)}</div><div class="kv"><b>Category</b><br>${esc(p.Category)}</div><div class="kv"><b>Location</b><br>${esc(p.Location)}</div><div class="kv"><b>Current Stock</b><br>${p.currentStock}</div><div class="kv"><b>Sale Price</b><br>${esc(p['Sale Price'])}</div></div></div>`)}
-function productForm(){modal('Add / Edit Product',`<div class="form-grid"><label>Model / Part No.<input id="pm"></label><label>Category<select id="pcat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></label><label class="wide">Description<input id="pdesc"></label><label>Brand<input id="pbrand"></label><label>Unit<input id="punit" value="Pcs"></label><label>Location<input id="ploc"></label><label>Cost Price<input id="pcost" type="number"></label><label>Sale Price<input id="pprice" type="number"></label><label>Opening Stock<input id="pop" type="number" value="0"></label><label>Product Image<input id="pimg" type="file" accept="image/*"></label><label class="wide">Remarks<textarea id="prem"></textarea></label></div><button class="btn primary" onclick="saveProduct()">Save Product</button>`)}
-async function saveProduct(){const f=$('pimg').files[0];let b='';if(f)b=await file64(f);const r=await api('saveProduct',{model:$('pm').value,category:$('pcat').value,description:$('pdesc').value,brand:$('pbrand').value,unit:$('punit').value,location:$('ploc').value,costPrice:$('pcost').value,salePrice:$('pprice').value,openingStock:$('pop').value,remarks:$('prem').value,imageBase64:b,imageName:f?.name});if(!r.ok)return alert(r.error);closeModal();await refresh();showPage('products',document.querySelector('.navbtn:nth-child(2)'));alert('Product saved.');}
-function renderInward(){const d=new Date().toISOString().slice(0,10);$('idate').value=d}
-async function saveInward(){const r=await api('saveInward',{date:$('idate').value,sourceType:$('itype').value,model:$('imodel').value,quantity:$('iqty').value,supplier:$('isupplier').value,supplierReference:$('iref').value,purchaseCost:$('icost').value,remarks:$('irem').value});if(!r.ok)return alert(r.error);alert('Inward saved. Stock increased automatically.');await refresh()}
-let dcl=[],ivl=[];function renderDC(){dcl=[];addDc();$('dcdate').value=new Date().toISOString().slice(0,10)}function addDc(){dcl.push({model:'',qty:'',unit:'Pcs'});renderDcLines()}function renderDcLines(){if(!$('dclines'))return;$('dclines').innerHTML=dcl.map((x,i)=>`<tr><td><input value="${esc(x.model)}" list="ml" onchange="dcl[${i}].model=this.value;pickLine(dcl,${i})"></td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td><input type="number" value="${x.qty}" onchange="dcl[${i}].qty=this.value"></td><td><input value="${x.unit}" onchange="dcl[${i}].unit=this.value"></td><td><button class="btn small" onclick="dcl.splice(${i},1);renderDcLines()">×</button></td></tr>`).join('');$('dclines').insertAdjacentHTML('afterend',`<datalist id="ml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`)}function pickLine(a,i){renderDcLines()}
-async function saveDC(print){if(!dcl.length)return;const p={no:$('dcno').value,date:$('dcdate').value,customer:$('dccust').value,customerId:$('dcid').value,po:$('dcpo').value,poDate:$('dcpodate').value,stn:$('dcstn').value,ntn:$('dcntn').value,address:$('dcaddr').value,items:dcl};const r=await api('saveDC',p);if(!r.ok)return alert(r.error);if(print)printDC(p);alert('Delivery Challan saved and stock reduced.');dcl=[];await refresh();}
-function renderInvoice(){ivl=[];addInv();$('ivdate').value=new Date().toISOString().slice(0,10)}function addInv(){ivl.push({model:'',qty:'',rate:''});renderIvLines()}function renderIvLines(){if(!$('ivlines'))return;$('ivlines').innerHTML=ivl.map((x,i)=>`<tr><td><input value="${esc(x.model)}" list="ivml" onchange="ivl[${i}].model=this.value;const pr=S.products.find(p=>p['Model / Part No.']===this.value);if(pr&&(!ivl[${i}].rate||Number(ivl[${i}].rate)===0))ivl[${i}].rate=pr['Sale Price']||'';renderIvLines()"></td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td><input type="number" value="${x.qty}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td><td><input type="number" value="${x.rate}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td><td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td><td><button class="btn small" onclick="ivl.splice(${i},1);renderIvLines()">×</button></td></tr>`).join('');$('ivlines').insertAdjacentHTML('afterend',`<datalist id="ivml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);$('ivtotal').textContent=ivl.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0).toFixed(2)}
-async function saveInvoice(print){const p={no:$('ivno').value,date:$('ivdate').value,customer:$('ivcust').value,po:$('ivpo').value,poDate:$('ivpodate').value,dc:$('ivdc').value,dcDate:$('ivdcdate').value,stn:$('ivstn').value,ntn:$('ivntn').value,items:ivl};const r=await api('saveInvoice',p);if(!r.ok)return alert(r.error);if(print)printInvoice({...p,total:r.subtotal});alert('Invoice saved.');await refresh()}
-function renderCustomers(){$('customers').innerHTML=`<div class="party-grid">${S.customers.map(c=>`<div class="party-card"><div class="party-top"><div><h4>${esc(c.Name)}</h4><span class="party-id">${esc(c['Customer ID'])}</span></div><span class="status-pill">${esc(c.Status||'Active')}</span></div><div class="party-meta"><div><b>Contact</b><span>${esc(c['Contact Person']||'—')}</span></div><div><b>Phone</b><span>${esc(c.Phone||'—')}</span></div><div><b>Email</b><span>${esc(c.Email||'—')}</span></div><div><b>City</b><span>${esc(c.City||'—')}</span></div><div class="wide"><b>Address</b><span>${esc(c.Address||'—')}</span></div></div><button class="btn small primary" onclick="ledger('Customer','${encodeURIComponent(c.Name)}')">View Ledger</button></div>`).join('')||'<div class="empty-state">No customers yet.</div>'}</div>`}function renderSuppliers(){$('suppliers').innerHTML=`<div class="party-grid">${S.suppliers.map(c=>`<div class="party-card"><div class="party-top"><div><h4>${esc(c.Name)}</h4><span class="party-id">${esc(c['Supplier ID'])}</span></div><span class="status-pill">${esc(c.Status||'Active')}</span></div><div class="party-meta"><div><b>Contact</b><span>${esc(c['Contact Person']||'—')}</span></div><div><b>Phone</b><span>${esc(c.Phone||'—')}</span></div><div><b>Email</b><span>${esc(c.Email||'—')}</span></div><div><b>City</b><span>${esc(c.City||'—')}</span></div><div class="wide"><b>Address</b><span>${esc(c.Address||'—')}</span></div></div><button class="btn small primary" onclick="ledger('Supplier','${encodeURIComponent(c.Name)}')">View Ledger</button></div>`).join('')||'<div class="empty-state">No suppliers yet.</div>'}</div>`}
-function partyForm(type){modal('Add '+type,`<div class="form-grid"><label>Name<input id="pn"></label><label>Contact Person<input id="pcontact"></label><label>Phone<input id="pphone"></label><label>Email<input id="pemail"></label><label>City<input id="pcity"></label><label>NTN<input id="pntn"></label><label>STN<input id="pstn"></label><label class="wide">Address<textarea id="paddr"></textarea></label><label class="wide">Remarks<textarea id="pr"></textarea></label></div><button class="btn primary" onclick="saveParty('${type}')">Save</button>`)}async function saveParty(type){const r=await api(type==='Customer'?'saveCustomer':'saveSupplier',{name:$('pn').value,contact:$('pcontact').value,phone:$('pphone').value,email:$('pemail').value,city:$('pcity').value,ntn:$('pntn').value,stn:$('pstn').value,address:$('paddr').value,remarks:$('pr').value});if(!r.ok)return alert(r.error);closeModal();await refresh()}
-async function ledger(type,name){const r=await api('getLedger',{type,name:decodeURIComponent(name)});if(!r.ok)return alert(r.error);modal(type+' Ledger — '+decodeURIComponent(name),`<table><tr><th>Date</th><th>Type</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr>${r.transactions.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.ref)}</td><td>${x.debit}</td><td>${x.credit}</td><td>${esc(x.remarks)}</td></tr>`).join('')||'<tr><td colspan="6">No transactions.</td></tr>'}</table>`)}
-async function renderReports(){const r=await api('getReports',{year:$('ry')?.value||new Date().getFullYear()});if(!r.ok)return alert(r.error);$('reports').innerHTML=`<div class="cards"><div class="card"><span>Invoices</span><strong>${r.sales.length}</strong></div><div class="card"><span>Sales</span><strong>${r.sales.reduce((a,x)=>a+(+x.total||0),0).toLocaleString()}</strong></div></div><div class="panel"><h3>Sales by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${(r.categorySales[c]||0).toLocaleString()}</b></div>`).join('')}</div></div><div class="panel table-wrap"><h3>Recent Stock Movement</h3><table><tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr>${r.movements.map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('')}</table></div>`}
-function renderSettings(){}function saveSettings(){alert('Backend connection is configured in config.js.');}async function refreshSource(){const r=await api('refreshSource');alert(r.ok?'Source snapshot refreshed.':r.error);await refresh()}function changePasswordForm(){modal('Change Password',`<label>Current Password<input id="cp1" type="password"></label><label>New Password<input id="cp2" type="password"></label><label>Confirm Password<input id="cp3" type="password"></label><button class="btn primary" onclick="changePassword()">Change Password</button>`)}async function changePassword(){if($('cp2').value!==$('cp3').value)return alert('Passwords do not match');const r=await api('changePassword',{currentPassword:$('cp1').value,newPassword:$('cp2').value});if(!r.ok)return alert(r.error);closeModal();alert('Password changed. Please login again.');logout()}
-async function renderUsers(){const r=await api('listUsers');if(!r.ok)return alert(r.error);$('users').innerHTML=r.users.map(u=>`<div class="kv"><b>${esc(u.Name)}</b> — ${esc(u.Username)} — ${esc(u.Role)} — ${esc(u.Status)} <button class="btn small" onclick="toggleUser('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button></div>`).join('')||'No users.'}function userForm(){modal('Add Staff',`<div class="form-grid"><label>Name<input id="un"></label><label>Username<input id="uu"></label><label>Password<input id="up" type="password"></label><label>Role<select id="ur"><option>STAFF</option><option>ADMIN</option></select></label><label>Phone<input id="uph"></label><label>Email<input id="ue"></label></div><button class="btn primary" onclick="saveUser()">Create User</button>`)}async function saveUser(){const r=await api('saveUser',{name:$('un').value,username:$('uu').value,password:$('up').value,role:$('ur').value,phone:$('uph').value,email:$('ue').value});if(!r.ok)return alert(r.error);closeModal();renderUsers()}async function toggleUser(u,st){const r=await api('disableUser',{username:decodeURIComponent(u),status:decodeURIComponent(st)});if(!r.ok)return alert(r.error);renderUsers()}
-function modal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.remove('hidden')}function closeModal(){$('modal').classList.add('hidden')}function file64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
+/*
+SFS BUSINESS MANAGEMENT - FRONTEND ENGINE
+PHASE 3 COMPLETE IMPLEMENTATION
+*/
 
-function amountWords_(n){
-  const ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-  const tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
-  n=Math.floor(Number(n)||0);
-  if(n===0)return 'Zero';
-  function two(x){return x<20?ones[x]:tens[Math.floor(x/10)]+(x%10?' '+ones[x%10]:'')}
-  function three(x){return x<100?two(x):ones[Math.floor(x/100)]+' Hundred'+(x%100?' '+two(x%100):'')}
-  let out='';
-  if(n>=10000000){out+=three(Math.floor(n/10000000))+' Crore ';n%=10000000}
-  if(n>=100000){out+=three(Math.floor(n/100000))+' Lakh ';n%=100000}
-  if(n>=1000){out+=three(Math.floor(n/1000))+' Thousand ';n%=1000}
-  if(n>0)out+=three(n);
-  return out.trim();
+let state = {
+  user: null,
+  session: null,
+  products: [],
+  customers: [],
+  suppliers: [],
+  transactions: []
+};
+
+// Initial Load
+document.addEventListener('DOMContentLoaded', () => {
+  const savedSession = localStorage.getItem('sfs_session');
+  const savedUser = localStorage.getItem('sfs_user');
+  
+  if (savedSession && savedUser) {
+    state.session = savedSession;
+    state.user = JSON.parse(savedUser);
+    initApp();
+  } else {
+    showLogin();
+  }
+});
+
+/* ---------- AUTHENTICATION ---------- */
+
+async function login() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const errDiv = document.getElementById('loginError');
+
+  if (!u || !p) {
+    errDiv.textContent = 'Please enter both username and password.';
+    return;
+  }
+
+  errDiv.textContent = 'Logging in...';
+
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'login', username: u, password: p })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      state.session = data.session;
+      state.user = data.user;
+      localStorage.setItem('sfs_session', data.session);
+      localStorage.setItem('sfs_user', JSON.stringify(data.user));
+      errDiv.textContent = '';
+      initApp();
+    } else {
+      errDiv.textContent = data.error || 'Invalid credentials.';
+    }
+  } catch (err) {
+    errDiv.textContent = 'Connection error. Please try again.';
+  }
 }
-function printDoc(body,type){
-  $('printArea').innerHTML=`<div class="print-doc ${type||''}">${body}</div>`;
-  setTimeout(()=>window.print(),120);
+
+function logout() {
+  if (state.session) {
+    fetch(CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'logout', session: state.session })
+    }).catch(() => {});
+  }
+  state.session = null;
+  state.user = null;
+  localStorage.removeItem('sfs_session');
+  localStorage.removeItem('sfs_user');
+  showLogin();
 }
-function fmt_(n,dec=2){return Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:dec,maximumFractionDigits:dec})}
-function printDC(d){
-  const rows=d.items.map((x,i)=>{
-    const p=S.products.find(p=>p['Model / Part No.']===x.model)||{};
-    const rate=Number(x.rate||0), amount=Number(x.qty||0)*rate;
-    const brand=p.Brand?'<br><b>Brand '+esc(p.Brand)+'</b>':'';
-    return '<tr><td>'+String(i+1)+'</td><td class="desc">'+esc(p.Description||x.desc||'')+brand+'</td><td>'+esc(x.model)+'</td><td><b>'+esc(x.qty)+'</b><br><i>'+esc(x.unit||'nos')+'</i></td><td>'+(rate?fmt_(rate):'-')+'<br><i>each</i></td><td>'+(amount?fmt_(amount):'-')+'</td></tr>';
-  }).join('');
-  const total=d.items.reduce((a,x)=>a+Number(x.qty||0)*Number(x.rate||0),0);
-  const body='<div class="doc-head dc-head"><img src="logo.png"><div class="doc-title">CHALLAN</div></div>'+
-  '<div class="agent">SOLE AGENT<br><b>UNIVER</b></div>'+
-  '<div class="party-head"><div><b>M/S:</b><strong>'+esc(d.customer)+'</strong><div>'+esc(d.address||'')+'</div><b>To:</b> '+esc(d.contact||'')+'</div>'+
-  '<div class="meta"><div><b>DATE:</b> '+esc(d.date)+'</div><div><b>Challan #:</b> '+esc(d.no)+'</div><div><b>Customer ID:</b> '+esc(d.customerId)+'</div><div><b>PO #:</b> '+esc(d.po)+'</div><div><b>Po Date:</b> '+esc(d.poDate)+'</div><div><b>STN:</b> '+esc(d.stn)+'</div><div><b>NTN:</b> '+esc(d.ntn)+'</div></div></div>'+
-  '<table class="doc-table"><thead><tr><th>Item</th><th>Description</th><th>ITEM CODE</th><th>Qty.</th><th>Rate /Unit</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody>'+
-  '<tfoot><tr><td colspan="5" class="total-label">TOTAL</td><td>'+ (total?fmt_(total):'-') +'</td></tr></tfoot></table>'+
-  '<div class="thank">Thank you for Your Business!</div><div class="receiver">Receiver`s Name &amp; Sign<br><span></span></div>'+
-  '<div class="doc-footer"><b>STANDARD FLUID SYSTEMS</b><br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041<br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com</div>';
-  printDoc(body,'dc');
+
+function showLogin() {
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
 }
-function printInvoice(d){
-  const rows=d.items.map((x,i)=>{
-    const p=S.products.find(p=>p['Model / Part No.']===x.model)||{};
-    const amount=Number(x.qty||0)*Number(x.rate||0);
-    const brand=p.Brand?'<br><b>Brand '+esc(p.Brand)+'</b>':'';
-    return '<tr><td>'+String(i+1)+'</td><td class="desc">'+esc(p.Description||x.desc||'')+brand+'</td><td>'+esc(x.model)+'</td><td><b>'+esc(x.qty)+'</b><br><i>nos</i></td><td><b>'+fmt_(x.rate,3)+'</b><br><i>each</i></td><td><b>'+fmt_(amount,2)+'</b></td></tr>';
-  }).join('');
-  const subtotal=d.items.reduce((a,x)=>a+Number(x.qty||0)*Number(x.rate||0),0);
-  const gst=subtotal*0.18, grand=subtotal+gst;
-  const body='<div class="doc-head invoice-head"><img src="logo.png"><div class="doc-title">INVOICE</div></div>'+
-  '<div class="invoice-meta"><div><b>M/S.:</b> '+esc(d.customer)+'</div><div><b>Date:</b> '+esc(d.date)+'</div><div><b>Invoice#:</b> '+esc(d.no)+'</div>'+
-  '<div class="wide"><b>Address:</b> '+esc(d.address||'')+'</div><div><b>P.O#:</b> '+esc(d.po)+'</div><div><b>Date:</b> '+esc(d.poDate)+'</div>'+
-  '<div><b>Delivery Challan #:</b> '+esc(d.dc)+'</div><div><b>Date:</b> '+esc(d.dcDate)+'</div><div class="tax"><b>S.T.N#:</b> '+esc(d.stn)+'</div><div class="tax"><b>N.T.N #:</b> '+esc(d.ntn)+'</div></div>'+
-  '<table class="doc-table"><thead><tr><th>Item</th><th>Description</th><th>ITEM CODE</th><th>Qty.</th><th>Rate /Unit</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody>'+
-  '<tfoot><tr><td colspan="4" rowspan="3" class="words"><b>RUPEES:</b> '+esc(amountWords_(grand))+' Rupees &amp; Only /-</td><td>SUB TOTAL</td><td>'+fmt_(subtotal,2)+'</td></tr><tr><td>ADD GST 18 %</td><td>'+fmt_(gst,2)+'</td></tr><tr><td><b>TOTAL</b></td><td><b>'+fmt_(grand,2)+'</b></td></tr></tfoot></table>'+
-  '<div class="code-desc"><i>A.CODE: 84-4</i><br><b>Description: General Industrial Machinery &amp; Equipment</b><span>FOR STANDARD FLUID SYSTEMS</span></div>'+
-  '<div class="doc-footer"><b>STANDARD FLUID SYSTEMS</b><br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041<br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com</div>';
-  printDoc(body,'invoice');
+
+async function initApp() {
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('who').textContent = state.user.name || state.user.username;
+  document.getElementById('role').textContent = state.user.role;
+
+  renderNav();
+  await refresh();
 }
-function init(){S.api=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';if(S.session&&S.api){api('bootstrap').then(r=>{if(r.ok){S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];enter()}else{sessionStorage.clear();}})} }init();
+
+async function refresh() {
+  try {
+    const res = await apiCall('bootstrap');
+    if (res.ok) {
+      state.products = res.products || [];
+      state.customers = res.customers || [];
+      state.suppliers = res.suppliers || [];
+      state.transactions = res.transactions || [];
+      navigate('dashboard');
+    } else {
+      alert(res.error || 'Failed to sync database state.');
+    }
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+}
+
+async function apiCall(action, payload = {}) {
+  payload.action = action;
+  payload.session = state.session;
+
+  const res = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+}
+
+/* ---------- NAVIGATION ---------- */
+
+function renderNav() {
+  const nav = document.getElementById('nav');
+  const items = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'products', label: 'Products', icon: '📦' },
+    { id: 'dc_create', label: 'Create DC', icon: '🚚' },
+    { id: 'dc_search', label: 'DC History', icon: '🔍' },
+    { id: 'inv_create', label: 'Create Invoice', icon: '🧾' },
+    { id: 'inv_search', label: 'Invoice History', icon: '📑' },
+    { id: 'inward', label: 'Inward / Stock In', icon: '📥' },
+    { id: 'cust_ledger', label: 'Customer Ledger', icon: '👤' },
+    { id: 'sup_ledger', label: 'Supplier Ledger', icon: '🏭' },
+    { id: 'customers', label: 'Customers', icon: '👥' },
+    { id: 'suppliers', label: 'Suppliers', icon: '🏬' }
+  ];
+
+  nav.innerHTML = items.map(i => `
+    <button class="nav-item" onclick="navigate('${i.id}')">
+      <span>${i.icon}</span> <span>${i.label}</span>
+    </button>
+  `).join('');
+}
+
+function navigate(pageId) {
+  const titleMap = {
+    dashboard: 'Dashboard',
+    products: 'Product Inventory',
+    dc_create: 'New Delivery Challan',
+    dc_search: 'Delivery Challan History',
+    inv_create: 'New Sales Invoice',
+    inv_search: 'Invoice History',
+    inward: 'Stock Inward Purchase',
+    cust_ledger: 'Customer Financial Ledger',
+    sup_ledger: 'Supplier Financial Ledger',
+    customers: 'Customer Master',
+    suppliers: 'Supplier Master'
+  };
+
+  document.getElementById('pageTitle').textContent = titleMap[pageId] || 'SFS System';
+  const content = document.getElementById('content');
+
+  switch (pageId) {
+    case 'dashboard': renderDashboard(content); break;
+    case 'products': renderProducts(content); break;
+    case 'dc_create': renderDCCreate(content); break;
+    case 'dc_search': renderDCSearch(content); break;
+    case 'inv_create': renderInvoiceCreate(content); break;
+    case 'inv_search': renderInvoiceSearch(content); break;
+    case 'inward': renderInward(content); break;
+    case 'cust_ledger': renderCustomerLedgerView(content); break;
+    case 'sup_ledger': renderSupplierLedgerView(content); break;
+    case 'customers': renderCustomers(content); break;
+    case 'suppliers': renderSuppliers(content); break;
+    default: content.innerHTML = '<h3>Page Under Construction</h3>';
+  }
+}
+
+/* ---------- AUTOCOMPLETE DROPDOWNS ---------- */
+
+function createAutocomplete(containerId, options = {}) {
+  const { placeholder = 'Search...', data = [], getValue, getLabel, onSelect } = options;
+  const container = document.getElementById(containerId);
+  
+  container.className = 'ac-container';
+  container.innerHTML = `
+    <input type="text" class="ac-input" placeholder="${placeholder}" autocomplete="off">
+    <div class="ac-dropdown hidden"></div>
+  `;
+
+  const input = container.querySelector('.ac-input');
+  const dropdown = container.querySelector('.ac-dropdown');
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim().toLowerCase();
+    if (!val) {
+      dropdown.classList.add('hidden');
+      return;
+    }
+
+    const matches = data.filter(item => getLabel(item).toLowerCase().includes(val)).slice(0, 20);
+    if (!matches.length) {
+      dropdown.innerHTML = '<div class="ac-item empty">No match found</div>';
+    } else {
+      dropdown.innerHTML = matches.map((item, idx) => `
+        <div class="ac-item" data-idx="${idx}">${getLabel(item)}</div>
+      `).join('');
+    }
+
+    dropdown.classList.remove('hidden');
+
+    dropdown.querySelectorAll('.ac-item:not(.empty)').forEach(el => {
+      el.addEventListener('click', () => {
+        const selected = matches[parseInt(el.dataset.idx)];
+        input.value = getValue(selected);
+        dropdown.classList.add('hidden');
+        if (onSelect) onSelect(selected);
+      });
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) dropdown.classList.add('hidden');
+  });
+}
+
+/* ---------- 1 & 2. DC & INVOICE SEARCH / HISTORY ---------- */
+
+async function renderDCSearch(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="search-bar">
+        <input type="text" id="dcSearchInput" placeholder="Search by DC No, Customer Name/ID, PO #, Model No...">
+        <button class="btn primary" onclick="executeDCSearch()">Search</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>DC No.</th><th>Date</th><th>Customer</th><th>PO No.</th><th>Total Qty</th><th>Status</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="dcSearchBody"><tr><td colspan="7">Loading history...</td></tr></tbody>
+      </table>
+    </div>
+  `;
+  executeDCSearch();
+}
+
+async function executeDCSearch() {
+  const q = document.getElementById('dcSearchInput')?.value || '';
+  const body = document.getElementById('dcSearchBody');
+  if (!body) return;
+
+  const res = await apiCall('searchDCs', { query: q });
+  if (!res.ok) { body.innerHTML = `<tr><td colspan="7">${res.error}</td></tr>`; return; }
+
+  if (!res.data.length) {
+    body.innerHTML = `<tr><td colspan="7">No Delivery Challans found.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = res.data.map(d => `
+    <tr>
+      <td><b>${d.dcNo}</b></td>
+      <td>${new Date(d.date).toLocaleDateString()}</td>
+      <td>${d.customer}</td>
+      <td>${d.poNo || '--'}</td>
+      <td>${d.totalQty}</td>
+      <td><span class="badge ${d.status === 'Invoiced' ? 'success' : 'warning'}">${d.status}</span></td>
+      <td>
+        <button class="btn ghost btn-sm" onclick="viewDocument('DC', '${d.dcNo}')">View</button>
+        <button class="btn primary btn-sm" onclick="printDocument('DC', '${d.dcNo}')">Print</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function renderInvoiceSearch(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="search-bar">
+        <input type="text" id="invSearchInput" placeholder="Search by Invoice No, Customer, DC No, PO #, Model No...">
+        <button class="btn primary" onclick="executeInvoiceSearch()">Search</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Invoice No.</th><th>Date</th><th>Customer</th><th>DC No.</th><th>PO No.</th><th>Total Amount</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="invSearchBody"><tr><td colspan="7">Loading history...</td></tr></tbody>
+      </table>
+    </div>
+  `;
+  executeInvoiceSearch();
+}
+
+async function executeInvoiceSearch() {
+  const q = document.getElementById('invSearchInput')?.value || '';
+  const body = document.getElementById('invSearchBody');
+  if (!body) return;
+
+  const res = await apiCall('searchInvoices', { query: q });
+  if (!res.ok) { body.innerHTML = `<tr><td colspan="7">${res.error}</td></tr>`; return; }
+
+  if (!res.data.length) {
+    body.innerHTML = `<tr><td colspan="7">No Invoices found.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = res.data.map(i => `
+    <tr>
+      <td><b>${i.invoiceNo}</b></td>
+      <td>${new Date(i.date).toLocaleDateString()}</td>
+      <td>${i.customer}</td>
+      <td>${i.dcNo || '--'}</td>
+      <td>${i.poNo || '--'}</td>
+      <td><b>${Number(i.totalAmount).toLocaleString('en-PK', {minimumFractionDigits:2})}</b></td>
+      <td>
+        <button class="btn ghost btn-sm" onclick="viewDocument('Invoice', '${i.invoiceNo}')">View</button>
+        <button class="btn primary btn-sm" onclick="printDocument('Invoice', '${i.invoiceNo}')">Print</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ---------- 3 & 4. CUSTOMER / SUPPLIER AUTO-FILL IN FORMS ---------- */
+
+function renderDCCreate(container) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>Create Delivery Challan</h2>
+      <div class="form-grid">
+        <div>
+          <label>Customer Search (Name / ID / Keyword)</label>
+          <div id="custACContainer"></div>
+        </div>
+        <div><label>Customer ID</label><input type="text" id="dcCustId" readonly></div>
+        <div><label>Customer Name</label><input type="text" id="dcCustName"></div>
+        <div><label>Delivery Address</label><input type="text" id="dcAddr"></div>
+        <div><label>PO Number</label><input type="text" id="dcPO"></div>
+        <div><label>PO Date</label><input type="date" id="dcPODate"></div>
+        <div><label>NTN</label><input type="text" id="dcNTN"></div>
+        <div><label>STN</label><input type="text" id="dcSTN"></div>
+      </div>
+
+      <hr class="divider">
+      <h3>Items</h3>
+      <table class="data-table" id="dcItemsTable">
+        <thead>
+          <tr>
+            <th>Product (Model / Keyword)</th><th>Description</th><th>Stock Avail</th><th>Qty</th><th>Unit</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="dcItemsBody"></tbody>
+      </table>
+      <button class="btn ghost" onclick="addDCItemRow()">+ Add Item</button>
+
+      <div class="form-actions" style="margin-top: 20px;">
+        <button class="btn primary full" onclick="submitDC()">Save Delivery Challan</button>
+      </div>
+    </div>
+  `;
+
+  createAutocomplete('custACContainer', {
+    placeholder: 'Type Customer Name / ID...',
+    data: state.customers,
+    getValue: c => c['Customer Name'],
+    getLabel: c => `${c['Customer Name']} (${c['Customer ID']})`,
+    onSelect: c => {
+      document.getElementById('dcCustId').value = c['Customer ID'] || '';
+      document.getElementById('dcCustName').value = c['Customer Name'] || '';
+      document.getElementById('dcAddr').value = c.Address || '';
+      document.getElementById('dcNTN').value = c['NTN/Tax ID'] || '';
+      document.getElementById('dcSTN').value = c.STN || '';
+    }
+  });
+
+  addDCItemRow();
+}
+
+function addDCItemRow() {
+  const tbody = document.getElementById('dcItemsBody');
+  const rowId = 'row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  const tr = document.createElement('tr');
+  tr.id = rowId;
+  tr.innerHTML = `
+    <td><div id="prodAC_${rowId}"></div></td>
+    <td><input type="text" class="desc" readonly></td>
+    <td><span class="stock-badge">0</span></td>
+    <td><input type="number" class="qty" min="1" value="1"></td>
+    <td><input type="text" class="unit" value="Pcs"></td>
+    <td><button class="btn ghost btn-sm" onclick="this.closest('tr').remove()">×</button></td>
+  `;
+  tbody.appendChild(tr);
+
+  createAutocomplete(`prodAC_${rowId}`, {
+    placeholder: 'Search Model / Part No...',
+    data: state.products,
+    getValue: p => p['Model / Part No.'],
+    getLabel: p => `${p['Model / Part No.']} - ${p.Description || ''} (Stock: ${p['Current Stock'] || 0})`,
+    onSelect: p => {
+      tr.querySelector('.desc').value = p.Description || '';
+      tr.querySelector('.stock-badge').textContent = p['Current Stock'] || 0;
+      tr.querySelector('.unit').value = p.Unit || 'Pcs';
+      tr.dataset.model = p['Model / Part No.'];
+      tr.dataset.stock = p['Current Stock'] || 0;
+    }
+  });
+}
+
+/* ---------- 8, 9, 10, 11, 12. DC → INVOICE AUTO-FILL & RULES ---------- */
+
+function renderInvoiceCreate(container) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>Create Sales Invoice</h2>
+      <div class="form-grid" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <div style="grid-column: span 2;">
+          <label><b>CORE REQUIREMENT: Select Delivery Challan (DC No)</b></label>
+          <div id="dcACContainer"></div>
+          <small class="text-muted">Selecting a DC will automatically populate customer, PO, and items.</small>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div><label>Customer Name</label><input type="text" id="invCustName" readonly></div>
+        <div><label>Customer ID</label><input type="text" id="invCustId" readonly></div>
+        <div><label>DC No.</label><input type="text" id="invDCNo" readonly></div>
+        <div><label>DC Date</label><input type="text" id="invDCDate" readonly></div>
+        <div><label>PO Number</label><input type="text" id="invPO" readonly></div>
+        <div><label>PO Date</label><input type="text" id="invPODate" readonly></div>
+        <div><label>NTN</label><input type="text" id="invNTN" readonly></div>
+        <div><label>STN</label><input type="text" id="invSTN" readonly></div>
+      </div>
+
+      <hr class="divider">
+      <h3>Invoice Line Items</h3>
+      <table class="data-table" id="invItemsTable">
+        <thead>
+          <tr>
+            <th>Model / Part No.</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate / Unit (Editable)</th><th>Amount</th>
+          </tr>
+        </thead>
+        <tbody id="invItemsBody">
+          <tr><td colspan="6">Please select a Delivery Challan to load items.</td></tr>
+        </tbody>
+      </table>
+
+      <div style="text-align: right; margin-top: 15px; font-size: 1.2rem;">
+        <b>Subtotal Amount: Rs. <span id="invSubtotal">0.00</span></b>
+      </div>
+
+      <div class="form-actions" style="margin-top: 20px;">
+        <button class="btn primary full" onclick="submitInvoice()">Save & Issue Invoice</button>
+      </div>
+    </div>
+  `;
+
+  loadDCDropdownForInvoice();
+}
+
+async function loadDCDropdownForInvoice() {
+  const res = await apiCall('searchDCs', { query: '' });
+  if (!res.ok) return;
+
+  createAutocomplete('dcACContainer', {
+    placeholder: 'Type DC Number (e.g. DC-2026-000001)...',
+    data: res.data,
+    getValue: d => d.dcNo,
+    getLabel: d => `${d.dcNo} - ${d.customer} (${new Date(d.date).toLocaleDateString()}) [Status: ${d.status}]`,
+    onSelect: async d => {
+      if (d.status === 'Invoiced') {
+        alert(`Duplicate Protection Notice:\nInvoice already exists against this Delivery Challan (${d.dcNo}).`);
+        renderInvoiceCreate(document.getElementById('content'));
+        return;
+      }
+      
+      const dcDetails = await apiCall('getDCDetails', { dcNo: d.dcNo });
+      if (!dcDetails.ok) { alert(dcDetails.error); return; }
+
+      const dc = dcDetails.dc;
+      document.getElementById('invCustName').value = dc.customer || '';
+      document.getElementById('invCustId').value = dc.customerId || '';
+      document.getElementById('invDCNo').value = dc.dcNo || '';
+      document.getElementById('invDCDate').value = dc.date ? new Date(dc.date).toLocaleDateString() : '';
+      document.getElementById('invPO').value = dc.po || '';
+      document.getElementById('invPODate').value = dc.poDate ? new Date(dc.poDate).toLocaleDateString() : '';
+      document.getElementById('invNTN').value = dc.ntn || '';
+      document.getElementById('invSTN').value = dc.stn || '';
+
+      populateInvoiceItemsFromDC(dc.items);
+    }
+  });
+}
+
+function populateInvoiceItemsFromDC(items) {
+  const tbody = document.getElementById('invItemsBody');
+  tbody.innerHTML = '';
+
+  items.forEach(it => {
+    const prod = state.products.find(p => p['Model / Part No.'] === it.model) || {};
+    const salePrice = Number(prod['Sale Price'] || 0);
+
+    const tr = document.createElement('tr');
+    tr.dataset.model = it.model;
+    tr.innerHTML = `
+      <td><b>${it.model}</b></td>
+      <td>${it.desc || prod.Description || ''}</td>
+      <td class="qty">${it.qty}</td>
+      <td>${it.unit || 'Pcs'}</td>
+      <td><input type="number" class="rate" value="${salePrice}" min="0" step="any" oninput="calcInvoiceTotals()"></td>
+      <td class="amount"><b>0.00</b></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  calcInvoiceTotals();
+}
+
+function calcInvoiceTotals() {
+  let subtotal = 0;
+  document.querySelectorAll('#invItemsBody tr').forEach(tr => {
+    const qty = Number(tr.querySelector('.qty').textContent || 0);
+    const rate = Number(tr.querySelector('.rate').value || 0);
+    const amount = qty * rate;
+    tr.querySelector('.amount').textContent = amount.toLocaleString('en-PK', {minimumFractionDigits: 2});
+    subtotal += amount;
+  });
+  document.getElementById('invSubtotal').textContent = subtotal.toLocaleString('en-PK', {minimumFractionDigits: 2});
+}
+
+/* ---------- 6. STOCK VALIDATION & SUBMIT DC / INVOICE ---------- */
+
+async function submitDC() {
+  const customer = document.getElementById('dcCustName').value.trim();
+  const customerId = document.getElementById('dcCustId').value.trim();
+  const address = document.getElementById('dcAddr').value.trim();
+  const po = document.getElementById('dcPO').value.trim();
+  const poDate = document.getElementById('dcPODate').value;
+  const ntn = document.getElementById('dcNTN').value.trim();
+  const stn = document.getElementById('dcSTN').value.trim();
+
+  if (!customer) { alert('Please select/enter a Customer.'); return; }
+
+  const items = [];
+  let stockError = false;
+
+  document.querySelectorAll('#dcItemsBody tr').forEach(tr => {
+    const model = tr.dataset.model;
+    const desc = tr.querySelector('.desc').value;
+    const qty = Number(tr.querySelector('.qty').value || 0);
+    const available = Number(tr.dataset.stock || 0);
+    const unit = tr.querySelector('.unit').value;
+
+    if (!model) return;
+
+    if (qty > available) {
+      alert(`Insufficient Stock for Model: ${model}\nRequested: ${qty}, Available Stock: ${available}`);
+      stockError = true;
+      return;
+    }
+
+    if (qty > 0) items.push({ model, desc, qty, unit });
+  });
+
+  if (stockError) return;
+  if (!items.length) { alert('Please add at least one valid item to the DC.'); return; }
+
+  const res = await apiCall('saveDC', { customerId, customer, address, po, poDate, ntn, stn, items });
+  if (res.ok) {
+    alert('Delivery Challan created successfully!');
+    await refresh();
+    navigate('dc_search');
+  } else {
+    alert(res.error || 'Failed to save Delivery Challan.');
+  }
+}
+
+async function submitInvoice() {
+  const dcNo = document.getElementById('invDCNo').value;
+  const customer = document.getElementById('invCustName').value;
+  const customerId = document.getElementById('invCustId').value;
+  const po = document.getElementById('invPO').value;
+  const poDate = document.getElementById('invPODate').value;
+  const dcDate = document.getElementById('invDCDate').value;
+  const ntn = document.getElementById('invNTN').value;
+  const stn = document.getElementById('invSTN').value;
+
+  if (!dcNo) { alert('Please select a Delivery Challan first.'); return; }
+
+  const items = [];
+  document.querySelectorAll('#invItemsBody tr').forEach(tr => {
+    const model = tr.dataset.model;
+    const qty = Number(tr.querySelector('.qty').textContent || 0);
+    const rate = Number(tr.querySelector('.rate').value || 0);
+    if (model && qty > 0) items.push({ model, qty, rate });
+  });
+
+  const res = await apiCall('saveInvoice', { dc: dcNo, customerId, customer, po, poDate, dcDate, ntn, stn, items });
+  if (res.ok) {
+    alert('Invoice created successfully! Stock was preserved (no double-deduction).');
+    await refresh();
+    navigate('inv_search');
+  } else {
+    alert(res.error || 'Failed to create Invoice.');
+  }
+}
+
+/* ---------- 13 & 14. CUSTOMER & SUPPLIER LEDGERS ---------- */
+
+function renderCustomerLedgerView(container) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>Customer Financial Ledger</h2>
+      <div class="form-grid">
+        <div>
+          <label>Select Customer</label>
+          <div id="ledgerCustAC"></div>
+        </div>
+        <div><label>Date From</label><input type="date" id="ledgerCustFrom"></div>
+        <div><label>Date To</label><input type="date" id="ledgerCustTo"></div>
+      </div>
+      <div style="margin-top: 15px;">
+        <button class="btn primary" onclick="fetchCustomerLedgerData()">Generate Ledger</button>
+      </div>
+
+      <hr class="divider">
+      <div id="ledgerResult" class="hidden">
+        <div class="form-grid" style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+          <div><b>Total Debit:</b> Rs. <span id="lblTotalDebit">0.00</span></div>
+          <div><b>Total Credit:</b> Rs. <span id="lblTotalCredit">0.00</span></div>
+          <div><b>Closing Balance:</b> Rs. <span id="lblClosingBalance">0.00</span></div>
+        </div>
+        <br>
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
+          </thead>
+          <tbody id="custLedgerBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  createAutocomplete('ledgerCustAC', {
+    placeholder: 'Type Customer Name...',
+    data: state.customers,
+    getValue: c => c['Customer Name'],
+    getLabel: c => `${c['Customer Name']} (${c['Customer ID']})`,
+    onSelect: c => { state.selectedLedgerCustomer = c['Customer Name']; }
+  });
+}
+
+async function fetchCustomerLedgerData() {
+  const custName = state.selectedLedgerCustomer;
+  if (!custName) { alert('Please select a Customer.'); return; }
+
+  const dateFrom = document.getElementById('ledgerCustFrom').value;
+  const dateTo = document.getElementById('ledgerCustTo').value;
+
+  const res = await apiCall('getCustomerLedger', { customer: custName, dateFrom, dateTo });
+  if (!res.ok) { alert(res.error); return; }
+
+  document.getElementById('ledgerResult').classList.remove('hidden');
+  document.getElementById('lblTotalDebit').textContent = res.totalDebit.toLocaleString('en-PK', {minimumFractionDigits: 2});
+  document.getElementById('lblTotalCredit').textContent = res.totalCredit.toLocaleString('en-PK', {minimumFractionDigits: 2});
+  document.getElementById('lblClosingBalance').textContent = res.closingBalance.toLocaleString('en-PK', {minimumFractionDigits: 2});
+
+  const tbody = document.getElementById('custLedgerBody');
+  tbody.innerHTML = res.ledger.map(r => `
+    <tr>
+      <td>${new Date(r.date).toLocaleDateString()}</td>
+      <td>${r.type}</td>
+      <td>${r.ref}</td>
+      <td>${r.description}</td>
+      <td>${r.debit ? r.debit.toLocaleString('en-PK', {minimumFractionDigits: 2}) : '--'}</td>
+      <td>${r.credit ? r.credit.toLocaleString('en-PK', {minimumFractionDigits: 2}) : '--'}</td>
+      <td><b>${r.balance.toLocaleString('en-PK', {minimumFractionDigits: 2})}</b></td>
+    </tr>
+  `).join('');
+}
+
+function renderSupplierLedgerView(container) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>Supplier Financial Ledger</h2>
+      <div class="form-grid">
+        <div>
+          <label>Select Supplier</label>
+          <div id="ledgerSupAC"></div>
+        </div>
+        <div><label>Date From</label><input type="date" id="ledgerSupFrom"></div>
+        <div><label>Date To</label><input type="date" id="ledgerSupTo"></div>
+      </div>
+      <div style="margin-top: 15px;">
+        <button class="btn primary" onclick="fetchSupplierLedgerData()">Generate Ledger</button>
+      </div>
+
+      <hr class="divider">
+      <div id="supLedgerResult" class="hidden">
+        <div class="form-grid" style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+          <div><b>Total Purchases (Credit):</b> Rs. <span id="lblSupCredit">0.00</span></div>
+          <div><b>Total Paid (Debit):</b> Rs. <span id="lblSupDebit">0.00</span></div>
+          <div><b>Closing Balance:</b> Rs. <span id="lblSupBalance">0.00</span></div>
+        </div>
+        <br>
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr>
+          </thead>
+          <tbody id="supLedgerBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  createAutocomplete('ledgerSupAC', {
+    placeholder: 'Type Supplier Name...',
+    data: state.suppliers,
+    getValue: s => s['Supplier Name'],
+    getLabel: s => `${s['Supplier Name']} (${s['Supplier ID']})`,
+    onSelect: s => { state.selectedLedgerSupplier = s['Supplier Name']; }
+  });
+}
+
+async function fetchSupplierLedgerData() {
+  const supName = state.selectedLedgerSupplier;
+  if (!supName) { alert('Please select a Supplier.'); return; }
+
+  const dateFrom = document.getElementById('ledgerSupFrom').value;
+  const dateTo = document.getElementById('ledgerSupTo').value;
+
+  const res = await apiCall('getSupplierLedger', { supplier: supName, dateFrom, dateTo });
+  if (!res.ok) { alert(res.error); return; }
+
+  document.getElementById('supLedgerResult').classList.remove('hidden');
+  document.getElementById('lblSupDebit').textContent = res.totalDebit.toLocaleString('en-PK', {minimumFractionDigits: 2});
+  document.getElementById('lblSupCredit').textContent = res.totalCredit.toLocaleString('en-PK', {minimumFractionDigits: 2});
+  document.getElementById('lblSupBalance').textContent = res.closingBalance.toLocaleString('en-PK', {minimumFractionDigits: 2});
+
+  const tbody = document.getElementById('supLedgerBody');
+  tbody.innerHTML = res.ledger.map(r => `
+    <tr>
+      <td>${new Date(r.date).toLocaleDateString()}</td>
+      <td>${r.type}</td>
+      <td>${r.ref}</td>
+      <td>${r.description}</td>
+      <td>${r.debit ? r.debit.toLocaleString('en-PK', {minimumFractionDigits: 2}) : '--'}</td>
+      <td>${r.credit ? r.credit.toLocaleString('en-PK', {minimumFractionDigits: 2}) : '--'}</td>
+      <td><b>${r.balance.toLocaleString('en-PK', {minimumFractionDigits: 2})}</b></td>
+    </tr>
+  `).join('');
+}
+
+/* ---------- 15. VIEW & REPRINT BUSINESS DOCUMENTS ---------- */
+
+async function viewDocument(type, docNo) {
+  const action = type === 'DC' ? 'getDCDetails' : 'getInvoiceDetails';
+  const param = type === 'DC' ? { dcNo: docNo } : { invoiceNo: docNo };
+
+  const res = await apiCall(action, param);
+  if (!res.ok) { alert(res.error); return; }
+
+  const modal = document.getElementById('modal');
+  const title = document.getElementById('modalTitle');
+  const body = document.getElementById('modalBody');
+
+  title.textContent = `${type} Details: ${docNo}`;
+
+  if (type === 'DC') {
+    const dc = res.dc;
+    body.innerHTML = `
+      <div>
+        <p><b>Customer:</b> ${dc.customer} (ID: ${dc.customerId})</p>
+        <p><b>Date:</b> ${new Date(dc.date).toLocaleDateString()} | <b>PO #:</b> ${dc.po || '--'}</p>
+        <p><b>Linked Invoice:</b> ${dc.invoiceNo ? `<b>${dc.invoiceNo}</b>` : 'None (Pending Invoice)'}</p>
+        <hr>
+        <table class="data-table">
+          <thead><tr><th>Model / Part No.</th><th>Description</th><th>Qty</th><th>Unit</th></tr></thead>
+          <tbody>
+            ${dc.items.map(i => `<tr><td><b>${i.model}</b></td><td>${i.desc || ''}</td><td>${i.qty}</td><td>${i.unit}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <br>
+        <button class="btn primary full" onclick="printDocument('DC', '${docNo}')">Print Official DC</button>
+      </div>
+    `;
+  } else {
+    const inv = res.invoice;
+    body.innerHTML = `
+      <div>
+        <p><b>Customer:</b> ${inv.customer}</p>
+        <p><b>Invoice Date:</b> ${new Date(inv.date).toLocaleDateString()} | <b>DC #:</b> ${inv.dcNo || '--'}</p>
+        <hr>
+        <table class="data-table">
+          <thead><tr><th>Model / Part No.</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+          <tbody>
+            ${inv.items.map(i => `<tr><td><b>${i.model}</b></td><td>${i.qty}</td><td>${i.rate.toFixed(2)}</td><td><b>${i.amount.toFixed(2)}</b></td></tr>`).join('')}
+          </tbody>
+        </table>
+        <br>
+        <button class="btn primary full" onclick="printDocument('Invoice', '${docNo}')">Print Official Invoice</button>
+      </div>
+    `;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+async function printDocument(type, docNo) {
+  const action = type === 'DC' ? 'getDCDetails' : 'getInvoiceDetails';
+  const param = type === 'DC' ? { dcNo: docNo } : { invoiceNo: docNo };
+
+  const res = await apiCall(action, param);
+  if (!res.ok) { alert(res.error); return; }
+
+  closeModal();
+
+  const printArea = document.getElementById('printArea');
+  document.getElementById('printDocTitle').textContent = type === 'DC' ? 'DELIVERY CHALLAN' : 'SALES INVOICE';
+  document.getElementById('printDocNo').textContent = docNo;
+
+  const data = type === 'DC' ? res.dc : res.invoice;
+  document.getElementById('printDocDate').textContent = new Date(data.date).toLocaleDateString();
+  document.getElementById('printDocRef').textContent = type === 'DC' ? (data.po || '--') : (data.dcNo || '--');
+  document.getElementById('printCustName').textContent = data.customer || '--';
+  document.getElementById('printCustAddr').textContent = data.address || '--';
+  document.getElementById('printCustNTN').textContent = data.ntn || '--';
+  document.getElementById('printCustSTN').textContent = data.stn || '--';
+
+  const body = document.getElementById('printTableBody');
+  const invOnlyEls = document.querySelectorAll('.inv-only');
+
+  if (type === 'DC') {
+    invOnlyEls.forEach(el => el.style.display = 'none');
+    body.innerHTML = data.items.map((it, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td><b>${it.model}</b></td>
+        <td>${it.desc || ''}</td>
+        <td>${it.qty}</td>
+        <td>${it.unit || 'Pcs'}</td>
+      </tr>
+    `).join('');
+  } else {
+    invOnlyEls.forEach(el => el.style.display = 'table-cell');
+    document.querySelector('.print-totals.inv-only').style.display = 'block';
+
+    let total = 0;
+    body.innerHTML = data.items.map((it, idx) => {
+      total += it.amount;
+      return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td><b>${it.model}</b></td>
+          <td>${it.desc || ''}</td>
+          <td>${it.qty}</td>
+          <td>${it.unit || 'Pcs'}</td>
+          <td>${it.rate.toFixed(2)}</td>
+          <td><b>${it.amount.toFixed(2)}</b></td>
+        </tr>
+      `;
+    }).join('');
+    document.getElementById('printGrandTotal').textContent = total.toLocaleString('en-PK', {minimumFractionDigits: 2});
+  }
+
+  printArea.classList.remove('hidden');
+  window.print();
+  printArea.classList.add('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+}
+
+/* ---------- OTHER VIEWS ---------- */
+
+function renderDashboard(container) {
+  container.innerHTML = `
+    <div class="card-grid">
+      <div class="card metric"><h3>Total Products</h3><p>${state.products.length}</p></div>
+      <div class="card metric"><h3>Total Customers</h3><p>${state.customers.length}</p></div>
+      <div class="card metric"><h3>Total Suppliers</h3><p>${state.suppliers.length}</p></div>
+    </div>
+  `;
+}
+
+function renderProducts(container) {
+  container.innerHTML = `
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Current Stock</th><th>Sale Price</th></tr>
+        </thead>
+        <tbody>
+          ${state.products.map(p => `
+            <tr>
+              <td><b>${p['Model / Part No.']}</b></td>
+              <td>${p.Description || ''}</td>
+              <td>${p.Category || ''}</td>
+              <td>${p.Location || ''}</td>
+              <td><span class="stock-badge">${p['Current Stock'] || 0}</span></td>
+              <td>${p['Sale Price'] || '--'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderCustomers(container) {
+  container.innerHTML = `
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr><th>Customer ID</th><th>Customer Name</th><th>Phone</th><th>NTN/Tax ID</th><th>Address</th></tr>
+        </thead>
+        <tbody>
+          ${state.customers.map(c => `
+            <tr>
+              <td>${c['Customer ID']}</td>
+              <td><b>${c['Customer Name']}</b></td>
+              <td>${c.Phone || ''}</td>
+              <td>${c['NTN/Tax ID'] || ''}</td>
+              <td>${c.Address || ''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSuppliers(container) {
+  container.innerHTML = `
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr><th>Supplier ID</th><th>Supplier Name</th><th>Phone</th><th>NTN/Tax ID</th><th>Address</th></tr>
+        </thead>
+        <tbody>
+          ${state.suppliers.map(s => `
+            <tr>
+              <td>${s['Supplier ID']}</td>
+              <td><b>${s['Supplier Name']}</b></td>
+              <td>${s.Phone || ''}</td>
+              <td>${s['NTN/Tax ID'] || ''}</td>
+              <td>${s.Address || ''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderInward(container) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>Inward Purchase Stock</h2>
+      <div class="form-grid">
+        <div><label>Supplier Search</label><div id="inwSupAC"></div></div>
+        <div><label>Product Search</label><div id="inwProdAC"></div></div>
+        <div><label>Quantity</label><input type="number" id="inwQty" min="1" value="1"></div>
+        <div><label>Purchase Cost</label><input type="number" id="inwCost" step="any"></div>
+      </div>
+      <button class="btn primary" style="margin-top: 15px;" onclick="submitInward()">Save Inward</button>
+    </div>
+  `;
+
+  createAutocomplete('inwSupAC', {
+    placeholder: 'Search Supplier...',
+    data: state.suppliers,
+    getValue: s => s['Supplier Name'],
+    getLabel: s => s['Supplier Name'],
+    onSelect: s => { state.inwSupplier = s['Supplier Name']; }
+  });
+
+  createAutocomplete('inwProdAC', {
+    placeholder: 'Search Product Model...',
+    data: state.products,
+    getValue: p => p['Model / Part No.'],
+    getLabel: p => `${p['Model / Part No.']} - ${p.Description || ''}`,
+    onSelect: p => { state.inwModel = p['Model / Part No.']; }
+  });
+}
+
+async function submitInward() {
+  const model = state.inwModel;
+  const supplier = state.inwSupplier;
+  const qty = Number(document.getElementById('inwQty').value);
+  const purchaseCost = document.getElementById('inwCost').value;
+
+  if (!model || !supplier || qty <= 0) { alert('Please fill required fields.'); return; }
+
+  const res = await apiCall('saveInward', { model, supplier, qty, purchaseCost });
+  if (res.ok) {
+    alert('Inward entry recorded successfully!');
+    await refresh();
+    navigate('products');
+  } else {
+    alert(res.error);
+  }
+}
