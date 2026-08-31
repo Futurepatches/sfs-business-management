@@ -43,8 +43,14 @@ async function login() {
   try {
     const res = await fetch(CONFIG.API_URL, {
       method: 'POST',
+      mode: 'cors',
+      redirect: 'follow',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
       body: JSON.stringify({ action: 'login', username: u, password: p })
     });
+    
     const data = await res.json();
 
     if (data.ok) {
@@ -58,10 +64,10 @@ async function login() {
       errDiv.textContent = data.error || 'Invalid credentials.';
     }
   } catch (err) {
+    console.error("Login Fetch Error:", err);
     errDiv.textContent = 'Connection error. Please try again.';
   }
 }
-
 function logout() {
   if (state.session) {
     fetch(CONFIG.API_URL, {
@@ -114,11 +120,16 @@ async function apiCall(action, payload = {}) {
 
   const res = await fetch(CONFIG.API_URL, {
     method: 'POST',
+    mode: 'cors',
+    redirect: 'follow',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
     body: JSON.stringify(payload)
   });
+  
   return await res.json();
 }
-
 /* ---------- NAVIGATION ---------- */
 
 function renderNav() {
