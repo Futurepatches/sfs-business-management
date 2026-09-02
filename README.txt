@@ -1,35 +1,20 @@
-SFS BUSINESS MANAGEMENT - FRONTEND FINAL
+SFS BUSINESS MANAGEMENT - LOGIN CONNECTION FIX
 
-1. Replace these files in the GitHub Pages repository:
-   index.html
-   app.js
-   styles.css
-   config.js
-   price-list.js
-   Keep your existing logo.png.
+FRONTEND (GitHub Pages): upload these files to the repository root:
+index.html
+app.js
+styles.css
+config.js
+logo.png
 
-2. ONE-TIME configuration:
-   Open config.js and replace:
-   PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE
-   with the existing deployed Apps Script /exec URL.
+The Apps Script URL is already configured in config.js. The URL is NOT shown on the login screen.
 
-   This is the only frontend configuration. Users do NOT enter the URL at login.
+BACKEND:
+Code.gs is the matching backend for the existing "Users & Roles" sheet and session login.
+Do NOT run setupDatabase() just to fix login.
 
-3. Do NOT replace Code.gs with this package.
-   Do NOT run setupDatabase() for this frontend upload.
+IMPORTANT:
+The Apps Script Web App /exec URL was tested and returned:
+{"ok":true,"service":"SFS Business Management","message":"API is online"}
 
-4. Price list:
-   Only matched stock products are included.
-   Model = Price List column A.
-   Rate = Price List column R.
-   500 existing stock products matched; unmatched products are not assigned guessed prices.
-
-5. Invoice:
-   Standard sale price is auto-filled, but the final Rate / Unit remains editable.
-   There is NO discount field.
-
-6. Delivery Challan:
-   Saves stock OUT. Invoice does not reduce stock again.
-
-7. Source inventory:
-   Original live inventory remains read-only.
+After uploading frontend files, hard refresh the GitHub Pages site (Ctrl+F5).
