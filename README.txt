@@ -1,20 +1,13 @@
-SFS BUSINESS MANAGEMENT - LOGIN CONNECTION FIX
+SFS BUSINESS MANAGEMENT - CONNECTION FIX
 
-FRONTEND (GitHub Pages): upload these files to the repository root:
-index.html
-app.js
-styles.css
-config.js
-logo.png
+1. Replace the GitHub Pages frontend files with ALL files in this folder:
+   index.html, app.js, styles.css, config.js, logo.png
 
-The Apps Script URL is already configured in config.js. The URL is NOT shown on the login screen.
+2. Apps Script:
+   Replace Code.gs with the Code.gs in this package.
+   Save it, then Deploy > Manage deployments > Web app > Edit > New version > Deploy.
+   Keep Execute as: Me and access: Anyone with the link (or your existing working access setting).
 
-BACKEND:
-Code.gs is the matching backend for the existing "Users & Roles" sheet and session login.
-Do NOT run setupDatabase() just to fix login.
+3. DO NOT run setupDatabase().
 
-IMPORTANT:
-The Apps Script Web App /exec URL was tested and returned:
-{"ok":true,"service":"SFS Business Management","message":"API is online"}
-
-After uploading frontend files, hard refresh the GitHub Pages site (Ctrl+F5).
+The frontend first tries POST and automatically falls back to JSONP GET. This avoids the browser CORS/redirect problem that can cause 'Connection error' with Apps Script Web Apps from GitHub Pages.

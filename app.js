@@ -1,6 +1,36 @@
 const DEFAULT_API=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';const CATS=['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];let S={session:sessionStorage.sfsSession||'',user:null,products:[],customers:[],suppliers:[],tx:[],api:DEFAULT_API};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function nav(){const items=[['dashboard','Dashboard'],['products','Products'],['inward','Inward / Purchase'],['dc','Delivery Challans'],['invoices','Invoices'],['customers','Customers'],['suppliers','Suppliers'],['reports','Reports'],['settings','Settings']];if(S.user?.role==='ADMIN')items.push(['users','Users / Staff']);$('nav').innerHTML=items.map(x=>`<button class="navbtn ${x[0]==='dashboard'?'active':''}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('');}
-async function api(action,data={}){if(!S.api)return {ok:false,error:'Backend URL not configured'};try{const r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,session:S.session,...data})});const text=await r.text();let j;try{j=JSON.parse(text)}catch(e){return {ok:false,error:'Invalid response from business database.'}}return j}catch(e){console.error(e);return {ok:false,error:'Connection error. Please try again.'}}}
+function jsonpRequest(url, payload){
+  return new Promise(function(resolve){
+    var cb='sfs_cb_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    var script=document.createElement('script');
+    var done=false;
+    window[cb]=function(data){done=true;cleanup();resolve(data)};
+    function cleanup(){try{delete window[cb]}catch(e){window[cb]=undefined}if(script.parentNode)script.parentNode.removeChild(script)}
+    script.onerror=function(){if(done)return;done=true;cleanup();resolve({ok:false,error:'Connection error. Please try again.'})};
+    var params=new URLSearchParams();
+    params.set('action',payload.action||'');
+    params.set('callback',cb);
+    var copy=Object.assign({},payload);delete copy.action;
+    if(copy.session) params.set('session',copy.session);
+    delete copy.session;
+    if(Object.keys(copy).length) params.set('data',encodeURIComponent(JSON.stringify(copy)));
+    script.src=url+(url.indexOf('?')>=0?'&':'?')+params.toString();
+    document.head.appendChild(script);
+    setTimeout(function(){if(!done){done=true;cleanup();resolve({ok:false,error:'Connection timeout. Please try again.'})}},15000);
+  });
+}
+async function api(action,data={}){
+  if(!S.api)return {ok:false,error:'Backend URL not configured'};
+  var payload=Object.assign({action:action,session:S.session||''},data||{});
+  try{
+    var r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+    var text=await r.text();
+    var j;try{j=JSON.parse(text)}catch(e){j=null}
+    if(j) return j;
+  }catch(e){console.warn('POST connection unavailable; using JSONP fallback.',e)}
+  return await jsonpRequest(S.api,payload);
+}
 async function login(){const user=$('loginUser').value.trim(),pass=$('loginPass').value;S.api=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||DEFAULT_API||localStorage.sfsApiUrl||'';if(!S.api){$('loginError').textContent='System connection is not configured.';return}if(!user||!pass){$('loginError').textContent='Username and password are required.';return}$('loginError').textContent='Signing in...';const r=await api('login',{username:user,password:pass});if(!r.ok){$('loginError').textContent=r.error||'Invalid username or password';return}S.session=r.session;S.user=r.user;sessionStorage.sfsSession=S.session;enter();}
 async function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=S.user.name;$('role').textContent=S.user.role;nav();await refresh();}
 function logout(){if(S.session)api('logout').catch(()=>{});sessionStorage.clear();location.reload()}

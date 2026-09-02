@@ -49,105 +49,62 @@ const HEADERS = {
 /* ---------- WEB API ---------- */
 
 function doGet(e) {
-  return out({
-    ok:true,
-    service:'SFS Business Management',
-    message:'API is online',
-    timestamp:new Date()
-  });
+  try {
+    var q = (e && e.parameter) || {};
+    if (!q.action) return out({ok:true,service:'SFS Business Management',message:'API is online',timestamp:new Date()});
+    var p = {};
+    Object.keys(q).forEach(function(k){ if(k !== 'callback') p[k] = q[k]; });
+    if (p.data) { try { p = Object.assign(p, JSON.parse(decodeURIComponent(p.data))); } catch(ignore){} }
+    var result = handleRequest_(p);
+    var cb = String(q.callback || '');
+    if (cb && /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(cb)) {
+      return ContentService.createTextOutput(cb + '(' + JSON.stringify(result) + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return out(result);
+  } catch(err) { return out({ok:false,error:String(err && err.message ? err.message : err)}); }
 }
 
 function doPost(e) {
   try {
-    const p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const action = String(p.action || '').trim();
-
-    // Login is the only public application action.
-    if (action === 'login') return out(loginUser(p));
-
-    // Everything else requires a server-side session.
-    if (action === 'logout') return out(logoutUser_(p));
-    if (action === 'bootstrap') return out(bootstrap_(p));
-
-    const auth = requireSession_(p);
-    if (!auth.ok) return out(auth);
-
-    switch (action) {
-      case 'saveProduct':
-      case 'product':
-        return out(saveProduct(p));
-
-      case 'saveInward':
-      case 'inward':
-        p.user = auth.user.username;
-        return out(saveInward(p));
-
-      case 'saveDC':
-      case 'dc':
-        p.user = auth.user.username;
-        return out(saveDC(p));
-
-      case 'saveInvoice':
-      case 'invoice':
-        p.user = auth.user.username;
-        return out(saveInvoice(p));
-
-      case 'saveCustomer':
-        return out(saveCustomer_(p, auth.user));
-
-      case 'saveSupplier':
-        return out(saveSupplier_(p, auth.user));
-
-      case 'getLedger':
-        return out(getLedgerForFrontend_(p));
-
-      case 'getReports':
-        return out(getReportsForFrontend_(p));
-
-      case 'listUsers':
-        return out(listUsers_(auth.user));
-
-      case 'saveUser':
-        return out(saveUser_(p, auth.user));
-
-      case 'disableUser':
-        return out(disableUser_(p, auth.user));
-
-      case 'changePassword':
-        return out(changePassword_(p, auth.user));
-
-      case 'refreshSource':
-      case 'sync':
-        syncSourceData();
-        return out({ok:true, message:'Source data refreshed'});
-
-      case 'products':
-        return out(getProducts());
-
-      case 'stock':
-        return out(getStock(p));
-
-      case 'stockMovement':
-        return out(getStockMovement(p));
-
-      case 'customers':
-        return out(getCustomers());
-
-      case 'suppliers':
-        return out(getSuppliers());
-
-      default:
-        return out({ok:false,error:'Unknown action: '+action});
-    }
+    var p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    return out(handleRequest_(p));
   } catch (err) {
     return out({ok:false,error:String(err && err.message ? err.message : err)});
   }
 }
-function out(o) {
-  return ContentService
-    .createTextOutput(JSON.stringify(o))
-    .setMimeType(ContentService.MimeType.JSON);
+
+function handleRequest_(p) {
+  try {
+    var action = String(p.action || '').trim();
+    if (action === 'login') return loginUser(p);
+    if (action === 'logout') return logoutUser_(p);
+    if (action === 'bootstrap') return bootstrap_(p);
+    var auth = requireSession_(p);
+    if (!auth.ok) return auth;
+    switch (action) {
+      case 'saveProduct': case 'product': return saveProduct(p);
+      case 'saveInward': case 'inward': p.user=auth.user.username; return saveInward(p);
+      case 'saveDC': case 'dc': p.user=auth.user.username; return saveDC(p);
+      case 'saveInvoice': case 'invoice': p.user=auth.user.username; return saveInvoice(p);
+      case 'saveCustomer': return saveCustomer_(p,auth.user);
+      case 'saveSupplier': return saveSupplier_(p,auth.user);
+      case 'getLedger': return getLedgerForFrontend_(p);
+      case 'getReports': return getReportsForFrontend_(p);
+      case 'listUsers': return listUsers_(auth.user);
+      case 'saveUser': return saveUser_(p,auth.user);
+      case 'disableUser': return disableUser_(p,auth.user);
+      case 'changePassword': return changePassword_(p,auth.user);
+      case 'refreshSource': case 'sync': syncSourceData(); return {ok:true,message:'Source data refreshed'};
+      case 'products': return getProducts();
+      case 'stock': return getStock(p);
+      case 'stockMovement': return getStockMovement(p);
+      case 'customers': return getCustomers();
+      case 'suppliers': return getSuppliers();
+      default: return {ok:false,error:'Unknown action: '+action};
+    }
+  } catch(err) { return {ok:false,error:String(err && err.message ? err.message : err)}; }
 }
+function out(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 /* ---------- DATABASE SETUP ---------- */
 
