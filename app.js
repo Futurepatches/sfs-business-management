@@ -1,6 +1,6 @@
 // Standard Fluid Systems - Main Application Logic
 const SFS_CONFIG = {
-    scriptUrl: "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE", // Apni Apps Script URL yahan dalein
+    scriptUrl: "https://script.google.com/macros/s/AKfycbwL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec
 };
 
 let appState = {
