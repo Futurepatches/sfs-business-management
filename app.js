@@ -6,7 +6,22 @@ const SFS_CONFIG = {
 let appState = {
     user: null,
     inventory: [],
-    deliveries: [],
+    deliveries: [
+        {
+            dcNumber: "123",
+            customerName: "M/S ABC Engineering",
+            address: "Plot 45, SITE Area, Karachi",
+            poNo: "PO-9988",
+            poDate: "2026-08-15",
+            date: "2026-08-17",
+            stn: "3277876141543",
+            ntn: "2221343-7",
+            items: [
+                { description: "Connector 1/8 x 4mm", model: "HA345418", qty: 350, rate: 150 },
+                { description: "3/2 Electro/CNOMO N.O. 1.5MM", model: "AA-0404", qty: 1, rate: 24000 }
+            ]
+        }
+    ],
     invoices: [],
     activeTab: 'dashboard'
 };
@@ -16,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.onsubmit = handleLoginSubmit;
     }
+    populateDCDropdown();
     fetchDataFromSheets();
 });
 
@@ -49,13 +65,16 @@ async function fetchDataFromSheets() {
         const response = await fetch(SFS_CONFIG.scriptUrl);
         const data = await response.json();
         if (data) {
+            if (data.deliveries && data.deliveries.length > 0) {
+                appState.deliveries = data.deliveries;
+            }
             appState.inventory = data.inventory || [];
-            appState.deliveries = data.deliveries || [];
             appState.invoices = data.invoices || [];
             populateDCDropdown();
+            initDashboard();
         }
     } catch (error) {
-        console.error("Error fetching data from Google Sheets:", error);
+        console.warn("Using local fallback data:", error);
     }
 }
 
@@ -76,7 +95,13 @@ function switchTab(tabId) {
 }
 
 function initDashboard() {
-    console.log("Dashboard initialized successfully.");
+    const totalItemsEl = document.getElementById('dashTotalItems');
+    const totalDcEl = document.getElementById('dashTotalDC');
+    const totalInvEl = document.getElementById('dashTotalInv');
+
+    if (totalItemsEl) totalItemsEl.innerText = appState.inventory.length;
+    if (totalDcEl) totalDcEl.innerText = appState.deliveries.length;
+    if (totalInvEl) totalInvEl.innerText = appState.invoices.length;
 }
 
 function populateDCDropdown() {
@@ -122,11 +147,11 @@ function handleDCSelection(dcNumber) {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${index + 1}</td>
-                <td><input type="text" value="${item.description || ''}" class="input"></td>
-                <td><input type="text" value="${item.model || ''}" class="input"></td>
-                <td><input type="number" value="${item.qty || 1}" class="input item-qty"></td>
-                <td><input type="number" value="${item.rate || 0}" class="input item-rate"></td>
-                <td class="item-total">${(item.qty || 1) * (item.rate || 0)}</td>
+                <td>${item.description || ''}</td>
+                <td>${item.model || ''}</td>
+                <td>${item.qty || 1}</td>
+                <td>${item.rate || 0}</td>
+                <td>${(item.qty || 1) * (item.rate || 0)}</td>
             `;
             itemsTableBody.appendChild(row);
         });
