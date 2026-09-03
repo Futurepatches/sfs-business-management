@@ -30,9 +30,14 @@
                 <small>Business Management</small>
             </div>
             <button class="navbtn active" onclick="switchTab('dashboard')">Dashboard</button>
-            <button class="navbtn" onclick="switchTab('inventory')">Inventory</button>
-            <button class="navbtn" onclick="switchTab('deliveries')">Delivery Challan</button>
+            <button class="navbtn" onclick="switchTab('products')">Products</button>
+            <button class="navbtn" onclick="switchTab('inward')">Inward / Purchase</button>
+            <button class="navbtn" onclick="switchTab('deliveries')">Delivery Challans</button>
             <button class="navbtn" onclick="switchTab('invoices')">Invoices</button>
+            <button class="navbtn" onclick="switchTab('customers')">Customers</button>
+            <button class="navbtn" onclick="switchTab('suppliers')">Suppliers</button>
+            <button class="navbtn" onclick="switchTab('reports')">Reports</button>
+            <button class="navbtn" onclick="switchTab('settings')">Settings</button>
             <div class="userbox">
                 <b>Standard Fluid Systems</b>
                 <small>Authorized Distributor</small>
@@ -52,8 +57,8 @@
                 <section id="dashboardView" class="view-section">
                     <div class="cards">
                         <div class="card">
-                            <span>Total Inventory Items</span>
-                            <strong id="dashTotalItems">0</strong>
+                            <span>Total Products</span>
+                            <strong id="dashTotalProducts">0</strong>
                         </div>
                         <div class="card">
                             <span>Delivery Challans</span>
@@ -68,57 +73,42 @@
                             <strong style="color: #22c55e;">Online</strong>
                         </div>
                     </div>
-                    <div class="panel">
-                        <div class="panel-head">
-                            <h3>Quick Overview</h3>
-                        </div>
-                        <p class="muted" style="margin-top: 10px;">Standard Fluid Systems - Authorized Distributor of UNIVER Pneumatic Equipment. Manage your inventory, delivery challans and invoices efficiently.</p>
-                    </div>
                 </section>
 
-                <!-- Inventory View -->
-                <section id="inventoryView" class="view-section hidden">
+                <!-- Products View -->
+                <section id="productsView" class="view-section hidden">
                     <div class="panel">
-                        <div class="panel-head">
-                            <h3>Inventory Stock List</h3>
-                        </div>
+                        <div class="panel-head"><h3>Products Inventory</h3></div>
                         <div class="table-wrap" style="margin-top: 15px;">
                             <table>
-                                <thead>
-                                    <tr>
-                                        <th>Model / Code</th>
-                                        <th>Description</th>
-                                        <th>Category</th>
-                                        <th>Stock Qty</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="inventoryTableBody">
-                                    <!-- Dynamic Inventory Rows -->
-                                </tbody>
+                               <thead><tr><th>Model / Code</th><th>Description</th><th>Category</th><th>Stock</th></tr></thead>
+                               <tbody id="productsTableBody"></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Delivery Challan View -->
-                <section id="deliveriesView" class="view-section hidden">
+                <!-- Inward / Purchase View -->
+                <section id="inwardView" class="view-section hidden">
                     <div class="panel">
-                        <div class="panel-head">
-                            <h3>Delivery Challans</h3>
-                        </div>
+                        <div class="panel-head"><h3>Inward & Purchase Records</h3></div>
                         <div class="table-wrap" style="margin-top: 15px;">
                             <table>
-                                <thead>
-                                    <tr>
-                                        <th>DC #</th>
-                                        <th>Date</th>
-                                        <th>Customer (M/S)</th>
-                                        <th>P.O #</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="deliveriesTableBody">
-                                    <!-- Dynamic DC Rows -->
-                                </tbody>
+                               <thead><tr><th>Purchase ID</th><th>Supplier</th><th>Date</th><th>Items Count</th></tr></thead>
+                               <tbody id="inwardTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Delivery Challans View -->
+                <section id="deliveriesView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head"><h3>Delivery Challans</h3></div>
+                        <div class="table-wrap" style="margin-top: 15px;">
+                            <table>
+                               <thead><tr><th>DC #</th><th>Date</th><th>Customer (M/S)</th><th>P.O #</th></tr></thead>
+                               <tbody id="deliveriesTableBody"></tbody>
                             </table>
                         </div>
                     </div>
@@ -127,55 +117,69 @@
                 <!-- Invoices & DC Generator View -->
                 <section id="invoicesView" class="view-section hidden">
                     <div class="panel">
-                        <div class="panel-head">
-                            <h3>Invoice / Delivery Challan Generator</h3>
-                        </div>
+                        <div class="panel-head"><h3>Invoice / Delivery Challan Generator</h3></div>
                         <div class="form-grid" style="margin-top: 14px;">
                             <label>Select DC Number:
                                 <select id="dcSelectDropdown" class="input">
                                     <option value="">Select DC Number</option>
                                 </select>
                             </label>
-                            <label>Customer (M/S):
-                                <input type="text" id="invCustomer" class="input">
-                            </label>
-                            <label class="wide">Address:
-                                <input type="text" id="invAddress" class="input">
-                            </label>
-                            <label>P.O No:
-                                <input type="text" id="invPoNo" class="input">
-                            </label>
-                            <label>P.O Date:
-                                <input type="text" id="invPoDate" class="input">
-                            </label>
-                            <label>DC Date:
-                                <input type="text" id="invDcDate" class="input">
-                            </label>
-                            <label>STN #:
-                                <input type="text" id="invStn" class="input">
-                            </label>
-                            <label>NTN #:
-                                <input type="text" id="invNtn" class="input">
-                            </label>
+                            <label>Customer (M/S):<input type="text" id="invCustomer" class="input"></label>
+                            <label class="wide">Address:<input type="text" id="invAddress" class="input"></label>
+                            <label>P.O No:<input type="text" id="invPoNo" class="input"></label>
+                            <label>P.O Date:<input type="text" id="invPoDate" class="input"></label>
+                            <label>DC Date:<input type="text" id="invDcDate" class="input"></label>
+                            <label>STN #:<input type="text" id="invStn" class="input"></label>
+                            <label>NTN #:<input type="text" id="invNtn" class="input"></label>
                         </div>
-
                         <div class="table-wrap" style="margin-top: 20px;">
                             <table class="sfs-print-table">
-                               <thead>
-                                   <tr>
-                                       <th>#</th>
-                                       <th>Description</th>
-                                       <th>Model</th>
-                                       <th>Qty</th>
-                                       <th>Rate</th>
-                                       <th>Total</th>
-                                   </tr>
-                               </thead>
-                               <tbody id="invoiceItemsBody">
-                                   <!-- Dynamically filled items -->
-                               </tbody>
+                               <thead><tr><th>#</th><th>Description</th><th>Model</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead>
+                               <tbody id="invoiceItemsBody"></tbody>
                             </table>
                         </div>
+                    </div>
+                </section>
+
+                <!-- Customers View -->
+                <section id="customersView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head"><h3>Customers Directory</h3></div>
+                        <div class="table-wrap" style="margin-top: 15px;">
+                            <table>
+                               <thead><tr><th>Customer Name</th><th>NTN / STN</th><th>Address</th></tr></thead>
+                               <tbody id="customersTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Suppliers View -->
+                <section id="suppliersView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head"><h3>Suppliers Directory</h3></div>
+                        <div class="table-wrap" style="margin-top: 15px;">
+                            <table>
+                               <thead><tr><th>Supplier Name</th><th>Contact Person</th><th>Phone / Email</th></tr></thead>
+                               <tbody id="suppliersTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Reports View -->
+                <section id="reportsView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head"><h3>Business Reports</h3></div>
+                        <p class="muted" style="margin-top: 10px;">View and analyze summary metrics for sales, inventory stock levels, and purchasing history.</p>
+                    </div>
+                </section>
+
+                <!-- Settings View -->
+                <section id="settingsView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head"><h3>System Settings</h3></div>
+                        <p class="muted" style="margin-top: 10px;">Connected Google Apps Script Backend: <b>Active</b></p>
                     </div>
                 </section>
             </div>
