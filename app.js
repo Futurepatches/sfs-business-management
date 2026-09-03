@@ -12,36 +12,36 @@ let appState = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    setupLoginHandler();
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.onsubmit = handleLoginSubmit;
+    }
     fetchDataFromSheets();
 });
 
-function setupLoginHandler() {
-    const loginForm = document.getElementById('loginForm');
-    if (loginForm) {
-        loginForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const userInput = document.getElementById('userInput');
-            const passInput = document.getElementById('passInput');
-            const errorDiv = document.getElementById('loginError');
+function handleLoginSubmit(e) {
+    if (e) e.preventDefault();
+    
+    const userInput = document.getElementById('userInput');
+    const passInput = document.getElementById('passInput');
+    const errorDiv = document.getElementById('loginError');
 
-            const user = userInput ? userInput.value.trim() : '';
-            const pass = passInput ? passInput.value.trim() : '';
-            
-            if (user !== "" && pass !== "") {
-                appState.user = user;
-                const loginScreen = document.getElementById('loginScreen');
-                const appDiv = document.getElementById('app');
+    const user = userInput ? userInput.value.trim() : '';
+    const pass = passInput ? passInput.value.trim() : '';
+    
+    if (user !== "" && pass !== "") {
+        appState.user = user;
+        const loginScreen = document.getElementById('loginScreen');
+        const appDiv = document.getElementById('app');
 
-                if (loginScreen) loginScreen.classList.add('hidden');
-                if (appDiv) appDiv.classList.remove('hidden');
-                
-                initDashboard();
-            } else {
-                if (errorDiv) errorDiv.innerText = 'Please enter valid username and password.';
-            }
-        });
+        if (loginScreen) loginScreen.classList.add('hidden');
+        if (appDiv) appDiv.classList.remove('hidden');
+        
+        initDashboard();
+    } else {
+        if (errorDiv) errorDiv.innerText = 'Please enter valid username and password.';
     }
+    return false;
 }
 
 async function fetchDataFromSheets() {
