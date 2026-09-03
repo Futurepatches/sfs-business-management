@@ -1,184 +1,30 @@
-// Standard Fluid Systems - Main Application Logic
-const SFS_CONFIG = {
-    scriptUrl: "https://script.google.com/macros/s/AKfycbwL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec"
-};
-
-let appState = {
-    user: null,
-    inventory: [],
-    deliveries: [],
-    invoices: [],
-    inward: [],
-    customers: [],
-    suppliers: [],
-    activeTab: 'dashboard'
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    const loginForm = document.getElementById('loginForm');
-    if (loginForm) {
-        loginForm.onsubmit = handleLoginSubmit;
-    }
-    fetchDataFromSheets();
-});
-
-function handleLoginSubmit(e) {
-    if (e) e.preventDefault();
-    const userInput = document.getElementById('userInput');
-    const passInput = document.getElementById('passInput');
-    const errorDiv = document.getElementById('loginError');
-
-    const user = userInput ? userInput.value.trim() : '';
-    const pass = passInput ? passInput.value.trim() : '';
-    
-    if (user !== "" && pass !== "") {
-        appState.user = user;
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        initDashboard();
-    } else {
-        if (errorDiv) errorDiv.innerText = 'Please enter valid username and password.';
-    }
-    return false;
-}
-
-async function fetchDataFromSheets() {
-    try {
-        const response = await fetch(SFS_CONFIG.scriptUrl);
-        const data = await response.json();
-        if (data) {
-            appState.inventory = data.inventory || data.products || [];
-            appState.deliveries = data.deliveries || [];
-            appState.invoices = data.invoices || [];
-            appState.inward = data.inward || data.purchases || [];
-            appState.customers = data.customers || [];
-            appState.suppliers = data.suppliers || [];
-            
-            initDashboard();
-            populateDCDropdown();
-        }
-    } catch (error) {
-        console.error("Error fetching data from Google Sheets:", error);
-    }
-}
-
-function switchTab(tabId) {
-    appState.activeTab = tabId;
-    document.querySelectorAll('.navbtn').forEach(btn => btn.classList.remove('active'));
-    if (event && event.currentTarget) {
-        event.currentTarget.classList.add('active');
-    }
-    
-    document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
-    const target = document.getElementById(tabId + 'View');
-    if (target) target.classList.remove('hidden');
-
-    if (tabId === 'products') loadProductsData();
-    if (tabId === 'inward') loadInwardData();
-    if (tabId === 'deliveries') loadDeliveriesData();
-    if (tabId === 'invoices') loadInvoicesData();
-    if (tabId === 'customers') loadCustomersData();
-    if (tabId === 'suppliers') loadSuppliersData();
-}
-
-function initDashboard() {
-    const totalProdEl = document.getElementById('dashTotalProducts');
-    const totalDcEl = document.getElementById('dashTotalDC');
-    const totalInvEl = document.getElementById('dashTotalInv');
-
-    if (totalProdEl) totalProdEl.innerText = appState.inventory.length;
-    if (totalDcEl) totalDcEl.innerText = appState.deliveries.length;
-    if (totalInvEl) totalInvEl.innerText = appState.invoices.length;
-}
-
-function loadProductsData() {
-    const tbody = document.getElementById('productsTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = appState.inventory.length ===0 ? '<tr><td colspan="4" style="text-align:center;">No products found.</td></tr>' : '';
-    appState.inventory.forEach(item => {
-        tbody.innerHTML += `<tr><td>${item.model || item.itemCode || ''}</td><td>${item.description || ''}</td><td>${item.category || ''}</td><td>${item.qty || item.stock || 0}</td></tr>`;
-    });
-}
-
-function loadInwardData() {
-    const tbody = document.getElementById('inwardTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = appState.inward.length === 0 ? '<tr><td colspan="4" style="text-align:center;">No inward records found.</td></tr>' : '';
-    appState.inward.forEach(i => {
-        tbody.innerHTML += `<tr><td>${i.id || i.poNo || ''}</td><td>${i.supplier || ''}</td><td>${i.date || ''}</td><td>${i.itemsCount || 0}</td></tr>`;
-    });
-}
-
-function loadDeliveriesData() {
-    const tbody = document.getElementById('deliveriesTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = appState.deliveries.length === 0 ? '<tr><td colspan="4" style="text-align:center;">No delivery challans found.</td></tr>' : '';
-    appState.deliveries.forEach(dc => {
-        tbody.innerHTML += `<tr><td>${dc.dcNumber || dc.challanNo || ''}</td><td>${dc.date || ''}</td><td>${dc.customerName || dc.m_s || ''}</td><td>${dc.poNo || ''}</td></tr>`;
-    });
-}
-
-function loadCustomersData() {
-    const tbody = document.getElementById('customersTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = appState.customers.length === 0 ? '<tr><td colspan="3" style="text-align:center;">No customers found.</td></tr>' : '';
-    appState.customers.forEach(c => {
-        tbody.innerHTML += `<tr><td>${c.name || c.customerName || ''}</td><td>${c.ntn || ''}</td><td>${c.address || ''}</td></tr>`;
-    });
-}
-
-function loadSuppliersData() {
-    const tbody = document.getElementById('suppliersTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = appState.suppliers.length === 0 ? '<tr><td colspan="3" style="text-align:center;">No suppliers found.</td></tr>' : '';
-    appState.suppliers.forEach(s => {
-        tbody.innerHTML += `<tr><td>${s.name || ''}</td><td>${s.contact || ''}</td><td>${s.phone || s.email || ''}</td></tr>`;
-    });
-}
-
-function populateDCDropdown() {
-    const dcSelect = document.getElementById('dcSelectDropdown');
-    if (dcSelect && appState.deliveries.length > 0) {
-        dcSelect.innerHTML = '<option value="">Select DC Number</option>';
-        appState.deliveries.forEach(dc => {
-            const dcNo = dc.dcNumber || dc.challanNo;
-            if (dcNo) {
-                const opt = document.createElement('option');
-                opt.value = dcNo;
-                opt.textContent = `DC-${dcNo} (${dc.customerName || dc.m_s || 'Client'})`;
-                dcSelect.appendChild(opt);
-            }
-        });
-    }
-}
-
-function handleDCSelection(dcNumber) {
-    const selectedDC = appState.deliveries.find(d => (d.dcNumber == dcNumber || d.challanNo == dcNumber));
-    if (!selectedDC) return;
-
-    document.getElementById('invCustomer').value = selectedDC.customerName || selectedDC.m_s || '';
-    document.getElementById('invAddress').value = selectedDC.address || '';
-    document.getElementById('invPoNo').value = selectedDC.poNo || '';
-    document.getElementById('invPoDate').value = selectedDC.poDate || '';
-    document.getElementById('invDcDate').value = selectedDC.date || '';
-    document.getElementById('invStn').value = selectedDC.stn || '';
-    document.getElementById('invNtn').value = selectedDC.ntn || '';
-
-    const itemsTableBody = document.getElementById('invoiceItemsBody');
-    if (itemsTableBody && selectedDC.items) {
-        itemsTableBody.innerHTML = '';
-        selectedDC.items.forEach((item, index) => {
-            itemsTableBody.innerHTML += `<tr><td>${index + 1}</td><td>${item.description || ''}</td><td>${item.model || ''}</td><td>${item.qty || 1}</td><td>${item.rate || 0}</td><td>${(item.qty || 1) * (item.rate || 0)}</td></tr>`;
-        });
-    }
-}
-
-function loadInvoicesData() {
-    populateDCDropdown();
-    const dcSelect = document.getElementById('dcSelectDropdown');
-    if (dcSelect) {
-        dcSelect.onchange = function(e) {
-            handleDCSelection(e.target.value);
-        };
-    }
-}
+const DEFAULT_API=localStorage.sfsApiUrl||'';const CATS=['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];let S={session:sessionStorage.sfsSession||'',user:null,products:[],customers:[],suppliers:[],tx:[],api:localStorage.sfsApiUrl||''};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function nav(){const items=[['dashboard','Dashboard'],['products','Products'],['inward','Inward / Purchase'],['dc','Delivery Challans'],['invoices','Invoices'],['customers','Customers'],['suppliers','Suppliers'],['reports','Reports'],['settings','Settings']];if(S.user?.role==='ADMIN')items.push(['users','Users / Staff']);$('nav').innerHTML=items.map(x=>`<button class="navbtn ${x[0]==='dashboard'?'active':''}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('');}
+async function api(action,data={}){if(!S.api)return {ok:false,error:'Backend URL not configured'};const r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,session:S.session,...data})});return r.json();}
+async function login(){const user=$('loginUser').value.trim(),pass=$('loginPass').value;let url=localStorage.sfsApiUrl||$('loginApi').value.trim();if(!url){$('loginError').textContent='Enter the Apps Script Web App URL first.';return}localStorage.sfsApiUrl=url;S.api=url;const r=await api('login',{username:user,password:pass});if(!r.ok){$('loginError').textContent=r.error||'Invalid username or password';return}S.session=r.session;S.user=r.user;sessionStorage.sfsSession=S.session;enter();}
+async function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=S.user.name;$('role').textContent=S.user.role;nav();await refresh();}
+function logout(){if(S.session)api('logout').catch(()=>{});sessionStorage.clear();location.reload()}
+async function refresh(){const r=await api('bootstrap');if(!r.ok){if(r.error==='Unauthorized'){logout();return}alert(r.error||'Could not load data');return}S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];renderCurrent();}
+function showPage(p,btn){document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');$('pageTitle').textContent=btn?btn.textContent:p;$('content').innerHTML=pages[p]?pages[p]():'';if(p==='dashboard')renderDashboard();if(p==='products')renderProducts();if(p==='inward')renderInward();if(p==='dc')renderDC();if(p==='invoices')renderInvoice();if(p==='customers')renderCustomers();if(p==='suppliers')renderSuppliers();if(p==='reports')renderReports();if(p==='settings')renderSettings();if(p==='users')renderUsers();}
+function renderCurrent(){const active=document.querySelector('.navbtn.active');showPage(active?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||'dashboard',active)}
+const pages={dashboard:()=>`<div class="wrap" id="dash"></div>`,products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0.01"></label><label>Supplier<input id="isupplier"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost<input id="icost" type="number" min="0"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button></div></div>`,dc:()=>`<div class="wrap"><div class="panel"><h3>Delivery Challan</h3><div class="form-grid"><label>Challan #<input id="dcno"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save & Print</button></div></div></div>`,invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<input id="ivdc"></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save & Print</button></div></div></div>`,customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry"><option>2026</option><option>2025</option><option>2024</option></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">The original live inventory remains read-only. This software writes only to the separate database.</p><label>Apps Script Web App URL<input id="apiurl" class="input" value="${esc(S.api)}"></label><div class="actions"><button class="btn primary" onclick="saveSettings()">Save Settings</button></div><hr><button class="btn" onclick="changePasswordForm()">Change My Password</button>${S.user?.role==='ADMIN'?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>`,users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`};
+function renderDashboard(){$('dash').innerHTML=`<div class="cards"><div class="card"><span>Products</span><strong>${S.products.length}</strong></div><div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div><div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div><div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div></div><div class="panel"><h3>Categories</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${S.products.filter(p=>p.Category===c).length}</b><small class="muted">Products</small></div>`).join('')}</div></div>`}
+function renderProducts(){let q=($('ps')?.value||'').toLowerCase(),c=$('pc')?.value||'';let a=S.products.filter(p=>[p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q)&&( !c||p.Category===c));$('prows').innerHTML=a.slice(0,1000).map(p=>`<tr><td>${p['Product Image']?`<img class="thumb" src="${esc(p['Product Image'])}">`:'—'}</td><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td>${esc(p.Category)}</td><td>${esc(p.Location)}</td><td>${p.currentStock}</td></tr>`).join('')||'<tr><td colspan="6">No products found.</td></tr>'}
+function productDetail(em){const m=decodeURIComponent(em),p=S.products.find(x=>x['Model / Part No.']===m);if(!p)return;modal('Product Details — '+m,`<div class="detail"><div>${p['Product Image']?`<img src="${esc(p['Product Image'])}">`:'No image'}</div><div class="detail-grid"><div class="kv"><b>Model</b><br>${esc(p['Model / Part No.'])}</div><div class="kv"><b>Description</b><br>${esc(p.Description)}</div><div class="kv"><b>Category</b><br>${esc(p.Category)}</div><div class="kv"><b>Location</b><br>${esc(p.Location)}</div><div class="kv"><b>Current Stock</b><br>${p.currentStock}</div><div class="kv"><b>Sale Price</b><br>${esc(p['Sale Price'])}</div></div></div>`)}
+function productForm(){modal('Add / Edit Product',`<div class="form-grid"><label>Model / Part No.<input id="pm"></label><label>Category<select id="pcat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></label><label class="wide">Description<input id="pdesc"></label><label>Brand<input id="pbrand"></label><label>Unit<input id="punit" value="Pcs"></label><label>Location<input id="ploc"></label><label>Cost Price<input id="pcost" type="number"></label><label>Sale Price<input id="pprice" type="number"></label><label>Opening Stock<input id="pop" type="number" value="0"></label><label>Product Image<input id="pimg" type="file" accept="image/*"></label><label class="wide">Remarks<textarea id="prem"></textarea></label></div><button class="btn primary" onclick="saveProduct()">Save Product</button>`)}
+async function saveProduct(){const f=$('pimg').files[0];let b='';if(f)b=await file64(f);const r=await api('saveProduct',{model:$('pm').value,category:$('pcat').value,description:$('pdesc').value,brand:$('pbrand').value,unit:$('punit').value,location:$('ploc').value,costPrice:$('pcost').value,salePrice:$('pprice').value,openingStock:$('pop').value,remarks:$('prem').value,imageBase64:b,imageName:f?.name});if(!r.ok)return alert(r.error);closeModal();await refresh();showPage('products',document.querySelector('.navbtn:nth-child(2)'));alert('Product saved.');}
+function renderInward(){const d=new Date().toISOString().slice(0,10);$('idate').value=d}
+async function saveInward(){const r=await api('saveInward',{date:$('idate').value,sourceType:$('itype').value,model:$('imodel').value,quantity:$('iqty').value,supplier:$('isupplier').value,supplierReference:$('iref').value,purchaseCost:$('icost').value,remarks:$('irem').value});if(!r.ok)return alert(r.error);alert('Inward saved. Stock increased automatically.');await refresh()}
+let dcl=[],ivl=[];function renderDC(){dcl=[];addDc();$('dcdate').value=new Date().toISOString().slice(0,10)}function addDc(){dcl.push({model:'',qty:'',unit:'Pcs'});renderDcLines()}function renderDcLines(){if(!$('dclines'))return;$('dclines').innerHTML=dcl.map((x,i)=>`<tr><td><input value="${esc(x.model)}" list="ml" onchange="dcl[${i}].model=this.value;pickLine(dcl,${i})"></td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td><input type="number" value="${x.qty}" onchange="dcl[${i}].qty=this.value"></td><td><input value="${x.unit}" onchange="dcl[${i}].unit=this.value"></td><td><button class="btn small" onclick="dcl.splice(${i},1);renderDcLines()">×</button></td></tr>`).join('');$('dclines').insertAdjacentHTML('afterend',`<datalist id="ml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`)}function pickLine(a,i){renderDcLines()}
+async function saveDC(print){if(!dcl.length)return;const p={no:$('dcno').value,date:$('dcdate').value,customer:$('dccust').value,customerId:$('dcid').value,po:$('dcpo').value,poDate:$('dcpodate').value,stn:$('dcstn').value,ntn:$('dcntn').value,address:$('dcaddr').value,items:dcl};const r=await api('saveDC',p);if(!r.ok)return alert(r.error);if(print)printDC(p);alert('Delivery Challan saved and stock reduced.');dcl=[];await refresh();}
+function renderInvoice(){ivl=[];addInv();$('ivdate').value=new Date().toISOString().slice(0,10)}function addInv(){ivl.push({model:'',qty:'',rate:''});renderIvLines()}function renderIvLines(){if(!$('ivlines'))return;$('ivlines').innerHTML=ivl.map((x,i)=>`<tr><td><input value="${esc(x.model)}" list="ivml" onchange="ivl[${i}].model=this.value;renderIvLines()"></td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td><input type="number" value="${x.qty}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td><td><input type="number" value="${x.rate}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td><td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td><td><button class="btn small" onclick="ivl.splice(${i},1);renderIvLines()">×</button></td></tr>`).join('');$('ivlines').insertAdjacentHTML('afterend',`<datalist id="ivml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);$('ivtotal').textContent=ivl.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0).toFixed(2)}
+async function saveInvoice(print){const p={no:$('ivno').value,date:$('ivdate').value,customer:$('ivcust').value,po:$('ivpo').value,poDate:$('ivpodate').value,dc:$('ivdc').value,dcDate:$('ivdcdate').value,stn:$('ivstn').value,ntn:$('ivntn').value,items:ivl};const r=await api('saveInvoice',p);if(!r.ok)return alert(r.error);if(print)printInvoice({...p,total:r.subtotal});alert('Invoice saved.');await refresh()}
+function renderCustomers(){$('customers').innerHTML=S.customers.map(c=>`<div class="kv"><b>${esc(c.Name)}</b> — ${esc(c['Customer ID'])}<br>${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>${esc(c.Address)}<br><button class="btn small" onclick="ledger('Customer','${encodeURIComponent(c.Name)}')">Ledger</button></div>`).join('')||'No customers yet.'}function renderSuppliers(){$('suppliers').innerHTML=S.suppliers.map(c=>`<div class="kv"><b>${esc(c.Name)}</b> — ${esc(c['Supplier ID'])}<br>${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>${esc(c.Address)}<br><button class="btn small" onclick="ledger('Supplier','${encodeURIComponent(c.Name)}')">Ledger</button></div>`).join('')||'No suppliers yet.'}
+function partyForm(type){modal('Add '+type,`<div class="form-grid"><label>Name<input id="pn"></label><label>Contact Person<input id="pcontact"></label><label>Phone<input id="pphone"></label><label>Email<input id="pemail"></label><label>City<input id="pcity"></label><label>NTN<input id="pntn"></label><label>STN<input id="pstn"></label><label class="wide">Address<textarea id="paddr"></textarea></label><label class="wide">Remarks<textarea id="pr"></textarea></label></div><button class="btn primary" onclick="saveParty('${type}')">Save</button>`)}async function saveParty(type){const r=await api(type==='Customer'?'saveCustomer':'saveSupplier',{name:$('pn').value,contact:$('pcontact').value,phone:$('pphone').value,email:$('pemail').value,city:$('pcity').value,ntn:$('pntn').value,stn:$('pstn').value,address:$('paddr').value,remarks:$('pr').value});if(!r.ok)return alert(r.error);closeModal();await refresh()}
+async function ledger(type,name){const r=await api('getLedger',{type,name:decodeURIComponent(name)});if(!r.ok)return alert(r.error);modal(type+' Ledger — '+decodeURIComponent(name),`<table><tr><th>Date</th><th>Type</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr>${r.transactions.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.ref)}</td><td>${x.debit}</td><td>${x.credit}</td><td>${esc(x.remarks)}</td></tr>`).join('')||'<tr><td colspan="6">No transactions.</td></tr>'}</table>`)}
+async function renderReports(){const r=await api('getReports',{year:$('ry')?.value||new Date().getFullYear()});if(!r.ok)return alert(r.error);$('reports').innerHTML=`<div class="cards"><div class="card"><span>Invoices</span><strong>${r.sales.length}</strong></div><div class="card"><span>Sales</span><strong>${r.sales.reduce((a,x)=>a+(+x.total||0),0).toLocaleString()}</strong></div></div><div class="panel"><h3>Sales by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${(r.categorySales[c]||0).toLocaleString()}</b></div>`).join('')}</div></div><div class="panel table-wrap"><h3>Recent Stock Movement</h3><table><tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr>${r.movements.map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('')}</table></div>`}
+function renderSettings(){}function saveSettings(){S.api=$('apiurl').value.trim();localStorage.sfsApiUrl=S.api;alert('Backend URL saved. Login again to connect.');logout()}async function refreshSource(){const r=await api('refreshSource');alert(r.ok?'Source snapshot refreshed.':r.error);await refresh()}function changePasswordForm(){modal('Change Password',`<label>Current Password<input id="cp1" type="password"></label><label>New Password<input id="cp2" type="password"></label><label>Confirm Password<input id="cp3" type="password"></label><button class="btn primary" onclick="changePassword()">Change Password</button>`)}async function changePassword(){if($('cp2').value!==$('cp3').value)return alert('Passwords do not match');const r=await api('changePassword',{currentPassword:$('cp1').value,newPassword:$('cp2').value});if(!r.ok)return alert(r.error);closeModal();alert('Password changed. Please login again.');logout()}
+async function renderUsers(){const r=await api('listUsers');if(!r.ok)return alert(r.error);$('users').innerHTML=r.users.map(u=>`<div class="kv"><b>${esc(u.Name)}</b> — ${esc(u.Username)} — ${esc(u.Role)} — ${esc(u.Status)} <button class="btn small" onclick="toggleUser('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button></div>`).join('')||'No users.'}function userForm(){modal('Add Staff',`<div class="form-grid"><label>Name<input id="un"></label><label>Username<input id="uu"></label><label>Password<input id="up" type="password"></label><label>Role<select id="ur"><option>STAFF</option><option>ADMIN</option></select></label><label>Phone<input id="uph"></label><label>Email<input id="ue"></label></div><button class="btn primary" onclick="saveUser()">Create User</button>`)}async function saveUser(){const r=await api('saveUser',{name:$('un').value,username:$('uu').value,password:$('up').value,role:$('ur').value,phone:$('uph').value,email:$('ue').value});if(!r.ok)return alert(r.error);closeModal();renderUsers()}async function toggleUser(u,st){const r=await api('disableUser',{username:decodeURIComponent(u),status:decodeURIComponent(st)});if(!r.ok)return alert(r.error);renderUsers()}
+function modal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.remove('hidden')}function closeModal(){$('modal').classList.add('hidden')}function file64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
+function printDC(d){const rows=d.items.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.model)}</td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td>${x.qty}</td><td>${esc(x.unit)}</td></tr>`).join('');printDoc(`<h1>DELIVERY CHALLAN</h1><div class="meta"><div><b>M/S:</b> ${esc(d.customer)}</div><div><b>DATE:</b> ${esc(d.date)}</div><div><b>CHALLAN #:</b> ${esc(d.no)}</div><div><b>PO #:</b> ${esc(d.po)}</div><div><b>Customer ID:</b> ${esc(d.customerId)}</div><div><b>STN:</b> ${esc(d.stn)}</div><div><b>NTN:</b> ${esc(d.ntn)}</div><div><b>Address:</b> ${esc(d.address)}</div></div><table><tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th></tr>${rows}</table><div class="footer">Prepared by: ____________________ &nbsp;&nbsp; Received by: ____________________</div>`)}function printInvoice(d){const rows=d.items.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.model)}</td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td>${x.qty}</td><td>${x.rate}</td><td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td></tr>`).join('');printDoc(`<h1>INVOICE</h1><div class="meta"><div><b>M/S:</b> ${esc(d.customer)}</div><div><b>DATE:</b> ${esc(d.date)}</div><div><b>INVOICE #:</b> ${esc(d.no)}</div><div><b>PO #:</b> ${esc(d.po)}</div><div><b>DC #:</b> ${esc(d.dc)}</div><div><b>STN:</b> ${esc(d.stn)}</div><div><b>NTN:</b> ${esc(d.ntn)}</div></div><table><tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>${rows}<tr><td colspan="5" class="right"><b>SUB TOTAL</b></td><td><b>${d.total}</b></td></tr></table><div class="footer">Authorized Signature: ____________________</div>`)}function printDoc(body){$('printArea').innerHTML=`<div class="print-doc"><div class="company"><h2>STANDARD FLUID SYSTEMS</h2><div>General Industrial Machinery & Equipment</div><div>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi</div><div>Ph: 021 32464447 • Cell: 0301 8212041</div></div>${body}</div>`;setTimeout(()=>window.print(),100)}
+function init(){S.api=localStorage.sfsApiUrl||'';$('loginApi').value=S.api;if(S.session&&S.api){api('bootstrap').then(r=>{if(r.ok){S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];enter()}else{sessionStorage.clear();}})} }init();
