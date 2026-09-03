@@ -6,22 +6,7 @@ const SFS_CONFIG = {
 let appState = {
     user: null,
     inventory: [],
-    deliveries: [
-        {
-            dcNumber: "123",
-            customerName: "M/S ABC Engineering",
-            address: "Plot 45, SITE Area, Karachi",
-            poNo: "PO-9988",
-            poDate: "2026-08-15",
-            date: "2026-08-17",
-            stn: "3277876141543",
-            ntn: "2221343-7",
-            items: [
-                { description: "Connector 1/8 x 4mm", model: "HA345418", qty: 350, rate: 150 },
-                { description: "3/2 Electro/CNOMO N.O. 1.5MM", model: "AA-0404", qty: 1, rate: 24000 }
-            ]
-        }
-    ],
+    deliveries: [],
     invoices: [],
     activeTab: 'dashboard'
 };
@@ -31,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.onsubmit = handleLoginSubmit;
     }
-    populateDCDropdown();
     fetchDataFromSheets();
 });
 
@@ -65,16 +49,17 @@ async function fetchDataFromSheets() {
         const response = await fetch(SFS_CONFIG.scriptUrl);
         const data = await response.json();
         if (data) {
-            if (data.deliveries && data.deliveries.length > 0) {
-                appState.deliveries = data.deliveries;
-            }
             appState.inventory = data.inventory || [];
+            appState.deliveries = data.deliveries || [];
             appState.invoices = data.invoices || [];
-            populateDCDropdown();
+            
             initDashboard();
+            populateDCDropdown();
+            loadInventoryData();
+            loadDeliveriesData();
         }
     } catch (error) {
-        console.warn("Using local fallback data:", error);
+        console.error("Error fetching data from Google Sheets:", error);
     }
 }
 
@@ -90,6 +75,7 @@ function switchTab(tabId) {
     const target = document.getElementById(tabId + 'View');
     if (target) target.classList.remove('hidden');
 
+    if (tabId === 'inventory') loadInventoryData();
     if (tabId === 'deliveries') loadDeliveriesData();
     if (tabId === 'invoices') loadInvoicesData();
 }
@@ -102,6 +88,46 @@ function initDashboard() {
     if (totalItemsEl) totalItemsEl.innerText = appState.inventory.length;
     if (totalDcEl) totalDcEl.innerText = appState.deliveries.length;
     if (totalInvEl) totalInvEl.innerText = appState.invoices.length;
+}
+
+function loadInventoryData() {
+    const tbody = document.getElementById('inventoryTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (appState.inventory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No inventory items found.</td></tr>';
+        return;
+    }
+    appState.inventory.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.model || item.itemCode || ''}</td>
+            <td>${item.description || ''}</td>
+            <td>${item.category || ''}</td>
+            <td>${item.qty || item.stock || 0}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function loadDeliveriesData() {
+    const tbody = document.getElementById('deliveriesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (appState.deliveries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No delivery challans found.</td></tr>';
+        return;
+    }
+    appState.deliveries.forEach(dc => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${dc.dcNumber || dc.challanNo || ''}</td>
+            <td>${dc.date || ''}</td>
+            <td>${dc.customerName || dc.m_s || ''}</td>
+            <td>${dc.poNo || ''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function populateDCDropdown() {
@@ -157,8 +183,6 @@ function handleDCSelection(dcNumber) {
         });
     }
 }
-
-function loadDeliveriesData() {}
 
 function loadInvoicesData() {
     populateDCDropdown();
