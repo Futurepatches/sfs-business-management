@@ -1,6 +1,6 @@
 // Standard Fluid Systems - Main Application Logic
 const SFS_CONFIG = {
-    scriptUrl: "https://script.google.com/macros/s/AKfycbwL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec
+    scriptUrl: "https://script.google.com/macros/s/AKfycbwL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec"
 };
 
 let appState = {
@@ -12,38 +12,61 @@ let appState = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    checkSavedSession();
-    setupEventListeners();
+    setupLoginHandler();
+    fetchDataFromSheets();
 });
 
-function setupEventListeners() {
+function setupLoginHandler() {
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const userInput = document.getElementById('userInput');
+            const passInput = document.getElementById('passInput');
+            const errorDiv = document.getElementById('loginError');
+
+            const user = userInput ? userInput.value.trim() : '';
+            const pass = passInput ? passInput.value.trim() : '';
+            
+            if (user !== "" && pass !== "") {
+                appState.user = user;
+                const loginScreen = document.getElementById('loginScreen');
+                const appDiv = document.getElementById('app');
+
+                if (loginScreen) loginScreen.classList.add('hidden');
+                if (appDiv) appDiv.classList.remove('hidden');
+                
+                initDashboard();
+            } else {
+                if (errorDiv) errorDiv.innerText = 'Please enter valid username and password.';
+            }
+        });
     }
 }
 
-function handleLogin(e) {
-    e.preventDefault();
-    const user = document.getElementById('userInput').value.trim();
-    const pass = document.getElementById('passInput').value.trim();
-    
-    if (user && pass) {
-        appState.user = user;
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        initDashboard();
-    } else {
-        document.getElementById('loginError').innerText = 'Please enter valid credentials.';
+async function fetchDataFromSheets() {
+    try {
+        const response = await fetch(SFS_CONFIG.scriptUrl);
+        const data = await response.json();
+        if (data) {
+            appState.inventory = data.inventory || [];
+            appState.deliveries = data.deliveries || [];
+            appState.invoices = data.invoices || [];
+            populateDCDropdown();
+        }
+    } catch (error) {
+        console.error("Error fetching data from Google Sheets:", error);
     }
 }
 
 function switchTab(tabId) {
     appState.activeTab = tabId;
     document.querySelectorAll('.navbtn').forEach(btn => btn.classList.remove('active'));
-    event.currentTarget.classList.add('active');
     
-    // Hide all views and show selected
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
+    }
+    
     document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
     const target = document.getElementById(tabId + 'View');
     if (target) target.classList.remove('hidden');
@@ -53,30 +76,45 @@ function switchTab(tabId) {
 }
 
 function initDashboard() {
-    // Load initial stats and tables
-    fetchInventory();
+    console.log("Dashboard initialized successfully.");
 }
 
-async function fetchInventory() {
-    // Simulated or live fetch from Google Sheets
-    // Yahan aap apni fetch API call ya Google Apps Script endpoint connect karenge
+function populateDCDropdown() {
+    const dcSelect = document.getElementById('dcSelectDropdown');
+    if (dcSelect && appState.deliveries.length > 0) {
+        dcSelect.innerHTML = '<option value="">Select DC Number</option>';
+        appState.deliveries.forEach(dc => {
+            const dcNo = dc.dcNumber || dc.challanNo;
+            if (dcNo) {
+                const opt = document.createElement('option');
+                opt.value = dcNo;
+                opt.textContent = `DC-${dcNo} (${dc.customerName || dc.m_s || 'Client'})`;
+                dcSelect.appendChild(opt);
+            }
+        });
+    }
 }
 
-// --- CORE FIX: AUTO-FILL INVOICE FROM DC ---
 function handleDCSelection(dcNumber) {
-    const selectedDC = appState.deliveries.find(d => d.dcNumber == dcNumber || d.challanNo == dcNumber);
+    const selectedDC = appState.deliveries.find(d => (d.dcNumber == dcNumber || d.challanNo == dcNumber));
     if (!selectedDC) return;
 
-    // Auto-fill all header & customer fields
-    document.getElementById('invCustomer').value = selectedDC.customerName || selectedDC.m_s || '';
-    document.getElementById('invAddress').value = selectedDC.address || '';
-    document.getElementById('invPoNo').value = selectedDC.poNo || '';
-    document.getElementById('invPoDate').value = selectedDC.poDate || '';
-    document.getElementById('invDcDate').value = selectedDC.date || '';
-    document.getElementById('invStn').value = selectedDC.stn || '';
-    document.getElementById('invNtn').value = selectedDC.ntn || '';
+    const invCust = document.getElementById('invCustomer');
+    const invAddr = document.getElementById('invAddress');
+    const invPo = document.getElementById('invPoNo');
+    const invPoDt = document.getElementById('invPoDate');
+    const invDcDt = document.getElementById('invDcDate');
+    const invStn = document.getElementById('invStn');
+    const invNtn = document.getElementById('invNtn');
 
-    // Auto-populate items table inside Invoice form
+    if (invCust) invCust.value = selectedDC.customerName || selectedDC.m_s || '';
+    if (invAddr) invAddr.value = selectedDC.address || '';
+    if (invPo) invPo.value = selectedDC.poNo || '';
+    if (invPoDt) invPoDt.value = selectedDC.poDate || '';
+    if (invDcDt) invDcDt.value = selectedDC.date || '';
+    if (invStn) invStn.value = selectedDC.stn || '';
+    if (invNtn) invNtn.value = selectedDC.ntn || '';
+
     const itemsTableBody = document.getElementById('invoiceItemsBody');
     if (itemsTableBody && selectedDC.items) {
         itemsTableBody.innerHTML = '';
@@ -95,16 +133,14 @@ function handleDCSelection(dcNumber) {
     }
 }
 
-function loadDeliveriesData() {
-    // Deliveries screen logic
-}
+function loadDeliveriesData() {}
 
 function loadInvoicesData() {
-    // Invoices screen logic & dropdown binding for DC numbers
+    populateDCDropdown();
     const dcSelect = document.getElementById('dcSelectDropdown');
     if (dcSelect) {
-        dcSelect.addEventListener('change', (e) => {
+        dcSelect.onchange = function(e) {
             handleDCSelection(e.target.value);
-        });
+        };
     }
 }
