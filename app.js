@@ -1,37 +1,7 @@
-const DEFAULT_API=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';const CATS=['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];let S={session:sessionStorage.sfsSession||'',user:null,products:[],customers:[],suppliers:[],tx:[],api:DEFAULT_API};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const DEFAULT_API=localStorage.sfsApiUrl||'';const CATS=['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];let S={session:sessionStorage.sfsSession||'',user:null,products:[],customers:[],suppliers:[],tx:[],api:localStorage.sfsApiUrl||''};const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function nav(){const items=[['dashboard','Dashboard'],['products','Products'],['inward','Inward / Purchase'],['dc','Delivery Challans'],['invoices','Invoices'],['customers','Customers'],['suppliers','Suppliers'],['reports','Reports'],['settings','Settings']];if(S.user?.role==='ADMIN')items.push(['users','Users / Staff']);$('nav').innerHTML=items.map(x=>`<button class="navbtn ${x[0]==='dashboard'?'active':''}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('');}
-function jsonpRequest(url, payload){
-  return new Promise(function(resolve){
-    var cb='sfs_cb_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-    var script=document.createElement('script');
-    var done=false;
-    window[cb]=function(data){done=true;cleanup();resolve(data)};
-    function cleanup(){try{delete window[cb]}catch(e){window[cb]=undefined}if(script.parentNode)script.parentNode.removeChild(script)}
-    script.onerror=function(){if(done)return;done=true;cleanup();resolve({ok:false,error:'Connection error. Please try again.'})};
-    var params=new URLSearchParams();
-    params.set('action',payload.action||'');
-    params.set('callback',cb);
-    var copy=Object.assign({},payload);delete copy.action;
-    if(copy.session) params.set('session',copy.session);
-    delete copy.session;
-    if(Object.keys(copy).length) params.set('data',encodeURIComponent(JSON.stringify(copy)));
-    script.src=url+(url.indexOf('?')>=0?'&':'?')+params.toString();
-    document.head.appendChild(script);
-    setTimeout(function(){if(!done){done=true;cleanup();resolve({ok:false,error:'Connection timeout. Please try again.'})}},15000);
-  });
-}
-async function api(action,data={}){
-  if(!S.api)return {ok:false,error:'Backend URL not configured'};
-  var payload=Object.assign({action:action,session:S.session||''},data||{});
-  try{
-    var r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
-    var text=await r.text();
-    var j;try{j=JSON.parse(text)}catch(e){j=null}
-    if(j) return j;
-  }catch(e){console.warn('POST connection unavailable; using JSONP fallback.',e)}
-  return await jsonpRequest(S.api,payload);
-}
-async function login(){const user=$('loginUser').value.trim(),pass=$('loginPass').value;S.api=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||DEFAULT_API||localStorage.sfsApiUrl||'';if(!S.api){$('loginError').textContent='System connection is not configured.';return}if(!user||!pass){$('loginError').textContent='Username and password are required.';return}$('loginError').textContent='Signing in...';const r=await api('login',{username:user,password:pass});if(!r.ok){$('loginError').textContent=r.error||'Invalid username or password';return}S.session=r.session;S.user=r.user;sessionStorage.sfsSession=S.session;enter();}
+async function api(action,data={}){if(!S.api)return {ok:false,error:'Backend URL not configured'};const r=await fetch(S.api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,session:S.session,...data})});return r.json();}
+async function login(){const user=$('loginUser').value.trim(),pass=$('loginPass').value;let url=localStorage.sfsApiUrl||$('loginApi').value.trim();if(!url){$('loginError').textContent='Enter the Apps Script Web App URL first.';return}localStorage.sfsApiUrl=url;S.api=url;const r=await api('login',{username:user,password:pass});if(!r.ok){$('loginError').textContent=r.error||'Invalid username or password';return}S.session=r.session;S.user=r.user;sessionStorage.sfsSession=S.session;enter();}
 async function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=S.user.name;$('role').textContent=S.user.role;nav();await refresh();}
 function logout(){if(S.session)api('logout').catch(()=>{});sessionStorage.clear();location.reload()}
 async function refresh(){const r=await api('bootstrap');if(!r.ok){if(r.error==='Unauthorized'){logout();return}alert(r.error||'Could not load data');return}S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];renderCurrent();}
@@ -57,4 +27,4 @@ function renderSettings(){}function saveSettings(){S.api=$('apiurl').value.trim(
 async function renderUsers(){const r=await api('listUsers');if(!r.ok)return alert(r.error);$('users').innerHTML=r.users.map(u=>`<div class="kv"><b>${esc(u.Name)}</b> — ${esc(u.Username)} — ${esc(u.Role)} — ${esc(u.Status)} <button class="btn small" onclick="toggleUser('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button></div>`).join('')||'No users.'}function userForm(){modal('Add Staff',`<div class="form-grid"><label>Name<input id="un"></label><label>Username<input id="uu"></label><label>Password<input id="up" type="password"></label><label>Role<select id="ur"><option>STAFF</option><option>ADMIN</option></select></label><label>Phone<input id="uph"></label><label>Email<input id="ue"></label></div><button class="btn primary" onclick="saveUser()">Create User</button>`)}async function saveUser(){const r=await api('saveUser',{name:$('un').value,username:$('uu').value,password:$('up').value,role:$('ur').value,phone:$('uph').value,email:$('ue').value});if(!r.ok)return alert(r.error);closeModal();renderUsers()}async function toggleUser(u,st){const r=await api('disableUser',{username:decodeURIComponent(u),status:decodeURIComponent(st)});if(!r.ok)return alert(r.error);renderUsers()}
 function modal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.remove('hidden')}function closeModal(){$('modal').classList.add('hidden')}function file64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
 function printDC(d){const rows=d.items.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.model)}</td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td>${x.qty}</td><td>${esc(x.unit)}</td></tr>`).join('');printDoc(`<h1>DELIVERY CHALLAN</h1><div class="meta"><div><b>M/S:</b> ${esc(d.customer)}</div><div><b>DATE:</b> ${esc(d.date)}</div><div><b>CHALLAN #:</b> ${esc(d.no)}</div><div><b>PO #:</b> ${esc(d.po)}</div><div><b>Customer ID:</b> ${esc(d.customerId)}</div><div><b>STN:</b> ${esc(d.stn)}</div><div><b>NTN:</b> ${esc(d.ntn)}</div><div><b>Address:</b> ${esc(d.address)}</div></div><table><tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th></tr>${rows}</table><div class="footer">Prepared by: ____________________ &nbsp;&nbsp; Received by: ____________________</div>`)}function printInvoice(d){const rows=d.items.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.model)}</td><td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td><td>${x.qty}</td><td>${x.rate}</td><td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td></tr>`).join('');printDoc(`<h1>INVOICE</h1><div class="meta"><div><b>M/S:</b> ${esc(d.customer)}</div><div><b>DATE:</b> ${esc(d.date)}</div><div><b>INVOICE #:</b> ${esc(d.no)}</div><div><b>PO #:</b> ${esc(d.po)}</div><div><b>DC #:</b> ${esc(d.dc)}</div><div><b>STN:</b> ${esc(d.stn)}</div><div><b>NTN:</b> ${esc(d.ntn)}</div></div><table><tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>${rows}<tr><td colspan="5" class="right"><b>SUB TOTAL</b></td><td><b>${d.total}</b></td></tr></table><div class="footer">Authorized Signature: ____________________</div>`)}function printDoc(body){$('printArea').innerHTML=`<div class="print-doc"><div class="company"><h2>STANDARD FLUID SYSTEMS</h2><div>General Industrial Machinery & Equipment</div><div>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi</div><div>Ph: 021 32464447 • Cell: 0301 8212041</div></div>${body}</div>`;setTimeout(()=>window.print(),100)}
-function init(){S.api=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||localStorage.sfsApiUrl||'';if(S.session&&S.api){api('bootstrap').then(r=>{if(r.ok){S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];enter()}else{sessionStorage.clear();}})} }init();
+function init(){S.api=localStorage.sfsApiUrl||'';$('loginApi').value=S.api;if(S.session&&S.api){api('bootstrap').then(r=>{if(r.ok){S.user=r.user;S.products=r.products||[];S.customers=r.customers||[];S.suppliers=r.suppliers||[];S.tx=r.transactions||[];enter()}else{sessionStorage.clear();}})} }init();
