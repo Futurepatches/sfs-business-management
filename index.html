@@ -1,64 +1,119 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SFS Business Management</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="login" class="login-screen">
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
         <div class="login-card">
-            <img src="logo.png" class="login-logo" alt="Logo">
-            <h1>SFS Business Management</h1>
-            <input id="loginUser" placeholder="Username">
-            <input id="loginPass" type="password" placeholder="Password">
-            <button class="btn primary full" onclick="login()">Login</button>
-            <div id="loginError" class="error"></div>
+            <h1>SFS Management System</h1>
+            <p class="muted">Standard Fluid Systems</p>
+            <form id="loginForm">
+                <input type="text" id="userInput" placeholder="Username" required autocomplete="username">
+                <input type="password" id="passInput" placeholder="Password" required autocomplete="current-password">
+                <div id="loginError" class="error"></div>
+                <button type="submit" class="btn primary full">Login</button>
+            </form>
         </div>
     </div>
 
+    <!-- Main App Container -->
     <div id="app" class="hidden">
         <aside>
             <div class="brand">
-                <img src="logo.png" alt="Logo">
-                <div>
-                    <b>SFS</b>
-                    <small>Business Management</small>
-                </div>
+                <b>SFS</b>
+                <small>Business Management</small>
             </div>
-            <nav id="nav"></nav>
+            <button class="navbtn active" onclick="switchTab('dashboard')">Dashboard</button>
+            <button class="navbtn" onclick="switchTab('invoices')">Invoices & DC</button>
             <div class="userbox">
-                <b id="who"></b>
-                <small id="role"></small>
-                <button class="btn ghost full" onclick="logout()">Logout</button>
+                <b>Standard Fluid Systems</b>
+                <small>Authorized Distributor</small>
             </div>
         </aside>
+
         <main>
             <header>
                 <div>
-                    <h1 id="pageTitle">Dashboard</h1>
-                    <p>Inventory • Purchases • Sales • Documents</p>
+                    <h1>Standard Fluid Systems</h1>
+                    <p>Industrial Pneumatics & Fluid Systems</p>
                 </div>
-                <button class="btn ghost" onclick="refresh()">↻ Refresh</button>
             </header>
-            <div id="content" class="wrap"></div>
+
+            <div class="wrap">
+                <!-- Dashboard View -->
+                <section id="dashboardView" class="view-section">
+                    <div class="cards">
+                        <div class="card">
+                            <span>System Status</span>
+                            <strong>Online</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Invoices & DC View -->
+                <section id="invoicesView" class="view-section hidden">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <h3>Invoice / Delivery Challan Generator</h3>
+                        </div>
+                        <div class="form-grid" style="margin-top: 14px;">
+                            <label>Select DC Number:
+                                <select id="dcSelectDropdown" class="input">
+                                    <option value="">Select DC Number</option>
+                                </select>
+                            </label>
+                            <label>Customer (M/S):
+                                <input type="text" id="invCustomer" class="input">
+                            </label>
+                            <label class="wide">Address:
+                                <input type="text" id="invAddress" class="input">
+                            </label>
+                            <label>P.O No:
+                                <input type="text" id="invPoNo" class="input">
+                            </label>
+                            <label>P.O Date:
+                                <input type="text" id="invPoDate" class="input">
+                            </label>
+                            <label>DC Date:
+                                <input type="text" id="invDcDate" class="input">
+                            </label>
+                            <label>STN #:
+                                <input type="text" id="invStn" class="input">
+                            </label>
+                            <label>NTN #:
+                                <input type="text" id="invNtn" class="input">
+                            </label>
+                        </div>
+
+                        <div class="table-wrap" style="margin-top: 20px;">
+                            <table class="sfs-print-table">
+                               <thead>
+                                   <tr>
+                                       <th>#</th>
+                                       <th>Description</th>
+                                       <th>Model</th>
+                                       <th>Qty</th>
+                                       <th>Rate</th>
+                                       <th>Total</th>
+                                   </tr>
+                               </thead>
+                               <tbody id="invoiceItemsBody">
+                                   <!-- Dynamically filled items -->
+                               </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </main>
     </div>
 
-    <div id="modal" class="modal hidden">
-        <div class="modal-card">
-            <div class="modal-head">
-                <h3 id="modalTitle"></h3>
-                <button onclick="closeModal()">×</button>
-            </div>
-            <div id="modalBody"></div>
-        </div>
-    </div>
-
-    <div id="printArea"></div>
-
-    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
