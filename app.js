@@ -1,7 +1,7 @@
 /*
 SFS BUSINESS MANAGEMENT - GOOGLE APPS SCRIPT BACKEND
 -----------------------------------------------------
-PHASE 2 COMPLETE / SAFE REPLACEMENT
+PHASE 2 COMPLETE / SAFE REPLACEMENT (JSONP SUPPORTED)
 
 IMPORTANT:
 - The ORIGINAL LIVE INVENTORY is READ-ONLY.
@@ -22,7 +22,7 @@ DEPLOYMENT:
 4) Run setupDatabase() once and authorize.
 5) Deploy -> New deployment -> Web app
    Execute as: Me
-   Who has access: Anyone with the link (or your preferred restricted setting)
+   Who has access: Anyone (even anonymously)
 6) Keep the same /exec URL in the frontend Settings.
 */
 
@@ -31,7 +31,7 @@ const API_TOKEN = 'SFS_2026_MY_SECRET_8472'; // Backend-only; never put this in 
 const SOURCE = {
   stock: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSS4E1DvaV4RzuMHMENiroSR4WYZjT0usnqAgUwX-W44ADM-sB1Gz8lYNvK51-WP88BYi4lYLxwZaU3/pub?gid=1719776219&single=true&output=csv',
   imports: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSS4E1DvaV4RzuMHMENiroSR4WYZjT0usnqAgUwX-W44ADM-sB1Gz8lYNvK51-WP88BYi4lYLxwZaU3/pub?gid=1389271409&single=true&output=csv',
-  returns: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSS4E1DvaV4RzuMHMENiroSR4WYZjT0usnqAgUwX-W44ADM-sB1Gz8lYNvK51-WP88BYi4lYLxwZaU3/pub?gid=1032386368&single=true&output=csv'
+  returns: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSS4E1DvaV4RzuMHMENiroSR4WYZjT0usnqAgUwX-W44ADM-sB1Gz8lYLxwZaU3/pub?gid=1032386368&single=true&output=csv'
 };
 
 const HEADERS = {
@@ -46,15 +46,42 @@ const HEADERS = {
   'Categories':['Category ID','Category Name']
 };
 
-/* ---------- WEB API ---------- */
+/* ---------- WEB API (JSONP & POST Support) ---------- */
 
 function doGet(e) {
-  return out({
-    ok:true,
-    service:'SFS Business Management',
-    message:'API is online',
-    timestamp:new Date()
-  });
+  try {
+    const p = (e && e.parameter) || {};
+    const action = String(p.action || '').trim();
+    const callback = String(p.callback || '').trim();
+    let result = { ok: false, error: 'Invalid action' };
+
+    if (action === 'login') {
+      result = loginUser(p);
+    } else if (action === 'bootstrap') {
+      result = bootstrap_(p);
+    } else {
+      result = {
+        ok: true,
+        service: 'SFS Business Management',
+        message: 'API is online',
+        timestamp: new Date()
+      };
+    }
+
+    if (callback) {
+      const output = callback + '(' + JSON.stringify(result) + ');';
+      return ContentService.createTextOutput(output).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return out(result);
+  } catch (err) {
+    const errObj = { ok: false, error: String(err && err.message ? err.message : err) };
+    const callback = String(e && e.parameter && e.parameter.callback || '').trim();
+    if (callback) {
+      const output = callback + '(' + JSON.stringify(errObj) + ');';
+      return ContentService.createTextOutput(output).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return out(errObj);
+  }
 }
 
 function doPost(e) {
@@ -143,6 +170,7 @@ function doPost(e) {
     return out({ok:false,error:String(err && err.message ? err.message : err)});
   }
 }
+
 function out(o) {
   return ContentService
     .createTextOutput(JSON.stringify(o))
