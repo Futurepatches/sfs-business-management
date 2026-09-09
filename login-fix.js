@@ -1,38 +1,50 @@
-/* SFS LOGIN/API FIX — uses the deployed Apps Script endpoint directly and avoids CORS by using JSONP GET. */
+/* SFS LOGIN FIX — reliable JSONP login + session handoff */
 (function(){
-  const SFS_API='https://script.google.com/macros/s/AKfycbxL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec';
+  'use strict';
+  const SFS_API=(window.SFS_CONFIG&&window.SFS_CONFIG.API_URL)||'https://script.google.com/macros/s/AKfycbxL0yc-sfBcxnyuD1eYk4AlYY1xEoyMjjFLLAP_7XQPnVud-Otyndoj46ydPVYSKE02OQ/exec';
   window.SFS_CONFIG=window.SFS_CONFIG||{};
   window.SFS_CONFIG.API_URL=SFS_API;
-  if(window.S) window.S.api=SFS_API;
 
-  function sfsJSONP(action,data){
+  function jsonp(action,data){
     return new Promise(function(resolve){
-      const cb='sfs_login_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const cb='sfs_cb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
       const script=document.createElement('script');
-      let finished=false;
-      function cleanup(){try{delete window[cb]}catch(e){window[cb]=undefined}if(script.parentNode)script.parentNode.removeChild(script)}
-      window[cb]=function(result){if(finished)return;finished=true;cleanup();resolve(result||{ok:false,error:'Empty server response'})};
-      script.onerror=function(){if(finished)return;finished=true;cleanup();resolve({ok:false,error:'Cannot reach Apps Script backend. Please check Web App deployment access.'})};
-      const q=new URLSearchParams({action:action,callback:cb});
-      if(data){Object.keys(data).forEach(k=>q.set(k,String(data[k]??'')))}
+      let done=false;
+      function finish(result){
+        if(done)return; done=true;
+        try{delete window[cb]}catch(e){window[cb]=undefined}
+        if(script.parentNode)script.parentNode.removeChild(script);
+        resolve(result||{ok:false,error:'Empty server response'});
+      }
+      window[cb]=finish;
+      script.onerror=function(){finish({ok:false,error:'Unable to connect to the SFS server.'})};
+      const q=new URLSearchParams();
+      q.set('action',action); q.set('callback',cb);
+      Object.keys(data||{}).forEach(function(k){q.set(k,String(data[k]??''))});
       script.src=SFS_API+'?'+q.toString();
       document.head.appendChild(script);
-      setTimeout(function(){if(!finished){finished=true;cleanup();resolve({ok:false,error:'Apps Script connection timed out.'})}},12000);
+      setTimeout(function(){if(!done)finish({ok:false,error:'Server connection timed out.'})},15000);
     });
   }
 
   window.login=async function(){
-    const user=(document.getElementById('loginUser')?.value||'').trim();
-    const pass=document.getElementById('loginPass')?.value||'';
-    const err=document.getElementById('loginError');
-    if(!user||!pass){if(err)err.textContent='Username and password are required.';return;}
-    if(err)err.textContent='Connecting…';
-    const r=await sfsJSONP('login',{username:user,password:pass});
-    if(!r||!r.ok){if(err)err.textContent=(r&&r.error)||'Login failed. Backend did not respond.';return;}
-    window.S.api=SFS_API;
-    window.S.session=r.session;
-    window.S.user=r.user;
-    sessionStorage.sfsSession=r.session;
-    if(typeof window.enter==='function')window.enter();
+    const username=(document.getElementById('loginUser')?.value||'').trim();
+    const password=document.getElementById('loginPass')?.value||'';
+    const error=document.getElementById('loginError');
+    if(!username||!password){if(error)error.textContent='Username and password are required.';return false;}
+    if(error)error.textContent='Signing in…';
+    const result=await jsonp('login',{username:username,password:password});
+    if(!result||!result.ok){if(error)error.textContent=result?.error||'Login failed.';return false;}
+
+    sessionStorage.setItem('sfsSession',result.session||'');
+    sessionStorage.setItem('sfsUser',JSON.stringify(result.user||{}));
+    localStorage.setItem('sfsApiUrl',SFS_API);
+    localStorage.setItem('sfsSession',result.session||'');
+    localStorage.setItem('sfsUser',JSON.stringify(result.user||{}));
+
+    // app.js owns the actual state. Reloading lets its normal init path
+    // consume the persisted session instead of trying to modify its lexical `S`.
+    window.location.reload();
+    return true;
   };
 })();
