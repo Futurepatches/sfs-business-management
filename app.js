@@ -38,18 +38,18 @@ function printDC(d){const rows=d.items.map((x,i)=>{const prod=S.products.find(p=
 function printInvoice(d){const items=d.items||[];const rows=items.map((x,i)=>{const prod=S.products.find(p=>p['Model / Part No.']===x.model)||{};const amt=(+x.qty||0)*(+x.rate||0);return `<tr><td class="c">${i+1}</td><td>${esc(x.desc||prod.Description||'')}${x.model?`<br><span class="muted">Model: ${esc(x.model)}</span>`:''}</td><td class="c">${esc(prod['Product ID']||'')}</td><td class="c"><b>${x.qty}</b><br><span class="muted">nos</span></td><td class="c">${money(x.rate)}<br><span class="muted">each</span></td><td class="r">${money(amt)}</td></tr>`}).join('');const subtotal=items.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0);const gst=subtotal*0.18;const total=d.grandTotal!=null?Number(d.grandTotal):subtotal+gst;const body=`<div class="doc-head"><div class="doc-head-left"><img src="logo.png" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title">INVOICE</div></div></div><div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">M/S:</span><span>${esc(d.customer)}</span></div><div class="meta-line"><span class="meta-tag">Address:</span><span>${esc(d.address||'')}</span></div><div class="meta-line" style="margin-top:10px"><span class="meta-tag">P.O#:</span><span>${esc(d.po)}</span><span class="meta-tag" style="margin-left:14px">Date:</span><span>${fmtDate(d.poDate)}</span></div><div class="meta-line"><span class="meta-tag">Delivery Challan #:</span><span>${esc(d.dc)}</span><span class="meta-tag" style="margin-left:14px">Date:</span><span>${fmtDate(d.dcDate)}</span></div></div><div class="meta-right"><div class="meta-row"><span class="meta-label">Date:</span><span class="meta-value">${fmtDate(d.date)}</span></div><div class="meta-row"><span class="meta-label">Invoice#:</span><span class="meta-value"><b>${esc(d.no)}</b></span></div><div class="meta-row"><span class="meta-label">S.T.N#:</span><span class="meta-value">${esc(d.stn)}</span></div><div class="meta-row"><span class="meta-label">N.T.N#:</span><span class="meta-value">${esc(d.ntn)}</span></div></div></div><table class="doc-items"><thead><tr><th class="c">Item</th><th>Description</th><th class="c">Item Code</th><th class="c">Qty.</th><th class="c">Rate/Unit</th><th class="c">Amount</th></tr></thead><tbody>${rows}</tbody></table><table class="doc-totals"><tr><td class="words" rowspan="3"><i>RUPEES: ${numberToWords(total)} Only /-</i></td><td class="tot-label">SUB TOTAL</td><td class="r">${money(subtotal)}</td></tr><tr><td class="tot-label">ADD GST 18%</td><td class="r">${money(gst)}</td></tr><tr><td class="tot-label"><b>TOTAL</b></td><td class="r"><b>${money(total)}</b></td></tr></table><div class="doc-footer-note"><div>H.CODE: 84-F<br><b>Description:</b> General Industrial Machinery &amp; Equipment</div><div class="doc-sign-block"><i>FOR STANDARD FLUID SYSTEMS</i></div></div>`;printDoc(body)}
 function printDoc(body){$('printArea').innerHTML=`<style>
 #printArea{display:block}
-.print-doc{font-family:Arial,Helvetica,sans-serif;color:#111;width:100%;max-width:100%;margin:0 auto;font-size:15px;box-sizing:border-box;padding:10mm;display:flex;flex-direction:column;min-height:277mm}
+.print-doc{font-family:Arial,Helvetica,sans-serif;color:#111;width:100%;max-width:100%;margin:0 auto;font-size:15px;box-sizing:border-box;padding:6mm 10mm 10mm;display:flex;flex-direction:column;min-height:277mm}
 .doc-body{flex:1 0 auto}
-.doc-head{display:flex!important;justify-content:space-between;align-items:center;border-bottom:3px solid #111;padding-bottom:12px;margin-bottom:14px}
-.doc-head-left{display:flex!important;align-items:center;gap:10px}
-.doc-logo{height:80px}
-.doc-title{font-size:38px;font-weight:bold;color:#333}
-.doc-meta{display:flex!important;justify-content:space-between;gap:20px;margin-bottom:16px}
-.meta-left{width:58%;font-size:15px}
-.meta-right{width:38%;font-size:15px}
+.doc-head{display:flex!important;justify-content:space-between;align-items:center;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:20px}
+.doc-head-left{display:flex!important;align-items:center;gap:8px}
+.doc-logo{height:56px}
+.doc-title{font-size:32px;font-weight:bold;color:#333}
+.doc-meta{display:flex!important;justify-content:space-between;gap:20px;margin-bottom:26px}
+.meta-left{width:58%;font-size:12.5px}
+.meta-right{width:38%;font-size:12.5px}
 .meta-line{display:flex!important;flex-wrap:wrap;gap:6px;margin-bottom:3px}
 .meta-tag{font-weight:bold;white-space:nowrap}
-.cust-name{font-style:italic;font-weight:bold;font-size:18px}
+.cust-name{font-style:italic;font-weight:bold;font-size:14.5px}
 .meta-row{display:flex!important;justify-content:space-between;gap:10px;margin-bottom:3px;white-space:nowrap}
 .meta-label{font-weight:bold}
 .meta-value{text-align:right}
@@ -68,7 +68,7 @@ function printDoc(body){$('printArea').innerHTML=`<style>
 .doc-sign{text-align:right;margin-bottom:24px;font-size:15px}
 .doc-footer-note{display:flex!important;justify-content:space-between;align-items:flex-end;margin:18px 0 36px;font-size:14px}
 .doc-sign-block{font-style:italic}
-.print-company{flex:0 0 auto;text-align:center;font-size:12.5px;color:#333;border-top:1px solid #ccc;padding-top:10px;margin-top:auto}
+.print-company{flex:0 0 auto;text-align:center;font-size:12.5px;color:#333;border-top:1px solid #ccc;padding-top:14px;margin-top:auto;padding-bottom:4px}
 .print-company b{font-size:15px}
 @media print{
   @page{size:A4;margin:0}
@@ -76,7 +76,7 @@ function printDoc(body){$('printArea').innerHTML=`<style>
   body *{visibility:hidden!important}
   #printArea,#printArea *{visibility:visible!important}
   #printArea{position:absolute!important;left:0;top:0;width:210mm!important}
-  .print-doc{padding:14mm;min-height:269mm}
+  .print-doc{padding:8mm 14mm 14mm;min-height:275mm}
 }
 </style><div class="print-doc"><div class="doc-body">${body}</div><div class="print-company"><b>STANDARD FLUID SYSTEMS</b><div>General Industrial Machinery &amp; Equipment</div><div>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041</div><div>e-mail: sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com</div></div></div>`;setTimeout(()=>window.print(),100)}
 function showLogin(){$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginUser')?.focus()}
