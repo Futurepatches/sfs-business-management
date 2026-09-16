@@ -3,7 +3,7 @@
   const oldNav=window.nav;
   window.nav=function(){
     const groups=[['MAIN',[['dashboard','Dashboard']]],['INVENTORY',[['products','Products'],['inward','Inward / Purchase'],['movement','Stock Movement']]],['SALES',[['newdc','New Delivery Challan'],['dchistory','Delivery Challan History'],['newinvoice','New Invoice'],['invoicehistory','Invoice History']]],['ACCOUNTS',[['outstanding','Outstanding / Payments']]],['PARTIES',[['customers','Customers'],['suppliers','Suppliers']]],['REPORTS',[['reports','Reports']]],['SETTINGS',[['settings','System Settings']]]];
-    if(window.S?.user?.role==='ADMIN')groups[6][1].push(['users','Users & Roles']);
+    if(String(window.S?.user?.role||'').trim().toUpperCase()==='ADMIN'){const settingsGroup=groups.find(g=>g[0]==='SETTINGS');if(settingsGroup)settingsGroup[1].push(['users','Users & Roles']);}
     const n=document.getElementById('nav');if(!n)return;n.innerHTML=groups.map(g=>`<div class="nav-section">${g[0]}</div>`+g[1].map(x=>`<button class="navbtn" data-page="${x[0]}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('')).join('');
   };
   const oldShow=window.showPage;
