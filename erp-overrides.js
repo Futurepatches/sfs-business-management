@@ -4,7 +4,24 @@
   window.nav=function(){
     const groups=[['MAIN',[['dashboard','Dashboard']]],['INVENTORY',[['products','Products'],['inward','Inward / Purchase'],['movement','Stock Movement']]],['SALES',[['newdc','New Delivery Challan'],['dchistory','Delivery Challan History'],['newinvoice','New Invoice'],['invoicehistory','Invoice History']]],['ACCOUNTS',[['outstanding','Outstanding / Payments'],['supplierpayable','Supplier Payments']]],['PARTIES',[['customers','Customers'],['suppliers','Suppliers']]],['REPORTS',[['reports','Reports']]],['SETTINGS',[['settings','System Settings']]]];
     if(String(window.S?.user?.role||'').trim().toUpperCase()==='ADMIN'){const settingsGroup=groups.find(g=>g[0]==='SETTINGS');if(settingsGroup)settingsGroup[1].push(['users','Users & Roles']);}
-    const n=document.getElementById('nav');if(!n)return;n.innerHTML=groups.map(g=>`<div class="nav-section">${g[0]}</div>`+g[1].map(x=>`<button class="navbtn" data-page="${x[0]}" onclick="showPage('${x[0]}',this)">${x[1]}</button>`).join('')).join('');
+    const ICONS={
+      dashboard:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1"/><rect x="11" y="2.5" width="6.5" height="6.5" rx="1"/><rect x="2.5" y="11" width="6.5" height="6.5" rx="1"/><rect x="11" y="11" width="6.5" height="6.5" rx="1"/></svg>',
+      products:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 6.5 10 2.5l7.5 4v7L10 17.5l-7.5-4z"/><path d="M2.5 6.5 10 10.5l7.5-4M10 10.5v7"/></svg>',
+      inward:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 2.5v9M6.5 8l3.5 3.5L13.5 8"/><path d="M3 13v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>',
+      movement:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h11M11 3.5 14.5 7 11 10.5"/><path d="M17 13H6M9 9.5 5.5 13 9 16.5"/></svg>',
+      newdc:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 2.5h7l3.5 3.5V17a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5z"/><path d="M10 8.5v5M7.5 11h5"/></svg>',
+      dchistory:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 2.5h7l3.5 3.5V17a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5z"/><path d="M7 9h6M7 12h6M7 15h3"/></svg>',
+      newinvoice:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 2.5h9v15l-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M8 7h4M8 10h4"/></svg>',
+      invoicehistory:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 2.5h9v15l-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M8 8.5h4M8 11.5h4"/></svg>',
+      outstanding:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="5.5" width="15" height="10.5" rx="1.3"/><path d="M2.5 8.5h15"/><circle cx="14" cy="12" r="1"/></svg>',
+      supplierpayable:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 8 10 3l7.5 5"/><path d="M4 8v7.5M8 8v7.5M12 8v7.5M16 8v7.5"/><path d="M2.5 15.5h15"/></svg>',
+      customers:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7.5" cy="7" r="2.6"/><path d="M2.8 16c.6-2.6 2.4-4 4.7-4s4.1 1.4 4.7 4"/><circle cx="14.2" cy="7.5" r="2"/><path d="M13 12.3c1.9.2 3.2 1.5 3.7 3.7"/></svg>',
+      suppliers:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 17V8l4-3 4 3v9M10.5 17V6.5l4-2.5 3 2v11"/><path d="M2.5 17h15"/></svg>',
+      reports:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17V4M3 17h14"/><path d="M6 14v-4M9.5 14V7M13 14v-6.5"/></svg>',
+      settings:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.8v2M10 15.2v2M17.2 10h-2M4.8 10h-2M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4M15.1 15.1l-1.4-1.4M6.3 6.3 4.9 4.9"/></svg>',
+      users:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 2.5 4 5v4.3c0 4 2.6 6.7 6 8.2 3.4-1.5 6-4.2 6-8.2V5z"/><circle cx="10" cy="8.6" r="1.6"/><path d="M7.3 13c.6-1.4 1.6-2 2.7-2s2.1.6 2.7 2"/></svg>'
+    };
+    const n=document.getElementById('nav');if(!n)return;n.innerHTML=groups.map(g=>`<div class="nav-section">${g[0]}</div>`+g[1].map(x=>`<button class="navbtn" data-page="${x[0]}" onclick="showPage('${x[0]}',this)"><span class="nav-icon">${ICONS[x[0]]||''}</span><span class="nav-label">${x[1]}</span></button>`).join('')).join('');
   };
   const oldShow=window.showPage;
   window.showPage=function(p,b){
