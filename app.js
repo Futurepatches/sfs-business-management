@@ -309,3 +309,460 @@ async function saveProduct(){
   if (f) b = await file64(f);
   const r = await api('saveProduct', {
     model:$('pm').value, category:$('pcat').value, description:$('pdesc').value,
+    brand:$('pbrand').value, unit:$('punit').value, location:$('ploc').value,
+    costPrice:$('pcost').value, salePrice:$('pprice').value,
+    openingStock:$('pop').value, remarks:$('prem').value,
+    imageBase64:b, imageName:f?.name
+  });
+  if (!r.ok) return toast(r.error, true);
+  closeModal(); await refresh(); toast('Product saved.');
+}
+
+/* ---------- INWARD ---------- */
+function renderInward(){ $('idate').value = new Date().toISOString().slice(0,10); }
+let SFS_SAVING = false;
+async function guardedSave(fn){ if (SFS_SAVING) return; SFS_SAVING = true; try { await fn(); } finally { SFS_SAVING = false; } }
+
+async function saveInward(){
+  await guardedSave(async () => {
+    const r = await api('saveInward', {
+      date:$('idate').value, sourceType:$('itype').value, model:$('imodel').value,
+      quantity:$('iqty').value, supplier:$('isupplier').value,
+      supplierReference:$('iref').value, purchaseCost:$('icost').value, remarks:$('irem').value
+    });
+    if (!r.ok) return toast(r.error, true);
+    toast('Inward saved. Stock increased.');
+    await refresh();
+  });
+}
+
+/* ---------- DC ---------- */
+let dcl = [], ivl = [];
+function renderDC(){ dcl = []; addDc(); $('dcdate').value = new Date().toISOString().slice(0,10); }
+function addDc(){ dcl.push({model:'', qty:'', unit:'Pcs'}); renderDcLines(); }
+
+function renderDcLines(){
+  if (!$('dclines')) return;
+  $('dclines').innerHTML = dcl.map((x,i) =>
+    `<tr>
+       <td><input value="${esc(x.model)}" list="ml" onchange="dcl[${i}].model=this.value;renderDcLines()"></td>
+       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
+       <td><input type="number" value="${x.qty}" onchange="dcl[${i}].qty=this.value"></td>
+       <td><input value="${x.unit}" onchange="dcl[${i}].unit=this.value"></td>
+       <td><button class="btn small" onclick="dcl.splice(${i},1);renderDcLines()">×</button></td>
+     </tr>`).join('');
+  $('dclines').insertAdjacentHTML('afterend', `<datalist id="ml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);
+}
+
+async function saveDC(print){
+  if (!dcl.length) return;
+  await guardedSave(async () => {
+    const p = {
+      no:$('dcno').value, date:$('dcdate').value, customer:$('dccust').value,
+      customerId:$('dcid').value, po:$('dcpo').value, poDate:$('dcpodate').value,
+      stn:$('dcstn').value, ntn:$('dcntn').value, address:$('dcaddr').value, items:dcl
+    };
+    const r = await api('saveDC', p);
+    if (!r.ok) return toast(r.error, true);
+    if (print) printDC(p);
+    toast('Delivery Challan saved and stock reduced.');
+    dcl = []; await refresh();
+  });
+}
+
+/* ---------- INVOICE ---------- */
+function renderInvoice(){ ivl = []; addInv(); $('ivdate').value = new Date().toISOString().slice(0,10); }
+function addInv(){ ivl.push({model:'', qty:'', rate:''}); renderIvLines(); }
+
+function renderIvLines(){
+  if (!$('ivlines')) return;
+  $('ivlines').innerHTML = ivl.map((x,i) =>
+    `<tr>
+       <td><input value="${esc(x.model)}" list="ivml" onchange="ivl[${i}].model=this.value;renderIvLines()"></td>
+       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
+       <td><input type="number" value="${x.qty}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td>
+       <td><input type="number" value="${x.rate}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td>
+       <td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td>
+       <td><button class="btn small" onclick="ivl.splice(${i},1);renderIvLines()">×</button></td>
+     </tr>`).join('');
+  $('ivlines').insertAdjacentHTML('afterend', `<datalist id="ivml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);
+  $('ivtotal').textContent = ivl.reduce((a,x) => a + (+x.qty||0)*(+x.rate||0), 0).toFixed(2);
+}
+
+async function saveInvoice(print){
+  await guardedSave(async () => {
+    const p = {
+      no:$('ivno').value, date:$('ivdate').value, customer:$('ivcust').value,
+      po:$('ivpo').value, poDate:$('ivpodate').value, dc:$('ivdc').value,
+      dcDate:$('ivdcdate').value, stn:$('ivstn').value, ntn:$('ivntn').value, items:ivl
+    };
+    const r = await api('saveInvoice', p);
+    if (!r.ok) return toast(r.error, true);
+    if (print) printInvoice({...p, total:r.subtotal});
+    toast('Invoice saved.');
+    await refresh();
+  });
+}
+
+/* ---------- ACCOUNTS (placeholder) ---------- */
+function renderAccounts(){
+  const body = $('accountsBody');
+  if (!body) return;
+  body.innerHTML = `<div class="panel"><h3>Coming Soon</h3><p class="muted">Payments aur outstanding ka full UI yahan aayega. Filhaal API ready hai.</p></div>`;
+}
+
+/* ---------- CUSTOMERS / SUPPLIERS ---------- */
+function renderCustomers(){
+  $('customers').innerHTML = S.customers.map(c =>
+    `<div class="kv">
+       <b>${esc(c.Name)}</b> — <span class="muted">${esc(c['Customer ID'])}</span><br>
+       ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
+       ${esc(c.Address)}<br>
+       <button class="btn small" onclick="ledger('Customer','${encodeURIComponent(c.Name)}')">Ledger</button>
+     </div>`).join('') || '<div class="muted">No customers yet.</div>';
+}
+
+function renderSuppliers(){
+  $('suppliers').innerHTML = S.suppliers.map(c =>
+    `<div class="kv">
+       <b>${esc(c.Name)}</b> — <span class="muted">${esc(c['Supplier ID'])}</span><br>
+       ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
+       ${esc(c.Address)}<br>
+       <button class="btn small" onclick="ledger('Supplier','${encodeURIComponent(c.Name)}')">Ledger</button>
+     </div>`).join('') || '<div class="muted">No suppliers yet.</div>';
+}
+
+function partyForm(type){
+  modal('Add ' + type,
+    `<div class="form-grid">
+       <label>Name<input id="pn"></label>
+       <label>Contact Person<input id="pcontact"></label>
+       <label>Phone<input id="pphone"></label>
+       <label>Email<input id="pemail"></label>
+       <label>City<input id="pcity"></label>
+       <label>NTN<input id="pntn"></label>
+       <label>STN<input id="pstn"></label>
+       <label class="wide">Address<textarea id="paddr"></textarea></label>
+       <label class="wide">Remarks<textarea id="pr"></textarea></label>
+     </div>
+     <div class="actions">
+       <button class="btn" onclick="closeModal()">Cancel</button>
+       <button class="btn primary" onclick="saveParty('${type}')">Save</button>
+     </div>`);
+}
+
+async function saveParty(type){
+  const r = await api(type === 'Customer' ? 'saveCustomer' : 'saveSupplier', {
+    name:$('pn').value, contact:$('pcontact').value, phone:$('pphone').value,
+    email:$('pemail').value, city:$('pcity').value, ntn:$('pntn').value,
+    stn:$('pstn').value, address:$('paddr').value, remarks:$('pr').value
+  });
+  if (!r.ok) return toast(r.error, true);
+  closeModal(); await refresh();
+  toast(type + ' saved.');
+}
+
+async function ledger(type, name){
+  const r = await api('getLedger', {type, name:decodeURIComponent(name)});
+  if (!r.ok) return toast(r.error, true);
+  modal(type + ' Ledger — ' + decodeURIComponent(name),
+    `<table>
+       <tr><th>Date</th><th>Type</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr>
+       ${r.transactions.map(x => `<tr><td>${esc(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.ref)}</td><td>${x.debit}</td><td>${x.credit}</td><td>${esc(x.remarks)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No transactions.</td></tr>'}
+     </table>`);
+}
+
+/* ---------- REPORTS ---------- */
+async function renderReports(){
+  const r = await api('getReports', {year:$('ry')?.value || new Date().getFullYear()});
+  if (!r.ok) return toast(r.error, true);
+  $('reports').innerHTML =
+    `<div class="cards">
+       <div class="card"><span>Invoices</span><strong>${r.sales.length}</strong></div>
+       <div class="card"><span>Sales</span><strong>${r.sales.reduce((a,x)=>a+(+x.total||0),0).toLocaleString()}</strong></div>
+     </div>
+     <div class="panel"><h3>Sales by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${(r.categorySales[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
+     <div class="panel table-wrap"><h3>Recent Stock Movement</h3>
+       <table>
+         <tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr>
+         ${r.movements.map(x => `<tr><td>${esc(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('')}
+       </table>
+     </div>`;
+}
+
+/* ---------- SETTINGS ---------- */
+function renderSettings(){}
+function saveSettings(){
+  S.api = $('apiurl').value.trim();
+  localStorage.sfsApiUrl = S.api;
+  toast('Backend URL saved. Login again.');
+  logout();
+}
+async function refreshSource(){
+  const r = await api('refreshSource');
+  toast(r.ok ? 'Source snapshot refreshed.' : r.error, !r.ok);
+  await refresh();
+}
+function changePasswordForm(){
+  modal('Change Password',
+    `<div class="form-grid">
+       <label class="wide">Current Password<input id="cp1" type="password"></label>
+       <label class="wide">New Password<input id="cp2" type="password"></label>
+       <label class="wide">Confirm Password<input id="cp3" type="password"></label>
+     </div>
+     <div class="actions">
+       <button class="btn" onclick="closeModal()">Cancel</button>
+       <button class="btn primary" onclick="changePassword()">Change Password</button>
+     </div>`);
+}
+async function changePassword(){
+  if ($('cp2').value !== $('cp3').value) return toast('Passwords do not match', true);
+  const r = await api('changePassword', {currentPassword:$('cp1').value, newPassword:$('cp2').value});
+  if (!r.ok) return toast(r.error, true);
+  closeModal(); toast('Password changed. Login again.'); logout();
+}
+
+/* ---------- USERS ---------- */
+async function renderUsers(){
+  const r = await api('listUsers');
+  if (!r.ok) return toast(r.error, true);
+
+  $('users').innerHTML = r.users.map(u => {
+    const mods = Array.isArray(u.Modules) ? u.Modules : [];
+    const isAdminRow = String(u.Role || '').toUpperCase() === 'ADMIN';
+    const modBadges = isAdminRow
+      ? '<span class="badge badge-admin">All Modules</span>'
+      : (mods.length
+          ? mods.map(m => `<span class="badge">${esc((ALL_MODULES.find(x=>x.id===m)||{}).label||m)}</span>`).join('')
+          : '<span class="badge badge-none">No modules</span>');
+
+    return `<div class="kv user-row">
+      <div class="user-info">
+        <b>${esc(u.Name)}</b> — ${esc(u.Username)} <span class="role">${esc(u.Role)}</span> <span class="${u.Status==='Active'?'ok':'off'}">${esc(u.Status)}</span>
+        <div class="modules-row">${modBadges}</div>
+      </div>
+      <div class="user-actions">
+        <button class="btn small" onclick="userForm('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Name||'')}','${encodeURIComponent(u.Role||'')}',${JSON.stringify(mods).replace(/"/g,'&quot;')})">Edit Modules</button>
+        <button class="btn small" onclick="toggleUser('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="muted">No users.</div>';
+}
+
+function userForm(editUsername, editName, editRole, editModules){
+  const isEdit = !!editUsername;
+  const u = editUsername ? decodeURIComponent(editUsername) : '';
+  const n = editName ? decodeURIComponent(editName) : '';
+  const ro = editRole ? decodeURIComponent(editRole) : 'STAFF';
+  const mods = Array.isArray(editModules) ? editModules : [];
+
+  modal(isEdit ? 'Edit Staff — ' + u : 'Add Staff',
+    `<div class="form-grid">
+       <label>Name<input id="un" value="${esc(n)}"></label>
+       <label>Username<input id="uu" value="${esc(u)}" ${isEdit?'readonly':''}></label>
+       <label>Password ${isEdit?'<span class="muted small">(khaali chhoro agar change nahi karni)</span>':''}<input id="up" type="password"></label>
+       <label>Role<select id="ur">
+         <option value="STAFF" ${ro==='STAFF'?'selected':''}>STAFF</option>
+         <option value="ADMIN" ${ro==='ADMIN'?'selected':''}>ADMIN</option>
+       </select></label>
+     </div>
+     <div class="modules-block">
+       <div class="modules-title">Module Access</div>
+       ${ALL_MODULES.map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" ${mods.indexOf(m.id)!==-1?'checked':''}> ${m.label}</label>`).join('')}
+       <div class="muted small">Note: ADMIN role ko hamesha full access milta hai — modules ki zaroorat nahi.</div>
+     </div>
+     <div class="actions">
+       <button class="btn" onclick="closeModal()">Cancel</button>
+       <button class="btn primary" onclick="saveUser(${isEdit?`'${esc(u)}'`:'null'})">${isEdit?'Save Changes':'Create User'}</button>
+     </div>`);
+}
+
+async function saveUser(editUsername){
+  const isEdit = !!editUsername;
+  const modules = Array.from(document.querySelectorAll('.modules-block input[type=checkbox]:checked')).map(x=>x.value);
+  const payload = {
+    name: $('un').value,
+    username: $('uu').value.trim(),
+    password: $('up').value,
+    role: $('ur').value,
+    modules: modules
+  };
+  if (!payload.username) return toast('Username is required', true);
+  if (!isEdit && !payload.password) return toast('Password is required', true);
+
+  const r = await api(isEdit ? 'updateUser' : 'saveUser', payload);
+  if (!r.ok) return toast(r.error, true);
+  closeModal();
+  toast(isEdit ? 'User updated.' : 'Staff created.');
+  renderUsers();
+}
+
+async function toggleUser(u, st){
+  const r = await api('disableUser', {username:decodeURIComponent(u), status:decodeURIComponent(st)==='Active'?'Inactive':'Active'});
+  if (!r.ok) return toast(r.error, true);
+  renderUsers();
+}
+
+/* ---------- TOAST / MODAL / PRINT ---------- */
+function toast(msg, isError){
+  const host = $('toastHost');
+  if (!host) { alert(msg); return; }
+  if (!host.dataset.sfsPositioned){
+    host.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;';
+    host.dataset.sfsPositioned = '1';
+  }
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'margin-top:8px;padding:11px 18px;border-radius:8px;color:#fff;font-size:13.5px;font-weight:500;box-shadow:0 6px 18px rgba(11,27,43,.18);' + (isError ? 'background:#DC2626;' : 'background:#059669;');
+  host.appendChild(el);
+  setTimeout(() => { el.remove(); }, 4000);
+}
+
+function modal(t, b){
+  $('modalTitle').textContent = t;
+  $('modalBody').innerHTML = b;
+  $('modal').classList.remove('hidden');
+}
+function closeModal(){ $('modal').classList.add('hidden'); }
+function file64(f){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(f);
+  });
+}
+
+function printDC(d){
+  const rows = d.items.map((x,i) =>
+    `<tr>
+       <td>${i+1}</td>
+       <td>${esc(x.model)}</td>
+       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
+       <td>${x.qty}</td>
+       <td>${esc(x.unit)}</td>
+     </tr>`).join('');
+  printDoc(
+    `<h1>DELIVERY CHALLAN</h1>
+     <div class="meta">
+       <div><b>M/S:</b> ${esc(d.customer)}</div>
+       <div><b>DATE:</b> ${esc(d.date)}</div>
+       <div><b>CHALLAN #:</b> ${esc(d.no)}</div>
+       <div><b>PO #:</b> ${esc(d.po)}</div>
+       <div><b>Customer ID:</b> ${esc(d.customerId)}</div>
+       <div><b>STN:</b> ${esc(d.stn)}</div>
+       <div><b>NTN:</b> ${esc(d.ntn)}</div>
+       <div><b>Address:</b> ${esc(d.address)}</div>
+     </div>
+     <table>
+       <tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th></tr>
+       ${rows}
+     </table>
+     <div class="footer">Prepared by: ____________________ &nbsp;&nbsp; Received by: ____________________</div>`);
+}
+
+function printInvoice(d){
+  const rows = d.items.map((x,i) =>
+    `<tr>
+       <td>${i+1}</td>
+       <td>${esc(x.model)}</td>
+       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
+       <td>${x.qty}</td>
+       <td>${x.rate}</td>
+       <td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td>
+     </tr>`).join('');
+  printDoc(
+    `<h1>INVOICE</h1>
+     <div class="meta">
+       <div><b>M/S:</b> ${esc(d.customer)}</div>
+       <div><b>DATE:</b> ${esc(d.date)}</div>
+       <div><b>INVOICE #:</b> ${esc(d.no)}</div>
+       <div><b>PO #:</b> ${esc(d.po)}</div>
+       <div><b>DC #:</b> ${esc(d.dc)}</div>
+       <div><b>STN:</b> ${esc(d.stn)}</div>
+       <div><b>NTN:</b> ${esc(d.ntn)}</div>
+     </div>
+     <table>
+       <tr><th>#</th><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>
+       ${rows}
+       <tr><td colspan="5" class="right"><b>SUB TOTAL</b></td><td><b>${d.total}</b></td></tr>
+     </table>
+     <div class="footer">Authorized Signature: ____________________</div>`);
+}
+
+function printDoc(body){
+  $('printArea').innerHTML =
+    `<div class="print-doc">
+       <div class="company">
+         <h2>STANDARD FLUID SYSTEMS</h2>
+         <div>General Industrial Machinery &amp; Equipment</div>
+         <div>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi</div>
+         <div>Ph: 021 32464447 • Cell: 0301 8212041</div>
+       </div>
+       ${body}
+     </div>`;
+  setTimeout(() => window.print(), 100);
+}
+
+/* ---------- INIT ---------- */
+function showLogin(){
+  $('app').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('loginUser')?.focus();
+}
+
+function init(){
+  S.api = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || localStorage.sfsApiUrl || '';
+  if (S.session && S.api){
+    api('bootstrap').then(r => {
+      if (r.ok){
+        S.user = r.user;
+        S.products = r.products || [];
+        S.customers = r.customers || [];
+        S.suppliers = r.suppliers || [];
+        S.tx = r.transactions || [];
+        enter();
+      } else {
+        sessionStorage.clear();
+        showLogin();
+      }
+    });
+  } else {
+    showLogin();
+  }
+}
+init();
+
+/* ---------- GLOBAL EXPORTS (inline onclick ke liye) ---------- */
+window.login = login;
+window.logout = logout;
+window.refresh = refresh;
+window.showPage = showPage;
+window.productForm = productForm;
+window.saveProduct = saveProduct;
+window.productDetail = productDetail;
+window.renderProducts = renderProducts;
+window.addDc = addDc;
+window.addInv = addInv;
+window.saveDC = saveDC;
+window.saveInvoice = saveInvoice;
+window.saveInward = saveInward;
+window.renderInward = renderInward;
+window.renderCustomers = renderCustomers;
+window.renderSuppliers = renderSuppliers;
+window.partyForm = partyForm;
+window.saveParty = saveParty;
+window.ledger = ledger;
+window.renderReports = renderReports;
+window.renderSettings = renderSettings;
+window.saveSettings = saveSettings;
+window.refreshSource = refreshSource;
+window.changePasswordForm = changePasswordForm;
+window.changePassword = changePassword;
+window.renderUsers = renderUsers;
+window.userForm = userForm;
+window.saveUser = saveUser;
+window.toggleUser = toggleUser;
+window.closeModal = closeModal;
+window.renderAccounts = renderAccounts;
+window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
