@@ -1,2 +1,155 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SFS Business Management</title><link rel="stylesheet" href="styles.css?v=20260921a"></head><body><div id="login" class="login-screen"><div class="login-card"><img src="logo.png" class="login-logo" alt="SFS"><div class="eyebrow">STANDARD FLUID SYSTEMS</div><h1>Business Management</h1><label>Username<input id="loginUser" type="text" autocomplete="off"></label><label>Password<input id="loginPass" type="password" autocomplete="off" onkeydown="if(event.key==='Enter')login()"></label><label id="captchaLabel">Security Check<input id="captchaAnswer" type="text" inputmode="numeric" autocomplete="off" onkeydown="if(event.key==='Enter')login()"></label><p id="loginError" class="muted"></p><button class="btn primary full" onclick="login()">Login</button></div></div><div id="app" class="hidden"><aside><div class="brand"><img src="logo.png" alt="SFS"><div><b>SFS</b><small>Business Management</small></div></div><nav id="nav"></nav><div class="userbox"><b id="who">Administrator</b><small id="role">ADMIN</small><button class="btn ghost full" onclick="logout()">Logout</button></div></aside><main><header><div><div class="eyebrow">STANDARD FLUID SYSTEMS</div><h1 id="pageTitle">Dashboard</h1><p>Inventory • Purchases • Sales • Documents</p></div><div class="header-actions"><span id="busy" class="busy hidden">Working…</span><button class="btn ghost" onclick="refresh()">↻ Refresh</button></div></header><div id="content"></div></main></div><div id="modal" class="modal hidden"><div class="modal-card"><div class="modal-head"><h3 id="modalTitle"></h3><button onclick="closeModal()">×</button></div><div id="modalBody"></div></div></div><div id="toastHost" class="toast-host"></div><div id="printArea"></div><script src="config.js?v=20260921a"></script><script src="dev-mode.js?v=20260921a"></script><script src="app.js?v=20260921a"></script><script src="price-list.js?v=20260921a"></script><script src="erp-overrides.js?v=20260921a"></script><script src="erp-api-bridge.js?v=20260921a"></script><script src="stock-fix.js?v=20260921a"></script><script src="staff-access.js"></script>
-</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standard Fluid Systems — Business Management</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login" class="login-screen">
+  <div class="login-card">
+    <img src="logo.png" alt="SFS" class="login-logo">
+    <div class="eyebrow">Standard Fluid Systems</div>
+    <h1>Business Management</h1>
+
+    <label>Username
+      <input id="loginUser" type="text" autocomplete="username" placeholder="admin">
+    </label>
+
+    <label>Password
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+    </label>
+
+    <label>Security Check
+      <input id="loginCaptcha" type="text" placeholder="What is 1 + 1?">
+    </label>
+
+    <div id="loginError" class="muted"></div>
+
+    <button class="btn primary full" onclick="login()">Sign In</button>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app" class="hidden">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="brand">
+      <img src="logo.png" alt="SFS">
+      <div>
+        <b>Standard Fluid</b>
+        <small>Business Management</small>
+      </div>
+      <button class="collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="userbox">
+      <b id="who">—</b>
+      <small id="role">—</small>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Standard Fluid Systems</div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p>Inventory • Purchases • Sales • Documents</p>
+      </div>
+      <div class="header-actions">
+        <span id="busy" class="busy hidden">Working…</span>
+        <button class="btn" onclick="refresh()">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div id="content"></div>
+  </main>
+
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modalTitle">—</h3>
+      <button onclick="closeModal()" aria-label="Close">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div id="toastHost" class="toast-host"></div>
+
+<!-- ============ PRINT AREA ============ -->
+<div id="printArea"></div>
+
+<!-- ============ SCRIPTS ============ -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+
+<script>
+/* ---------- Sidebar collapse toggle ---------- */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try { localStorage.setItem('sfsSidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+}
+/* Restore sidebar state on load */
+(function(){
+  try {
+    if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
+      document.getElementById('sidebar')?.classList.add('collapsed');
+    }
+  } catch(e) {}
+})();
+
+/* ---------- Login captcha (simple gate) ---------- */
+(function(){
+  const cap = document.getElementById('loginCaptcha');
+  if (!cap) return;
+  cap.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); login(); }
+  });
+  // Override login() to also check captcha
+  const origLogin = window.login;
+  window.login = async function(){
+    const capVal = (document.getElementById('loginCaptcha')?.value || '').trim();
+    if (capVal !== '2') {
+      const err = document.getElementById('loginError');
+      if (err) err.textContent = 'Security check failed. 1 + 1 = ?';
+      return;
+    }
+    if (typeof origLogin === 'function') return origLogin.apply(this, arguments);
+    // fallback: call the app.js login
+    if (typeof window.__sfsLogin === 'function') return window.__sfsLogin();
+  };
+})();
+
+/* ---------- Enter key on login ---------- */
+document.addEventListener('DOMContentLoaded', function(){
+  ['loginUser','loginPass','loginCaptcha'].forEach(function(id){
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); login(); }
+    });
+  });
+});
+</script>
+
+</body>
+</html>
