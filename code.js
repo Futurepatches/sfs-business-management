@@ -38,16 +38,18 @@ const SOURCE = {
 };
 
 const HEADERS = {
-  'Products':['Product ID','Model / Part No.','Description','Category','Brand','Unit','Location','Cost Price','Sale Price','Current Stock','Product Image','Remarks','Status'],
+  'Products':['Product ID','Model / Part No.','Description','Category','Brand','Unit','Location','Cost Price','Sale Price','Current Stock','Product Image','Remarks','Status','Reorder Level'],
   'Inward':['Inward ID','Date','Product ID','Model / Part No.','Quantity','Source Type','Supplier','Supplier Reference','Purchase Cost','Remarks','Created By'],
   'Stock Movement':['Transaction ID','Date/Time','Type','Product ID','Model / Part No.','Quantity','Source / Destination','Reference Type','Reference No.','Created By'],
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
-  'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By'],
+  'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status'],
   'Categories':['Category ID','Category Name'],
-  'Payments':['Payment ID','Date','Customer ID','Customer Name','Invoice No.','Amount','Method','Reference','Remarks','Created By']
+  'Payments':['Payment ID','Date','Customer ID','Customer Name','Invoice No.','Amount','Method','Reference','Remarks','Created By'],
+  'Supplier Payments':['Payment ID','Date','Supplier ID','Supplier Name','Amount','Method','Reference','Remarks','Created By'],
+  'Targets':['Year','Target Amount']
 };
 
 /* ---------- WEB API ---------- */
@@ -126,7 +128,7 @@ function doPost(e) {
     // requests (e.g. a fast double-click, or a slow network retry) can
     // never both pass a stock check before either one has actually
     // written its update.
-    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','savePayment'];
+    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','savePayment','saveSupplierPayment'];
     let lock = null;
     if (STOCK_LOCKED_ACTIONS.indexOf(action) !== -1) {
       lock = LockService.getScriptLock();
@@ -143,6 +145,24 @@ function doPost(e) {
       case 'product':
         p.user = auth.user.username;
         return out(saveProduct(p));
+
+      case 'updateProduct':
+        return out(updateProduct(p));
+
+      case 'setProductStatus':
+        return out(setProductStatus_(p, auth.user));
+
+      case 'updateCustomer':
+        return out(updateCustomer(p));
+
+      case 'setCustomerStatus':
+        return out(setCustomerStatus_(p, auth.user));
+
+      case 'updateSupplier':
+        return out(updateSupplier(p));
+
+      case 'setSupplierStatus':
+        return out(setSupplierStatus_(p, auth.user));
 
       case 'saveInward':
       case 'inward':
@@ -165,8 +185,24 @@ function doPost(e) {
       case 'getOutstanding':
         return out(getOutstandingForFrontend_(p));
 
+      case 'getSalesSummary':
+        return out(getSalesSummaryForFrontend_(p));
+
+      case 'saveTarget':
+        return out(saveTarget(p, auth.user));
+
       case 'getPaymentHistory':
         return out(getPaymentHistory_(p));
+
+      case 'saveSupplierPayment':
+        p.user = auth.user.username;
+        return out(saveSupplierPayment(p));
+
+      case 'getSupplierOutstanding':
+        return out(getSupplierOutstandingForFrontend_(p));
+
+      case 'getSupplierPaymentHistory':
+        return out(getSupplierPaymentHistory_(p));
 
       case 'saveInvoice':
       case 'invoice':
@@ -199,6 +235,9 @@ function doPost(e) {
 
       case 'refreshSource':
       case 'sync':
+        if (String(auth.user.role || '').toUpperCase() !== 'ADMIN') {
+          return out({ok:false,error:'Only an Admin can refresh the source data snapshot.'});
+        }
         syncSourceData();
         return out({ok:true, message:'Source data refreshed'});
 
@@ -294,25 +333,49 @@ function ensureDefaultCategories_() {
   }
 }
 
+function getUserCols_(sh) {
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim().toLowerCase());
+
+  const find = (...names) => {
+    for (const n of names) {
+      const idx = headers.indexOf(n.toLowerCase());
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  return {
+    total: lastCol,
+    id: find('user id', 'id'),
+    name: find('name'),
+    username: find('username'),
+    role: find('role'),
+    password: find('password', 'password hash'),
+    status: find('status')
+  };
+}
+
 function ensureDefaultAdmin_() {
   const sh=SpreadsheetApp.getActive().getSheetByName('Users & Roles');
   if(!sh) return;
 
+  const cols = getUserCols_(sh);
   const values=sh.getDataRange().getValues();
 
   const hasAdmin=values.slice(1).some(r =>
-    String(r[2] || '').trim().toLowerCase()==='admin'
+    String(r[cols.username] || '').trim().toLowerCase()==='admin'
   );
 
   if(!hasAdmin) {
-    sh.appendRow([
-      'USR-000001',
-      'Administrator',
-      'admin',
-      'Admin',
-      'admin123',
-      'Active'
-    ]);
+    const row = new Array(cols.total).fill('');
+    if (cols.id !== -1) row[cols.id] = 'USR-000001';
+    if (cols.name !== -1) row[cols.name] = 'Administrator';
+    if (cols.username !== -1) row[cols.username] = 'admin';
+    if (cols.role !== -1) row[cols.role] = 'ADMIN';
+    if (cols.password !== -1) row[cols.password] = hashPassword_('admin123');
+    if (cols.status !== -1) row[cols.status] = 'Active';
+    sh.appendRow(row);
   }
 }
 
@@ -403,7 +466,8 @@ function syncProductsFromSource_(stock) {
       currentStock,
       old[10] || r[4] || '', // Image column E (index 4)
       old[11] || '',
-      old[12] || 'Active'
+      old[12] || 'Active',
+      old[13] || 5 // Reorder Level — preserve existing, default new products to 5
     ]);
   });
 
@@ -457,6 +521,135 @@ function findProduct(model) {
   return null;
 }
 
+function ensureInvoiceGstColumn_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Invoices');
+  if (!sh) return;
+
+  const lastCol = sh.getLastColumn();
+  if (lastCol < 1) return;
+
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (headers.indexOf('GST %') !== -1) return; // already migrated
+
+  const newCol = lastCol + 1;
+  sh.getRange(1, newCol).setValue('GST %');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const defaults = [];
+    for (let i = 0; i < lastRow - 1; i++) defaults.push([18]); // old invoices were always 18%
+    sh.getRange(2, newCol, lastRow - 1, 1).setValues(defaults);
+  }
+}
+
+function ensureReorderLevelColumn_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Products');
+  if (!sh) return;
+
+  const lastCol = sh.getLastColumn();
+  if (lastCol < 1) return;
+
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (headers.indexOf('Reorder Level') !== -1) return; // already migrated
+
+  const newCol = lastCol + 1;
+  sh.getRange(1, newCol).setValue('Reorder Level');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const defaults = [];
+    for (let i = 0; i < lastRow - 1; i++) defaults.push([5]);
+    sh.getRange(2, newCol, lastRow - 1, 1).setValues(defaults);
+  }
+}
+
+function updateProduct(p) {
+  const model = String(p.model || '').trim();
+  const prod = findProduct(model);
+  if (!prod) throw Error('Product not found: ' + model);
+
+  const sh = SpreadsheetApp.getActive().getSheetByName('Products');
+  const row = prod.row;
+
+  const imageUrl = p.imageBase64 ? saveImageToDrive_(p.imageBase64, p.imageName) : (p.image || prod.data[10] || '');
+
+  sh.getRange(row, 3).setValue(p.description || '');
+  sh.getRange(row, 4).setValue(p.category || '');
+  sh.getRange(row, 5).setValue(p.brand || '');
+  sh.getRange(row, 6).setValue(p.unit || 'Pcs');
+  sh.getRange(row, 7).setValue(p.location || '');
+  sh.getRange(row, 8).setValue(p.costPrice || '');
+  sh.getRange(row, 9).setValue(p.salePrice || '');
+  sh.getRange(row, 11).setValue(imageUrl);
+  sh.getRange(row, 12).setValue(p.remarks || '');
+  if (p.reorderLevel !== undefined && p.reorderLevel !== '') {
+    sh.getRange(row, 14).setValue(Number(p.reorderLevel));
+  }
+
+  return { ok:true };
+}
+
+function setProductStatus_(p, authUser) {
+  if (String(authUser.role || '').toUpperCase() !== 'ADMIN') {
+    return { ok:false, error:'Only an Admin can activate/deactivate products.' };
+  }
+
+  const model = String(p.model || '').trim();
+  const prod = findProduct(model);
+  if (!prod) throw Error('Product not found: ' + model);
+
+  const sh = SpreadsheetApp.getActive().getSheetByName('Products');
+  sh.getRange(prod.row, 13).setValue(String(p.status || 'Active'));
+
+  return { ok:true };
+}
+
+function updateParty_(sheetName, nameCol, p, statusCol) {
+  const name = String(p.name || '').trim();
+  if (!name) throw Error('Name is required.');
+
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  const values = sh.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][nameCol - 1] || '').trim().toLowerCase() === name.toLowerCase()) {
+      sh.getRange(i + 1, nameCol + 1).setValue(p.contact || '');  // Contact Person
+      sh.getRange(i + 1, nameCol + 2).setValue(p.phone || '');    // Phone
+      sh.getRange(i + 1, nameCol + 3).setValue(p.email || '');    // Email
+      sh.getRange(i + 1, nameCol + 4).setValue(p.address || '');  // Address
+      sh.getRange(i + 1, nameCol + 5).setValue(p.ntn || '');      // NTN/Tax ID
+      sh.getRange(i + 1, nameCol + 6).setValue(p.remarks || '');  // Remarks
+      return { ok:true };
+    }
+  }
+
+  throw Error(sheetName.slice(0, -1) + ' not found: ' + name);
+}
+
+function setPartyStatus_(sheetName, nameCol, statusCol, p, authUser) {
+  if (String(authUser.role || '').toUpperCase() !== 'ADMIN') {
+    return { ok:false, error:'Only an Admin can activate/deactivate ' + sheetName.toLowerCase() + '.' };
+  }
+
+  const name = String(p.name || '').trim();
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  const values = sh.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][nameCol - 1] || '').trim().toLowerCase() === name.toLowerCase()) {
+      sh.getRange(i + 1, statusCol).setValue(String(p.status || 'Active'));
+      return { ok:true };
+    }
+  }
+
+  throw Error(sheetName.slice(0, -1) + ' not found: ' + name);
+}
+
+function updateCustomer(p) { return updateParty_('Customers', 2, p); }
+function setCustomerStatus_(p, authUser) { return setPartyStatus_('Customers', 2, 9, p, authUser); }
+function updateSupplier(p) { return updateParty_('Suppliers', 2, p); }
+function setSupplierStatus_(p, authUser) { return setPartyStatus_('Suppliers', 2, 9, p, authUser); }
+
 function saveImageToDrive_(base64Data, fileName) {
   if (!base64Data) return '';
 
@@ -509,7 +702,8 @@ function saveProduct(p) {
     0,
     imageUrl,
     p.remarks || '',
-    'Active'
+    'Active',
+    Number(p.reorderLevel || 5)
   ]);
 
   const openingStock=Number(p.openingStock || 0);
@@ -872,10 +1066,20 @@ function updateDC(p) {
 /* ---------- INVOICE ---------- */
 
 function saveInvoice(p) {
+  ensureInvoiceGstColumn_();
+
   const id=p.no || nextSafeId_('INV-','Invoices',1);
 
   if (p.no && numberExistsInSheet_('Invoices', p.no)) {
     throw Error('Invoice '+p.no+' already exists. If you clicked Save twice, this one was already recorded — check Invoice History.');
+  }
+
+  const dcNo = String(p.dc || '').trim();
+  if (dcNo) {
+    const existingForDc = objectsFromSheet_('Invoices').some(r => String(r['DC No.'] || '').trim() === dcNo);
+    if (existingForDc) {
+      throw Error('An invoice already exists for Delivery Challan ' + dcNo + '. Check Invoice History.');
+    }
   }
 
   const sh=SpreadsheetApp.getActive().getSheetByName('Invoices');
@@ -884,6 +1088,8 @@ function saveInvoice(p) {
   if(!items.length) {
     throw Error('Invoice has no items.');
   }
+
+  const gstPercent = p.gstPercent !== undefined && p.gstPercent !== '' ? Number(p.gstPercent) : 18;
 
   items.forEach(it => {
     const prod=findProduct(it.model);
@@ -912,7 +1118,8 @@ function saveInvoice(p) {
       qty,
       rate,
       qty*rate,
-      p.user || 'Staff'
+      p.user || 'Staff',
+      gstPercent
     ]);
   });
 
@@ -930,45 +1137,81 @@ function loginUser(p) {
 
   if (!sh) return {ok:false,error:'Users & Roles sheet not found.'};
 
-  const rows = sh.getDataRange().getValues();
+  const cols = getUserCols_(sh);
+  if (cols.username === -1 || cols.password === -1) {
+    return {ok:false,error:'Users & Roles sheet is missing a Username or Password column.'};
+  }
+
   const username = String(p.username || '').trim();
   const password = String(p.password || '');
 
+  if (!username) return {ok:false,error:'Username is required.'};
+
+  const props = PropertiesService.getScriptProperties();
+  const lockKey = 'SFS_LOGIN_LOCK_' + username.toLowerCase();
+  const lockRaw = props.getProperty(lockKey);
+  const LOCK_LIMIT = 5;
+  const LOCK_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+  if (lockRaw) {
+    const lock = JSON.parse(lockRaw);
+    const elapsed = Date.now() - lock.lastAttempt;
+
+    if (lock.attempts >= LOCK_LIMIT && elapsed < LOCK_WINDOW_MS) {
+      const waitMin = Math.ceil((LOCK_WINDOW_MS - elapsed) / 60000);
+      return {ok:false, error:'Too many failed login attempts. Try again in ' + waitMin + ' minute(s).'};
+    }
+
+    if (elapsed >= LOCK_WINDOW_MS) {
+      props.deleteProperty(lockKey); // cooldown expired, start fresh
+    }
+  }
+
+  const rows = sh.getDataRange().getValues();
+
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
+    const rowUsername = String(r[cols.username] || '').trim();
+    const rowStatus = cols.status !== -1 ? String(r[cols.status] || 'Active') : 'Active';
 
     if (
-      String(r[2] || '').trim() === username &&
-      String(r[4] || '') === password &&
-      String(r[5] || 'Active').toLowerCase() !== 'inactive'
+      rowUsername === username &&
+      verifyPassword_(password, r[cols.password]) &&
+      rowStatus.toLowerCase() !== 'inactive'
     ) {
+      props.deleteProperty(lockKey); // successful login clears any lockout
+
+      if (isLegacyPassword_(r[cols.password])) {
+        // Transparently upgrade this account to a salted hash now that
+        // we've verified the plain-text password was correct.
+        sh.getRange(i + 1, cols.password + 1).setValue(hashPassword_(password));
+      }
+
       const session = Utilities.getUuid();
+      const userObj = {
+        id: cols.id !== -1 ? r[cols.id] : '',
+        name: cols.name !== -1 ? r[cols.name] : rowUsername,
+        username: rowUsername,
+        role: cols.role !== -1 ? String(r[cols.role] || 'STAFF').toUpperCase() : 'STAFF',
+        status: rowStatus
+      };
 
       PropertiesService.getScriptProperties().setProperty(
         'SFS_SESSION_' + session,
-        JSON.stringify({
-          id: r[0],
-          name: r[1],
-          username: r[2],
-          role: r[3],
-          status: r[5] || 'Active',
-          created: Date.now()
-        })
+        JSON.stringify(Object.assign({}, userObj, {created: Date.now()}))
       );
 
       return {
         ok:true,
         session:session,
-        user:{
-          id:r[0],
-          name:r[1],
-          username:r[2],
-          role:String(r[3] || 'STAFF').toUpperCase(),
-          status:r[5] || 'Active'
-        }
+        user:userObj
       };
     }
   }
+
+  // Failed attempt — record it against this username for rate-limiting.
+  const prevAttempts = lockRaw ? JSON.parse(lockRaw).attempts : 0;
+  props.setProperty(lockKey, JSON.stringify({attempts: prevAttempts + 1, lastAttempt: Date.now()}));
 
   return {ok:false,error:'Invalid username or password'};
 }
@@ -1018,6 +1261,9 @@ function logoutUser_(p) {
 function bootstrap_(p) {
   const auth = requireSession_(p);
   if (!auth.ok) return auth;
+
+  ensureReorderLevelColumn_();
+  ensureInvoiceGstColumn_();
 
   const products = objectsFromSheet_('Products');
   const customers = objectsFromSheet_('Customers');
@@ -1325,6 +1571,183 @@ function getPaymentHistory_(p) {
   return { ok: true, payments: rows.reverse() };
 }
 
+function saveSupplierPayment(p) {
+  const supplierName = String(p.supplier || '').trim();
+  const amount = Number(p.amount || 0);
+
+  if (!supplierName) throw Error('Supplier is required.');
+  if (amount <= 0) throw Error('Payment amount must be greater than zero.');
+
+  const outstandingRows = getSupplierOutstandingForFrontend_({supplier: supplierName, includeSettled: true}).rows;
+  const current = outstandingRows.find(r => r.supplier.toLowerCase() === supplierName.toLowerCase());
+  const outstandingBefore = current ? current.outstanding : 0;
+
+  if (amount > outstandingBefore + 0.5) {
+    throw Error('Payment (' + amount.toFixed(2) + ') exceeds outstanding balance (' + outstandingBefore.toFixed(2) + ') for ' + supplierName + '. Check the amount — the field may not have been cleared before typing.');
+  }
+
+  const supplier = objectsFromSheet_('Suppliers').find(
+    s => String(s['Supplier Name'] || '').trim().toLowerCase() === supplierName.toLowerCase()
+  );
+
+  const id = nextSafeId_('SPMT-', 'Supplier Payments', 1);
+  const sh = SpreadsheetApp.getActive().getSheetByName('Supplier Payments');
+
+  sh.appendRow([
+    id,
+    p.date || new Date(),
+    supplier ? supplier['Supplier ID'] : '',
+    supplierName,
+    amount,
+    p.method || '',
+    p.reference || '',
+    p.remarks || '',
+    p.user || 'Staff'
+  ]);
+
+  return { ok:true, id:id, outstanding: Math.max(0, outstandingBefore - amount) };
+}
+
+function getSupplierOutstandingForFrontend_(p) {
+  const inwardRows = objectsFromSheet_('Inward');
+  const payments = objectsFromSheet_('Supplier Payments');
+  const suppliersList = objectsFromSheet_('Suppliers');
+
+  function canonicalName_(raw) {
+    const norm = String(raw || '').trim().toLowerCase();
+    const match = suppliersList.find(s => String(s['Supplier Name'] || '').trim().toLowerCase() === norm);
+    return match ? match['Supplier Name'] : String(raw || '').trim();
+  }
+
+  const purchasedBySupplier = {}; // keyed by normalized (trimmed, lowercase) supplier name
+  const paidBySupplier = {};
+  const displayName = {};
+
+  inwardRows.forEach(r => {
+    const raw = String(r.Supplier || '').trim();
+    if (!raw) return;
+
+    const key = raw.toLowerCase();
+    purchasedBySupplier[key] = (purchasedBySupplier[key] || 0) + Number(r['Purchase Cost'] || 0);
+    if (!displayName[key]) displayName[key] = canonicalName_(raw);
+  });
+
+  payments.forEach(r => {
+    const raw = String(r['Supplier Name'] || '').trim();
+    if (!raw) return;
+
+    const key = raw.toLowerCase();
+    paidBySupplier[key] = (paidBySupplier[key] || 0) + Number(r.Amount || 0);
+    if (!displayName[key]) displayName[key] = canonicalName_(raw);
+  });
+
+  const keys = new Set([...Object.keys(purchasedBySupplier), ...Object.keys(paidBySupplier)]);
+
+  let rows = Array.from(keys).map(key => {
+    const purchased = purchasedBySupplier[key] || 0;
+    const paid = paidBySupplier[key] || 0;
+    return {
+      supplier: displayName[key] || key,
+      purchased: purchased,
+      paid: paid,
+      outstanding: Math.max(0, purchased - paid)
+    };
+  });
+
+  if (p && p.supplier) {
+    const s = String(p.supplier).trim().toLowerCase();
+    rows = rows.filter(r => r.supplier.toLowerCase() === s);
+  }
+
+  if (!p || !p.includeSettled) {
+    rows = rows.filter(r => r.outstanding > 0.5);
+  }
+
+  return { ok:true, rows: rows };
+}
+
+function getSupplierPaymentHistory_(p) {
+  let rows = objectsFromSheet_('Supplier Payments');
+
+  if (p && p.supplier) {
+    const s = String(p.supplier).toLowerCase();
+    rows = rows.filter(r => String(r['Supplier Name'] || '').toLowerCase() === s);
+  }
+
+  return { ok:true, payments: rows.reverse() };
+}
+
+/* ---------- SALES TARGET / CUSTOMER SALES SUMMARY ---------- */
+
+function getTargetForYear_(year) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Targets');
+  if (!sh || sh.getLastRow() < 2) return 0;
+
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(year).trim()) {
+      return Number(rows[i][1] || 0);
+    }
+  }
+  return 0;
+}
+
+function getSalesSummaryForFrontend_(p) {
+  const year = String(p.year || new Date().getFullYear());
+  const invoiceDocs = buildInvoiceDocuments_();
+
+  const byCustomer = {};
+  let totalSales = 0;
+
+  invoiceDocs.forEach(inv => {
+    const d = inv.date ? new Date(inv.date) : null;
+    if (d && !isNaN(d) && String(d.getFullYear()) !== year) return;
+
+    const grand = Number(inv.subtotal || 0) * (1 + Number(inv.gstPercent || 18) / 100);
+    const cust = String(inv.customer || '').trim();
+
+    if (cust) byCustomer[cust] = (byCustomer[cust] || 0) + grand;
+    totalSales += grand;
+  });
+
+  const customerSales = Object.keys(byCustomer)
+    .map(c => ({ customer: c, amount: byCustomer[c] }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const target = getTargetForYear_(year);
+
+  return {
+    ok: true,
+    year: year,
+    totalSales: totalSales,
+    target: target,
+    remaining: Math.max(0, target - totalSales),
+    customerSales: customerSales
+  };
+}
+
+function saveTarget(p, authUser) {
+  if (String(authUser.role || '').toUpperCase() !== 'ADMIN') {
+    return { ok:false, error:'Only an Admin can set sales targets.' };
+  }
+
+  const year = String(p.year || new Date().getFullYear()).trim();
+  const amount = Number(p.amount || 0);
+
+  const sh = SpreadsheetApp.getActive().getSheetByName('Targets');
+  const rows = sh.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === year) {
+      sh.getRange(i + 1, 2).setValue(amount);
+      return { ok:true };
+    }
+  }
+
+  sh.appendRow([year, amount]);
+  return { ok:true };
+}
+
 /* ---------- DOCUMENT HISTORY (Delivery Challans / Invoices) ---------- */
 /* Each DC/Invoice is stored as one row per item line. These helpers
    group the rows back into document objects with an items[] array,
@@ -1389,6 +1812,7 @@ function buildInvoiceDocuments_() {
         stn: r['STN'] || '',
         ntn: r['NTN'] || '',
         createdBy: r['Created By'] || '',
+        gstPercent: r['GST %'] !== undefined && r['GST %'] !== '' ? Number(r['GST %']) : 18,
         items: [],
         subtotal: 0
       };
@@ -1449,18 +1873,58 @@ function listUsers_(authUser) {
   }
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Users & Roles');
+  const cols = getUserCols_(sh);
   const values = sh.getDataRange().getValues();
 
   return {
     ok:true,
     users:values.slice(1).map(r => ({
-      'User ID':r[0],
-      'Name':r[1],
-      'Username':r[2],
-      'Role':r[3],
-      'Status':r[5] || 'Active'
+      'User ID': cols.id !== -1 ? r[cols.id] : '',
+      'Name': cols.name !== -1 ? r[cols.name] : '',
+      'Username': cols.username !== -1 ? r[cols.username] : '',
+      'Role': cols.role !== -1 ? r[cols.role] : '',
+      'Status': cols.status !== -1 ? (r[cols.status] || 'Active') : 'Active'
     }))
   };
+}
+
+/* ---------- PASSWORD HASHING ---------- */
+/* Passwords are stored as "salt$hash" (SHA-256 of salt+password).
+   Older plain-text passwords are still recognized on login (backward
+   compatibility) and are silently upgraded to the hashed format the
+   moment that user logs in successfully. */
+
+function generateSalt_() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+function sha256Hex_(text) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8);
+  return bytes.map(b => ((b < 0 ? b + 256 : b).toString(16)).padStart(2, '0')).join('');
+}
+
+function hashPassword_(password) {
+  const salt = generateSalt_();
+  return salt + '$' + sha256Hex_(salt + password);
+}
+
+function verifyPassword_(password, stored) {
+  const s = String(stored || '');
+  if (!s) return false;
+
+  const sep = s.indexOf('$');
+  if (sep === -1) {
+    // Legacy plain-text password — compare directly.
+    return s === password;
+  }
+
+  const salt = s.slice(0, sep);
+  const hash = s.slice(sep + 1);
+  return sha256Hex_(salt + password) === hash;
+}
+
+function isLegacyPassword_(stored) {
+  return String(stored || '').indexOf('$') === -1;
 }
 
 function saveUser_(p, authUser) {
@@ -1469,23 +1933,26 @@ function saveUser_(p, authUser) {
   }
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Users & Roles');
+  const cols = getUserCols_(sh);
   const username = String(p.username || '').trim();
 
   if (!username) return {ok:false,error:'Username is required'};
+  if (cols.username === -1) return {ok:false,error:'Users & Roles sheet has no Username column.'};
 
-  const existing = objectsFromSheet_('Users & Roles')
-    .some(u => String(u.Username || '').trim().toLowerCase() === username.toLowerCase());
+  const existing = sh.getDataRange().getValues().slice(1)
+    .some(r => String(r[cols.username] || '').trim().toLowerCase() === username.toLowerCase());
 
   if (existing) return {ok:false,error:'Username already exists'};
 
-  sh.appendRow([
-    nextSafeId_('USR-','Users & Roles',1),
-    String(p.name || '').trim(),
-    username,
-    String(p.role || 'STAFF').toUpperCase(),
-    String(p.password || ''),
-    'Active'
-  ]);
+  const row = new Array(cols.total).fill('');
+  if (cols.id !== -1) row[cols.id] = nextSafeId_('USR-','Users & Roles', cols.id + 1);
+  if (cols.name !== -1) row[cols.name] = String(p.name || '').trim();
+  row[cols.username] = username;
+  if (cols.role !== -1) row[cols.role] = String(p.role || 'STAFF').toUpperCase();
+  if (cols.password !== -1) row[cols.password] = hashPassword_(String(p.password || ''));
+  if (cols.status !== -1) row[cols.status] = 'Active';
+
+  sh.appendRow(row);
 
   return {ok:true};
 }
@@ -1497,11 +1964,15 @@ function disableUser_(p, authUser) {
 
   const username = String(p.username || '').trim();
   const sh = SpreadsheetApp.getActive().getSheetByName('Users & Roles');
+  const cols = getUserCols_(sh);
+  if (cols.username === -1) return {ok:false,error:'Users & Roles sheet has no Username column.'};
+  if (cols.status === -1) return {ok:false,error:'Users & Roles sheet has no Status column.'};
+
   const values = sh.getDataRange().getValues();
 
   for (let i=1;i<values.length;i++) {
-    if (String(values[i][2] || '').trim() === username) {
-      sh.getRange(i+1,6).setValue(String(p.status || 'Inactive'));
+    if (String(values[i][cols.username] || '').trim() === username) {
+      sh.getRange(i+1,cols.status+1).setValue(String(p.status || 'Inactive'));
       return {ok:true};
     }
   }
@@ -1518,15 +1989,20 @@ function changePassword_(p, authUser) {
   }
 
   const sh = SpreadsheetApp.getActive().getSheetByName('Users & Roles');
+  const cols = getUserCols_(sh);
+  if (cols.username === -1 || cols.password === -1) {
+    return {ok:false,error:'Users & Roles sheet is missing a Username or Password column.'};
+  }
+
   const values = sh.getDataRange().getValues();
 
   for (let i=1;i<values.length;i++) {
-    if (String(values[i][2] || '').trim() === String(authUser.username || '').trim()) {
-      if (String(values[i][4] || '') !== current) {
+    if (String(values[i][cols.username] || '').trim() === String(authUser.username || '').trim()) {
+      if (!verifyPassword_(current, values[i][cols.password])) {
         return {ok:false,error:'Current password is incorrect.'};
       }
 
-      sh.getRange(i+1,5).setValue(next);
+      sh.getRange(i+1,cols.password+1).setValue(hashPassword_(next));
       return {ok:true};
     }
   }
