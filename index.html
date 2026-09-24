@@ -24,8 +24,8 @@
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
     </label>
 
-    <label>Security Check
-      <input id="loginCaptcha" type="text" placeholder="What is 1 + 1?">
+    <label id="captchaLabel">What is 1 + 1? 
+      <input id="captchaAnswer" type="text" placeholder="Your answer">
     </label>
 
     <div id="loginError" class="muted"></div>
@@ -109,7 +109,6 @@ function toggleSidebar(){
   sb.classList.toggle('collapsed');
   try { localStorage.setItem('sfsSidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
 }
-/* Restore sidebar state on load */
 (function(){
   try {
     if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
@@ -118,31 +117,9 @@ function toggleSidebar(){
   } catch(e) {}
 })();
 
-/* ---------- Login captcha (simple gate) ---------- */
-(function(){
-  const cap = document.getElementById('loginCaptcha');
-  if (!cap) return;
-  cap.addEventListener('keydown', function(e){
-    if (e.key === 'Enter') { e.preventDefault(); login(); }
-  });
-  // Override login() to also check captcha
-  const origLogin = window.login;
-  window.login = async function(){
-    const capVal = (document.getElementById('loginCaptcha')?.value || '').trim();
-    if (capVal !== '2') {
-      const err = document.getElementById('loginError');
-      if (err) err.textContent = 'Security check failed. 1 + 1 = ?';
-      return;
-    }
-    if (typeof origLogin === 'function') return origLogin.apply(this, arguments);
-    // fallback: call the app.js login
-    if (typeof window.__sfsLogin === 'function') return window.__sfsLogin();
-  };
-})();
-
-/* ---------- Enter key on login ---------- */
+/* ---------- Enter key on login fields ---------- */
 document.addEventListener('DOMContentLoaded', function(){
-  ['loginUser','loginPass','loginCaptcha'].forEach(function(id){
+  ['loginUser','loginPass','captchaAnswer'].forEach(function(id){
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', function(e){
       if (e.key === 'Enter') { e.preventDefault(); login(); }
