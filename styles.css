@@ -429,3 +429,70 @@ td.empty{text-align:center;color:var(--steel);padding:34px 12px;font-style:itali
 button:focus-visible,.navbtn:focus-visible,a:focus-visible{
   outline:2px solid var(--brand);outline-offset:2px;
 }
+/* ===== SFS MODULE PERMISSIONS + STAFF UI ===== */
+
+.modules-block {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8f9fb;
+  border: 1px solid #e3e6ee;
+  border-radius: 8px;
+}
+.modules-block .modules-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #333;
+}
+.modules-block .chk {
+  display: block;
+  padding: 6px 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.modules-block .chk input { margin-right: 8px; }
+.modules-block .muted { margin-top: 8px; }
+.small { font-size: 12px; }
+
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid #eee;
+}
+.user-row:last-child { border-bottom: none; }
+.user-row .user-info { flex: 1; line-height: 1.6; }
+.user-row .user-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.user-row .role { font-weight: 600; color: #444; }
+.user-row .ok { color: #27ae60; font-weight: 600; }
+.user-row .off { color: #c0392b; font-weight: 600; }
+
+.modules-row {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #eef2ff;
+  color: #3b5bdb;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-admin {
+  background: #fff4e6;
+  color: #d9480f;
+}
+.badge-none {
+  background: #f1f3f5;
+  color: #868e96;
+}
+
+@media print {
+  .no-print { display: none !important; }
+}
