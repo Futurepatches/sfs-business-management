@@ -252,7 +252,12 @@ const pages = {
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate"></label><label>DC #<input id="ivdc"></label><label>DC Date<input id="ivdcdate"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
-  accounts:()=>`<div class="wrap"><div class="panel"><h3>Accounts / Payments</h3><p class="muted">Payments aur outstanding ka full UI yahan aayega. Filhaal API ready hai.</p></div></div>`,
+  accounts:()=>`<div class="wrap">
+<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><h3>Recent Customer Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="custPayRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><h3>Recent Supplier Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+</div>`,
   customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,
   suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry"><option>2026</option><option>2025</option><option>2024</option></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
@@ -402,8 +407,30 @@ function productDetail(em){
      </div>
      <div class="actions">
        <button class="btn" onclick="editProductForm('${encodeURIComponent(m)}')">Edit</button>
+       <button class="btn" onclick="showProductHistory('${encodeURIComponent(m)}')">Product History</button>
        ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encodeURIComponent(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`);
+}
+
+async function showProductHistory(em){
+  const m = decodeURIComponent(em);
+  modal('Product History — '+m, '<p class="muted">Loading…</p>');
+  const r = await api('stockMovement', {model:m});
+  if (!r.ok) { $('modalBody').innerHTML = '<p class="muted">'+esc(r.error||'Could not load history.')+'</p>'; return; }
+
+  const rows = (r.movements||[]).slice(1); // row 0 is the header row
+  const inRows = rows.filter(x => String(x[2]||'').toUpperCase()==='IN').sort((a,b)=>new Date(b[1])-new Date(a[1]));
+  const outRows = rows.filter(x => String(x[2]||'').toUpperCase()==='OUT').sort((a,b)=>new Date(b[1])-new Date(a[1]));
+  const totalIn = inRows.reduce((a,x)=>a+(Number(x[5])||0),0);
+  const totalOut = outRows.reduce((a,x)=>a+(Number(x[5])||0),0);
+  const fmtRow = x => `<tr><td>${esc(x[1])}</td><td><b>${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[7])}</td><td>${esc(x[8])}</td></tr>`;
+
+  $('modalBody').innerHTML = `
+    <h4 style="margin:0 0 8px">Purchases / Imports (IN) — Total: ${totalIn}</h4>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Supplier</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${inRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No purchase history yet.</td></tr>'}</tbody></table></div>
+    <h4 style="margin:16px 0 8px">Sales (OUT) — Total: ${totalOut}</h4>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Customer</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${outRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No sales history yet.</td></tr>'}</tbody></table></div>
+  `;
 }
 
 function editProductForm(em){
@@ -756,10 +783,64 @@ function viewInvoice(noEnc, print){
 }
 
 /* ---------- ACCOUNTS (placeholder) ---------- */
-function renderAccounts(){
-  const body = $('accountsBody') || $('content').querySelector('.wrap');
-  if (!body) return;
-  // just leave static message from page template
+async function loadAccounts(){
+  const [custOut, custPay, supOut, supPay] = await Promise.all([
+    api('getOutstanding', {}),
+    api('getPaymentHistory', {}),
+    api('getSupplierOutstanding', {}),
+    api('getSupplierPaymentHistory', {})
+  ]);
+
+  const outRows = custOut.ok ? (custOut.rows||[]) : [];
+  const outHost = $('custOutRows');
+  if (outHost) outHost.innerHTML = outRows.map(r=>`<tr><td>${esc(r.no)}</td><td>${esc(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encodeURIComponent(r.no)}','${encodeURIComponent(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No outstanding invoices — all settled!</td></tr>';
+
+  const pays = custPay.ok ? (custPay.payments||[]) : [];
+  const payHost = $('custPayRows');
+  if (payHost) payHost.innerHTML = pays.slice(0,30).map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>';
+
+  const supRows = supOut.ok ? (supOut.rows||[]) : [];
+  const supOutHost = $('supOutRows');
+  if (supOutHost) supOutHost.innerHTML = supRows.map(r=>`<tr><td>${esc(r.supplier)}</td><td>${money(r.purchased)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openSupPayModal('${encodeURIComponent(r.supplier)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">No outstanding supplier balances — all settled!</td></tr>';
+
+  const supPays = supPay.ok ? (supPay.payments||[]) : [];
+  const supPayHost = $('supPayRows');
+  if (supPayHost) supPayHost.innerHTML = supPays.slice(0,30).map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>';
+}
+function renderAccounts(){ loadAccounts(); }
+
+function openCustPayModal(invEnc, custEnc, outstanding){
+  const inv = decodeURIComponent(invEnc), cust = decodeURIComponent(custEnc);
+  modal('Record Payment — '+inv, `<div class="form-grid"><label>Invoice #<input id="payinv" value="${esc(inv)}" readonly></label><label>Customer<input value="${esc(cust)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Received<input id="payamt" type="number" step="0.01" value="${outstanding}" onfocus="this.select()"></label><label>Date<input id="paydate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Method<select id="paymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="payref"></label><label class="wide">Remarks<input id="payrem"></label></div><div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
+}
+async function submitCustPayment(){
+  await guardedSave(async () => {
+    const amt = Number($('payamt').value);
+    if (!(amt>0)) return toast('Enter a valid amount.', true);
+    const p = {invoiceNo:$('payinv').value, amount:amt, date:$('paydate').value, method:$('paymethod').value, reference:$('payref').value, remarks:$('payrem').value};
+    const r = await api('savePayment', p);
+    if (!r.ok) return toast(r.error, true);
+    closeModal();
+    toast('Payment recorded. Outstanding: '+money(r.outstanding));
+    await loadAccounts();
+  });
+}
+
+function openSupPayModal(supEnc, outstanding){
+  const sup = decodeURIComponent(supEnc);
+  modal('Pay Supplier — '+sup, `<div class="form-grid"><label>Supplier<input id="spaysup" value="${esc(sup)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Paid<input id="spayamt" type="number" step="0.01" value="${outstanding}" onfocus="this.select()"></label><label>Date<input id="spaydate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Method<select id="spaymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="spayref"></label><label class="wide">Remarks<input id="spayrem"></label></div><div class="actions"><button class="btn primary" onclick="submitSupPayment()">Save Payment</button></div>`);
+}
+async function submitSupPayment(){
+  await guardedSave(async () => {
+    const amt = Number($('spayamt').value);
+    if (!(amt>0)) return toast('Enter a valid amount.', true);
+    const p = {supplier:$('spaysup').value, amount:amt, date:$('spaydate').value, method:$('spaymethod').value, reference:$('spayref').value, remarks:$('spayrem').value};
+    const r = await api('saveSupplierPayment', p);
+    if (!r.ok) return toast(r.error, true);
+    closeModal();
+    toast('Supplier payment recorded.');
+    await loadAccounts();
+  });
 }
 
 /* ---------- CUSTOMERS / SUPPLIERS ---------- */
