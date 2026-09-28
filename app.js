@@ -318,64 +318,103 @@ async function loadSalesSummary(){
   const results = await Promise.all(years.map(year => api('getSalesSummary', {year})));
   const host = $('salesSummarySection');
   if (!host) return;
+
   const summaries = results.map((r,i) => r.ok ? {...r, year: years[i]} : null).filter(Boolean);
   if (!summaries.length) { host.innerHTML = ''; return; }
 
-  const current = summaries[0];
-  const currentPct = current.target > 0 ? Math.round(current.totalSales/current.target*100) : 0;
-  const top = current.customerSales.slice(0,8);
-  const maxAmt = Math.max(...top.map(c=>c.amount), 1);
-  const history = summaries.filter(r => r.target > 0 || r.totalSales > 0);
-
-  const yearRows = history.map(r => {
-    const pct = r.target > 0 ? (r.totalSales/r.target*100) : null;
-    const pctText = pct === null ? '—' : Math.round(pct) + '%';
-    const statusText = r.target > 0
-      ? (r.totalSales >= r.target ? 'Target reached' : money(r.target-r.totalSales) + ' remaining')
-      : 'No target set';
-    return `<tr>
-      <td><b>${r.year}</b></td>
-      <td class="right">${money(r.target)}</td>
-      <td class="right">${money(r.totalSales)}</td>
-      <td class="right"><b>${pctText}</b></td>
-      <td>${esc(statusText)}</td>
-      <td>${isAdmin()?'<button class="btn small" onclick="setTargetForm('+r.year+','+r.target+')">'+(r.target>0?'Edit Target':'Set Target')+'</button>':''}</td>
-    </tr>`;
-  }).join('');
+  window.SALES_YEAR_SUMMARIES = summaries;
+  window.SALES_SELECTED_YEAR = currentYear;
 
   host.innerHTML = `
     <div class="panel">
       <div class="panel-head">
-        <h3>Yearly Sales Target — ${currentYear}</h3>
-        ${isAdmin()?'<button class="btn small" onclick="setTargetForm('+currentYear+','+current.target+')">'+(current.target>0?'Edit':'Set')+' Target</button>':''}
+        <h3>Year-wise Sales Target</h3>
+        <select id="salesYearSelect" class="input" style="width:auto;min-width:130px" onchange="changeSalesTargetYear(this.value)">
+          ${summaries.map(r => `<option value="${r.year}" ${r.year===currentYear?'selected':''}>${r.year}</option>`).join('')}
+        </select>
       </div>
-      ${current.target > 0 ? `
-        <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:8px">
-          <span><b>${money(current.totalSales)}</b> achieved</span>
-          <span class="muted">Target: ${money(current.target)}</span>
-        </div>
-        <div style="background:#F0F2F5;border-radius:20px;height:14px;overflow:hidden">
-          <div style="width:${Math.min(100,currentPct)}%;height:100%;background:linear-gradient(90deg,#3B5BDB,#10B981);border-radius:20px;transition:width .4s"></div>
-        </div>
-        <div style="margin-top:6px;font-size:12.5px;color:var(--steel)">${currentPct}% of target reached • ${money(current.remaining)} remaining</div>
-      ` : `<div class="muted">No sales target set for ${currentYear} yet.${isAdmin()?' Click "Set Target" to add one.':''}</div>`}
+      <div id="selectedYearSalesTarget"></div>
     </div>
+
     <div class="panel">
-      <div class="panel-head"><h3>Year-wise Sales Target History</h3><span class="muted">Target vs actual sales</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Year</th><th class="right">Target</th><th class="right">Sale</th><th class="right">Achievement %</th><th>Status</th><th></th></tr></thead>
-          <tbody>${yearRows || '<tr><td colspan="6" class="empty">No target or sales history found.</td></tr>'}</tbody>
-        </table>
+      <div class="panel-head">
+        <h3 id="topCustomersYearTitle">Top Customers by Sales (${currentYear})</h3>
       </div>
-    </div>
-    <div class="panel">
-      <h3>Top Customers by Sales (${currentYear})</h3>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        ${top.map(c=>`<div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>${esc(c.customer)}</span><b>${money(c.amount)}</b></div><div style="background:#F0F2F5;border-radius:6px;height:9px;overflow:hidden"><div style="width:${(c.amount/maxAmt*100)}%;height:100%;background:var(--brand);border-radius:6px"></div></div></div>`).join('') || '<div class="muted">No invoices recorded yet this year.</div>'}
-      </div>
+      <div id="selectedYearTopCustomers"></div>
     </div>`;
+
+  renderSelectedSalesYear(currentYear);
 }
+
+function changeSalesTargetYear(year){
+  year = Number(year);
+  window.SALES_SELECTED_YEAR = year;
+  renderSelectedSalesYear(year);
+}
+
+function renderSelectedSalesYear(year){
+  const summaries = window.SALES_YEAR_SUMMARIES || [];
+  const r = summaries.find(x => Number(x.year) === Number(year));
+  if (!r) return;
+
+  const targetHost = $('selectedYearSalesTarget');
+  const customerHost = $('selectedYearTopCustomers');
+  const title = $('topCustomersYearTitle');
+  if (!targetHost || !customerHost) return;
+
+  const pct = r.target > 0 ? Math.round(r.totalSales / r.target * 100) : 0;
+  const remaining = r.target > 0 ? Math.max(0, r.target - r.totalSales) : 0;
+
+  targetHost.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <div style="font-size:13px;color:var(--steel)">Sales Target — ${r.year}</div>
+        <div style="font-size:24px;font-weight:700;margin-top:3px">${money(r.target)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;color:var(--steel)">Actual Sale</div>
+        <div style="font-size:24px;font-weight:700;margin-top:3px">${money(r.totalSales)}</div>
+      </div>
+    </div>
+
+    ${r.target > 0 ? `
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px">
+        <span>Achievement</span><b>${pct}%</b>
+      </div>
+      <div style="background:#F0F2F5;border-radius:20px;height:14px;overflow:hidden">
+        <div style="width:${Math.min(100,pct)}%;height:100%;background:linear-gradient(90deg,#3B5BDB,#10B981);border-radius:20px"></div>
+      </div>
+      <div style="margin-top:7px;font-size:12.5px;color:var(--steel)">
+        ${r.totalSales >= r.target ? 'Target reached' : money(remaining) + ' remaining'}
+      </div>
+    ` : `
+      <div class="muted">No sales target set for ${r.year} yet.</div>
+    `}
+
+    ${isAdmin() ? `<div style="margin-top:14px">
+      <button class="btn small" onclick="setTargetForm(${r.year},${r.target})">${r.target > 0 ? 'Edit Target' : 'Set Target'}</button>
+    </div>` : ''}`;
+
+  title.textContent = `Top Customers by Sales (${r.year})`;
+
+  const top = (r.customerSales || []).slice(0,8);
+  const maxAmt = Math.max(...top.map(c => Number(c.amount)||0), 1);
+
+  customerHost.innerHTML = top.length ? `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${top.map(c => `
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+            <span>${esc(c.customer)}</span><b>${money(c.amount)}</b>
+          </div>
+          <div style="background:#F0F2F5;border-radius:6px;height:9px;overflow:hidden">
+            <div style="width:${((Number(c.amount)||0)/maxAmt*100)}%;height:100%;background:var(--brand);border-radius:6px"></div>
+          </div>
+        </div>`).join('')}
+    </div>` : '<div class="muted">No invoice sales recorded for this year.</div>';
+}
+
+
 function setTargetForm(year, current){
   modal('Set Sales Target — ' + year,
     `<div class="form-grid">
