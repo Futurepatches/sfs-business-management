@@ -281,6 +281,20 @@ function donutChart(data, size){
   return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#F0F2F5" stroke-width="${size*0.135}"/>${segs}<text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="${size*0.16}" font-weight="700" fill="#0B1B2B" font-family="Barlow Semi Condensed,Arial">${total.toLocaleString()}</text><text x="${cx}" y="${cy+size*0.11}" text-anchor="middle" font-size="${size*0.065}" fill="#5B6B80" font-family="Inter,Arial">units</text></svg>`;
 }
 
+function openLowStock(){
+  const low=S.products.filter(p=>Number(p.currentStock)<=Number(p['Reorder Level']||5)&&(p.Status||'Active')==='Active').sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
+  $('dash').innerHTML=`<div class="panel"><div class="panel-head"><div><h3 style="margin:0;color:#c0392b">⚠ Low Stock Items</h3><div class="muted">${low.length} active items need attention</div></div><button class="btn ghost small" onclick="renderDashboard()">← Dashboard</button></div>
+  <div class="toolbar" style="margin-top:16px"><input id="lowStockSearch" placeholder="Search model / description / category / location" oninput="filterLowStock()" style="flex:1;min-width:280px"><select id="lowStockCategory" onchange="filterLowStock()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+  <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Category</th><th>Location</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th></tr></thead><tbody id="lowStockRows">${lowStockRowsHtml(low)}</tbody></table></div></div>`;
+}
+function lowStockRowsHtml(list){
+ return list.map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td>${esc(p.Category)}</td><td>${esc(p.Location)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${esc(p['Reorder Level']||5)}</td><td><b style="color:${Number(p.currentStock)<=0?'#c0392b':'#d97706'}">${Number(p.currentStock)<=0?'Out of Stock':'Low Stock'}</b></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No low stock items found.</td></tr>';
+}
+function filterLowStock(){
+ const q=norm($('lowStockSearch')?.value), cat=$('lowStockCategory')?.value||'';
+ const low=S.products.filter(p=>Number(p.currentStock)<=Number(p['Reorder Level']||5)&&(p.Status||'Active')==='Active').filter(p=>!cat||p.Category===cat).filter(p=>!q||[p['Model / Part No.'],p.Description,p.Category,p.Location].some(v=>norm(v).includes(q))).sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
+ $('lowStockRows').innerHTML=lowStockRowsHtml(low);
+}
 function renderDashboard(){
   const lowStock = S.products.filter(p => Number(p.currentStock) <= Number(p['Reorder Level']||5) && (p.Status||'Active')==='Active');
   const catData = CATS.map((c,i) => ({
@@ -299,7 +313,15 @@ function renderDashboard(){
       <div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div>
       <div class="card" style="${lowStock.length?'border-color:#c0392b':''}"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></div>
     </div>
-    ${lowStock.length ? `<div class="panel"><h3 class="section-title" style="color:#c0392b">Low Stock Items</h3><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Current Stock</th><th>Reorder Level</th></tr></thead><tbody>${lowStock.slice(0,20).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${esc(p['Reorder Level']||5)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${lowStock.length ? `<div class="panel">
+      <div class="panel-head">
+        <div><h3 class="section-title" style="color:#c0392b;margin-bottom:3px">⚠ Low Stock Items</h3><div class="muted">${lowStock.length} item${lowStock.length===1?'':'s'} need attention</div></div>
+        <button class="btn small" onclick="openLowStock()">View All →</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Current Stock</th><th>Reorder Level</th></tr></thead>
+      <tbody>${lowStock.slice(0,8).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${esc(p['Reorder Level']||5)}</td></tr>`).join('')}</tbody></table></div>
+      ${lowStock.length>8 ? `<div style="text-align:center;margin-top:12px"><button class="btn ghost small" onclick="openLowStock()">View all ${lowStock.length} low stock items</button></div>` : ''}
+    </div>` : ''}
     <div class="panel"><h3>Stock by Category</h3>
       <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:center">
         <div>${donutChart(catData)}</div>
