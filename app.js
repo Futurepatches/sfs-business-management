@@ -313,41 +313,69 @@ function renderDashboard(){
 }
 
 async function loadSalesSummary(){
-  const year = new Date().getFullYear();
-  const r = await api('getSalesSummary', {year});
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length:5}, (_,i) => currentYear - i);
+  const results = await Promise.all(years.map(year => api('getSalesSummary', {year})));
   const host = $('salesSummarySection');
   if (!host) return;
-  if (!r.ok) { host.innerHTML = ''; return; }
+  const summaries = results.map((r,i) => r.ok ? {...r, year: years[i]} : null).filter(Boolean);
+  if (!summaries.length) { host.innerHTML = ''; return; }
 
-  const pct = r.target > 0 ? Math.min(100, Math.round(r.totalSales/r.target*100)) : 0;
-  const top = r.customerSales.slice(0,8);
+  const current = summaries[0];
+  const currentPct = current.target > 0 ? Math.round(current.totalSales/current.target*100) : 0;
+  const top = current.customerSales.slice(0,8);
   const maxAmt = Math.max(...top.map(c=>c.amount), 1);
+  const history = summaries.filter(r => r.target > 0 || r.totalSales > 0);
+
+  const yearRows = history.map(r => {
+    const pct = r.target > 0 ? (r.totalSales/r.target*100) : null;
+    const pctText = pct === null ? '—' : Math.round(pct) + '%';
+    const statusText = r.target > 0
+      ? (r.totalSales >= r.target ? 'Target reached' : money(r.target-r.totalSales) + ' remaining')
+      : 'No target set';
+    return `<tr>
+      <td><b>${r.year}</b></td>
+      <td class="right">${money(r.target)}</td>
+      <td class="right">${money(r.totalSales)}</td>
+      <td class="right"><b>${pctText}</b></td>
+      <td>${esc(statusText)}</td>
+      <td>${isAdmin()?'<button class="btn small" onclick="setTargetForm('+r.year+','+r.target+')">'+(r.target>0?'Edit Target':'Set Target')+'</button>':''}</td>
+    </tr>`;
+  }).join('');
 
   host.innerHTML = `
     <div class="panel">
       <div class="panel-head">
-        <h3>Yearly Sales Target — ${year}</h3>
-        ${isAdmin()?`<button class="btn small" onclick="setTargetForm(${year},${r.target})">${r.target>0?'Edit':'Set'} Target</button>`:''}
+        <h3>Yearly Sales Target — ${currentYear}</h3>
+        ${isAdmin()?'<button class="btn small" onclick="setTargetForm('+currentYear+','+current.target+')">'+(current.target>0?'Edit':'Set')+' Target</button>':''}
       </div>
-      ${r.target > 0 ? `
+      ${current.target > 0 ? `
         <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:8px">
-          <span><b>${money(r.totalSales)}</b> achieved</span>
-          <span class="muted">Target: ${money(r.target)}</span>
+          <span><b>${money(current.totalSales)}</b> achieved</span>
+          <span class="muted">Target: ${money(current.target)}</span>
         </div>
         <div style="background:#F0F2F5;border-radius:20px;height:14px;overflow:hidden">
-          <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#3B5BDB,#10B981);border-radius:20px;transition:width .4s"></div>
+          <div style="width:${Math.min(100,currentPct)}%;height:100%;background:linear-gradient(90deg,#3B5BDB,#10B981);border-radius:20px;transition:width .4s"></div>
         </div>
-        <div style="margin-top:6px;font-size:12.5px;color:var(--steel)">${pct}% of target reached • ${money(r.remaining)} remaining</div>
-      ` : `<div class="muted">No sales target set for ${year} yet.${isAdmin()?' Click "Set Target" to add one.':''}</div>`}
+        <div style="margin-top:6px;font-size:12.5px;color:var(--steel)">${currentPct}% of target reached • ${money(current.remaining)} remaining</div>
+      ` : `<div class="muted">No sales target set for ${currentYear} yet.${isAdmin()?' Click "Set Target" to add one.':''}</div>`}
     </div>
     <div class="panel">
-      <h3>Top Customers by Sales (${year})</h3>
+      <div class="panel-head"><h3>Year-wise Sales Target History</h3><span class="muted">Target vs actual sales</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Year</th><th class="right">Target</th><th class="right">Sale</th><th class="right">Achievement %</th><th>Status</th><th></th></tr></thead>
+          <tbody>${yearRows || '<tr><td colspan="6" class="empty">No target or sales history found.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Top Customers by Sales (${currentYear})</h3>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${top.map(c=>`<div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>${esc(c.customer)}</span><b>${money(c.amount)}</b></div><div style="background:#F0F2F5;border-radius:6px;height:9px;overflow:hidden"><div style="width:${(c.amount/maxAmt*100)}%;height:100%;background:var(--brand);border-radius:6px"></div></div></div>`).join('') || '<div class="muted">No invoices recorded yet this year.</div>'}
       </div>
     </div>`;
 }
-
 function setTargetForm(year, current){
   modal('Set Sales Target — ' + year,
     `<div class="form-grid">
@@ -661,6 +689,16 @@ function viewDC(noEnc, print){
 }
 
 /* ---------- INVOICE ---------- */
+function renderDCHistory(){
+  DCH_CACHE = [];
+  loadDCHistory();
+}
+
+function renderIVHistory(){
+  IVH_CACHE = [];
+  loadIVHistory();
+}
+
 function renderInvoice(){ ivl = []; addInv(); $('ivdate').value = new Date().toISOString().slice(0,10); }
 function addInv(){ ivl.push({model:'', qty:'', rate:''}); renderIvLines(); }
 
