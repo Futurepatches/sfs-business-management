@@ -181,7 +181,7 @@ async function api(action, data = {}){
          (password URL mein leak na ho). Config mein ALLOW_JSONP_LOGIN:true se login fallback on hota hai. */
       if (action === 'bootstrap') result = await jsonpRequest(S.api, payload);
       else if (action === 'login' && window.SFS_CONFIG && window.SFS_CONFIG.ALLOW_JSONP_LOGIN === true) result = await jsonpRequest(S.api, payload);
-      else result = {ok:false, error:'Connection error. Internet check karke dobara koshish karein.'};
+      else result = {ok:false, error:'Connection error'};
     } finally {
       if (timer) clearTimeout(timer);
     }
