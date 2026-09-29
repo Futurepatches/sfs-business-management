@@ -1,5 +1,5 @@
 /* ============================================================
-   SFS BUSINESS MANAGEMENT — FRONTEND v3 (COMPLETE)
+   SFS BUSINESS MANAGEMENT — FRONTEND v3.1 (REVIEWED & FIXED)
    - Dynamic Captcha (captchaLabel + captchaAnswer)
    - Donut chart, Low stock, Sales target, Top customers
    - Edit Product / Customer / Supplier, Status toggle
@@ -10,7 +10,7 @@
    - DATA SAFETY: kuch delete nahi karta
    ============================================================ */
 
-const DEFAULT_API = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || localStorage.sfsApiUrl || '';
+const DEFAULT_API = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || '';
 const CATS = ['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];
 const ALL_MODULES = [
   {id:'products', label:'Products'},
@@ -34,6 +34,21 @@ let S = {
 const $  = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm = s => String(s||'').toLowerCase().trim();
+/* encA: onclick="fn('...')" ke andar safe encoding (apostrophe bhi encode hota hai) */
+const encA = s => encodeURIComponent(String(s ?? '')).replace(/'/g, '%27');
+function toInputDate(v){
+  if (!v) return '';
+  const d = (v instanceof Date) ? v : new Date(v);
+  if (isNaN(d)) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+/* Local (Karachi) date — toISOString() UTC deta hai jis se raat/subah ki date ek din peeche ho jati thi */
+function todayStr(){ return toInputDate(new Date()); }
+function reorderOf(p){ const v = p ? p['Reorder Level'] : ''; return (v === '' || v == null || isNaN(Number(v))) ? 5 : Number(v); }
+function findProd(model){ const t = norm(model); return t ? S.products.find(p => norm(p['Model / Part No.']) === t) : null; }
+function findCust(name){ const t = norm(name); return t ? S.customers.find(c => norm(c['Customer Name']) === t) : null; }
+function stnOf(party){ const m = String((party && party.Remarks) || '').match(/STN\s*[:#\-]\s*([^\n;|]+)/i); return m ? m[1].trim() : ''; }
+function round2(n){ return Math.round((Number(n)||0)*100)/100; }
 
 /* ---------- MODULE HELPERS ---------- */
 function isAdmin(){ return S.user && String(S.user.role||'').toUpperCase() === 'ADMIN'; }
@@ -128,16 +143,73 @@ function jsonpRequest(url, payload){
   });
 }
 
+let SFS_BUSY = 0, SFS_BOOTING = false, SFS_EXPIRED = false;
+function setBusy(delta){
+  SFS_BUSY = Math.max(0, SFS_BUSY + delta);
+  const b = $('busy');
+  if (b) b.classList.toggle('hidden', SFS_BUSY === 0);
+}
+function sessionExpired(){
+  if (SFS_EXPIRED) return;
+  SFS_EXPIRED = true;
+  sessionStorage.clear();
+  alert('Session expire ho gayi hai. Dobara login karein.');
+  location.reload();
+}
+
 async function api(action, data = {}){
   if (!S.api) return {ok:false, error:'Backend URL not configured'};
   var payload = Object.assign({action:action, session:S.session||''}, data||{});
+  setBusy(1);
   try {
-    var r = await fetch(S.api, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
-    var text = await r.text(), j;
-    try { j = JSON.parse(text); } catch(e){ j = null; }
-    if (j) return j;
-  } catch(e){ console.warn('POST failed; JSONP fallback.', e); }
-  return await jsonpRequest(S.api, payload);
+    var result = null;
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 60000) : null;
+    try {
+      var r = await fetch(S.api, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload),
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      var text = await r.text();
+      try { result = JSON.parse(text); } catch(e){ result = null; }
+      if (!result) result = {ok:false, error:'Server ne unexpected jawab diya. Dobara koshish karein.'};
+    } catch(e){
+      console.warn('POST failed', e);
+      /* JSONP fallback sirf read-only bootstrap ke liye. Login/writes GET URL par nahi jate
+         (password URL mein leak na ho). Config mein ALLOW_JSONP_LOGIN:true se login fallback on hota hai. */
+      if (action === 'bootstrap') result = await jsonpRequest(S.api, payload);
+      else if (action === 'login' && window.SFS_CONFIG && window.SFS_CONFIG.ALLOW_JSONP_LOGIN === true) result = await jsonpRequest(S.api, payload);
+      else result = {ok:false, error:'Connection error. Internet check karke dobara koshish karein.'};
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (result && result.error === 'Unauthorized' && action !== 'login' && action !== 'logout' && S.session && !SFS_BOOTING) sessionExpired();
+    return result;
+  } finally {
+    setBusy(-1);
+  }
+}
+
+/* Datalists (customer / product / supplier autocomplete) — pehle clist aur mlist define hi nahi thay */
+function syncDatalists(){
+  let host = $('sfsLists');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sfsLists';
+    host.style.display = 'none';
+    document.body.appendChild(host);
+  }
+  const opts = arr => arr.map(v => `<option value="${esc(v)}">`).join('');
+  const activeOnly = x => String(x.Status || 'Active').toLowerCase() !== 'inactive';
+  const activeProds = S.products.filter(activeOnly).map(p => p['Model / Part No.']);
+  host.innerHTML =
+    `<datalist id="clist">${opts(S.customers.filter(activeOnly).map(c => c['Customer Name']))}</datalist>` +
+    `<datalist id="suplist">${opts(S.suppliers.filter(activeOnly).map(s => s['Supplier Name']))}</datalist>` +
+    `<datalist id="mlist">${opts(activeProds)}</datalist>` +
+    `<datalist id="ml">${opts(activeProds)}</datalist>` +
+    `<datalist id="ivml">${opts(S.products.map(p => p['Model / Part No.']))}</datalist>`;
 }
 
 /* ---------- CAPTCHA ---------- */
@@ -153,6 +225,7 @@ function generateCaptcha(){
 }
 
 /* ---------- LOGIN ---------- */
+let SFS_LOGGING_IN = false;
 async function login(){
   const user = $('loginUser').value.trim();
   const pass = $('loginPass').value;
@@ -162,13 +235,19 @@ async function login(){
   if (isNaN(captcha)) { $('loginError').textContent = 'Please answer the security check.'; return; }
   if (captcha !== SFS_CAPTCHA_ANSWER) { $('loginError').textContent = 'Security check answer is incorrect.'; generateCaptcha(); return; }
 
-  S.api = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || DEFAULT_API || localStorage.sfsApiUrl || '';
+  S.api = DEFAULT_API;
   if (!S.api) { $('loginError').textContent = 'System connection is not configured.'; return; }
+  if (SFS_LOGGING_IN) return;
 
   $('loginError').textContent = 'Signing in...';
-  const r = await api('login', {username:user, password:pass});
+  SFS_LOGGING_IN = true;
+  let r;
+  try { r = await api('login', {username:user, password:pass}); } finally { SFS_LOGGING_IN = false; }
   if (!r.ok) { $('loginError').textContent = r.error || 'Invalid username or password'; generateCaptcha(); return; }
 
+  SFS_EXPIRED = false;
+  $('loginPass').value = '';
+  $('loginError').textContent = '';
   S.session = r.session;
   S.user = r.user;
   sessionStorage.sfsSession = S.session;
@@ -185,8 +264,18 @@ async function enter(){
   await refresh();
 }
 
-function logout(){
-  if (S.session) api('logout').catch(()=>{});
+async function logout(){
+  const tok = S.session;
+  S.session = '';
+  if (tok && S.api) {
+    /* Pehle server par session khatam karo (reload ke saath request cancel na ho) */
+    try {
+      await Promise.race([
+        fetch(S.api, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'logout', session:tok}), keepalive:true}),
+        new Promise(res => setTimeout(res, 2500))
+      ]);
+    } catch(e){}
+  }
   sessionStorage.clear();
   localStorage.removeItem('sfsSession');
   localStorage.removeItem('sfsUser');
@@ -205,6 +294,7 @@ async function refresh(){
   S.customers = r.customers || [];
   S.suppliers = r.suppliers || [];
   S.tx = r.transactions || [];
+  syncDatalists();
   nav();
   renderCurrent();
 }
@@ -247,10 +337,10 @@ function showPage(p, btn){
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
   products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
-  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0.01"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost<input id="icost" type="number" min="0"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button></div></div>`,
-  dc:()=>`<div class="wrap"><div class="panel"><h3>Delivery Challan</h3><div class="form-grid"><label>Challan #<input id="dcno"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
+  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button></div></div>`,
+  dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
-  invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate"></label><label>DC #<input id="ivdc"></label><label>DC Date<input id="ivdcdate"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
+  invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
 <div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
@@ -260,8 +350,8 @@ const pages = {
 </div>`,
   customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,
   suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,
-  reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry"><option>2026</option><option>2025</option><option>2024</option></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory read-only hai. Ye software sirf apni separate database mein likhta hai.</p><label>Apps Script Web App URL<input id="apiurl" class="input" value="${esc(S.api)}"></label><div class="actions"><button class="btn primary" onclick="saveSettings()">Save Settings</button></div><hr><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>`,
+  reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory read-only hai. Ye software sirf apni separate database mein likhta hai.</p><p class="muted">Backend connection config.js file se set hoti hai (yahan se change nahi hoti).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -282,21 +372,21 @@ function donutChart(data, size){
 }
 
 function openLowStock(){
-  const low=S.products.filter(p=>Number(p.currentStock)<=Number(p['Reorder Level']||5)&&(p.Status||'Active')==='Active').sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
+  const low=S.products.filter(p=>Number(p.currentStock)<=reorderOf(p)&&(p.Status||'Active')==='Active').sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
   $('dash').innerHTML=`<div class="panel"><div class="panel-head"><div><h3 style="margin:0;color:#c0392b">⚠ Low Stock Items</h3><div class="muted">${low.length} active items need attention</div></div><button class="btn ghost small" onclick="renderDashboard()">← Dashboard</button></div>
   <div class="toolbar" style="margin-top:16px"><input id="lowStockSearch" placeholder="Search model / description / category / location" oninput="filterLowStock()" style="flex:1;min-width:280px"><select id="lowStockCategory" onchange="filterLowStock()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
   <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Category</th><th>Location</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th></tr></thead><tbody id="lowStockRows">${lowStockRowsHtml(low)}</tbody></table></div></div>`;
 }
 function lowStockRowsHtml(list){
- return list.map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td>${esc(p.Category)}</td><td>${esc(p.Location)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${esc(p['Reorder Level']||5)}</td><td><b style="color:${Number(p.currentStock)<=0?'#c0392b':'#d97706'}">${Number(p.currentStock)<=0?'Out of Stock':'Low Stock'}</b></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No low stock items found.</td></tr>';
+ return list.map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td>${esc(p.Category)}</td><td>${esc(p.Location)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${reorderOf(p)}</td><td><b style="color:${Number(p.currentStock)<=0?'#c0392b':'#d97706'}">${Number(p.currentStock)<=0?'Out of Stock':'Low Stock'}</b></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No low stock items found.</td></tr>';
 }
 function filterLowStock(){
  const q=norm($('lowStockSearch')?.value), cat=$('lowStockCategory')?.value||'';
- const low=S.products.filter(p=>Number(p.currentStock)<=Number(p['Reorder Level']||5)&&(p.Status||'Active')==='Active').filter(p=>!cat||p.Category===cat).filter(p=>!q||[p['Model / Part No.'],p.Description,p.Category,p.Location].some(v=>norm(v).includes(q))).sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
+ const low=S.products.filter(p=>Number(p.currentStock)<=reorderOf(p)&&(p.Status||'Active')==='Active').filter(p=>!cat||p.Category===cat).filter(p=>!q||[p['Model / Part No.'],p.Description,p.Category,p.Location].some(v=>norm(v).includes(q))).sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
  $('lowStockRows').innerHTML=lowStockRowsHtml(low);
 }
 function renderDashboard(){
-  const lowStock = S.products.filter(p => Number(p.currentStock) <= Number(p['Reorder Level']||5) && (p.Status||'Active')==='Active');
+  const lowStock = S.products.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
   const catData = CATS.map((c,i) => ({
     label:c,
     value:S.products.filter(p=>p.Category===c).reduce((a,p)=>a+(+p.currentStock||0),0),
@@ -319,7 +409,7 @@ function renderDashboard(){
         <button class="btn small" onclick="openLowStock()">View All →</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Current Stock</th><th>Reorder Level</th></tr></thead>
-      <tbody>${lowStock.slice(0,8).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${esc(p['Reorder Level']||5)}</td></tr>`).join('')}</tbody></table></div>
+      <tbody>${lowStock.slice(0,8).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${reorderOf(p)}</td></tr>`).join('')}</tbody></table></div>
       ${lowStock.length>8 ? `<div style="text-align:center;margin-top:12px"><button class="btn ghost small" onclick="openLowStock()">View all ${lowStock.length} low stock items</button></div>` : ''}
     </div>` : ''}
     <div class="panel"><h3>Stock by Category</h3>
@@ -335,8 +425,9 @@ function renderDashboard(){
 }
 
 async function loadSalesSummary(){
+  if (!hasMod('reports')) { const h = $('salesSummarySection'); if (h) h.innerHTML = ''; return; }
   const currentYear = new Date().getFullYear();
-  const years = Array.from({length:5}, (_,i) => currentYear - i);
+  const years = Array.from({length:3}, (_,i) => currentYear - i);
   const results = await Promise.all(years.map(year => api('getSalesSummary', {year})));
   const host = $('salesSummarySection');
   if (!host) return;
@@ -462,10 +553,10 @@ function renderProducts(){
   let q = ($('ps')?.value||'').toLowerCase(), c = $('pc')?.value||'';
   let a = S.products.filter(p => [p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q) && (!c || p.Category === c));
   $('prows').innerHTML = a.slice(0,1000).map(p => {
-    const low = Number(p.currentStock) <= Number(p['Reorder Level']||5);
+    const low = Number(p.currentStock) <= reorderOf(p);
     return `<tr ${low?'style="background:#fbeae8"':''}>
        <td>${p['Product Image']?`<img class="thumb" src="${esc(p['Product Image'])}">`:'—'}</td>
-       <td><a class="model-link" onclick="productDetail('${encodeURIComponent(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td>
+       <td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td>
        <td>${esc(p.Description)}</td>
        <td>${esc(p.Category)}</td>
        <td>${esc(p.Location)}</td>
@@ -478,7 +569,7 @@ function productDetail(em){
   const m = decodeURIComponent(em), p = S.products.find(x => x['Model / Part No.'] === m);
   if (!p) return;
   const status = p.Status||'Active';
-  const low = Number(p.currentStock) <= Number(p['Reorder Level']||5);
+  const low = Number(p.currentStock) <= reorderOf(p);
 
   modal('Product Details — ' + m,
     `<div class="detail">
@@ -489,15 +580,15 @@ function productDetail(em){
          <div class="kv"><b>Category</b>${esc(p.Category)}</div>
          <div class="kv"><b>Location</b>${esc(p.Location)}</div>
          <div class="kv"><b>Current Stock</b>${p.currentStock}${low?' <span style="color:#c0392b">⚠ Low Stock</span>':''}</div>
-         <div class="kv"><b>Reorder Level</b>${esc(p['Reorder Level']||5)}</div>
+         <div class="kv"><b>Reorder Level</b>${reorderOf(p)}</div>
          <div class="kv"><b>Sale Price</b>${esc(p['Sale Price'])}</div>
          <div class="kv"><b>Status</b>${esc(status)}</div>
        </div>
      </div>
      <div class="actions">
-       <button class="btn" onclick="editProductForm('${encodeURIComponent(m)}')">Edit</button>
-       <button class="btn" onclick="showProductHistory('${encodeURIComponent(m)}')">Product History</button>
-       ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encodeURIComponent(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
+       <button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>
+       <button class="btn" onclick="showProductHistory('${encA(m)}')">Product History</button>
+       ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encA(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`);
 }
 
@@ -512,7 +603,7 @@ async function showProductHistory(em){
   const outRows = rows.filter(x => String(x[2]||'').toUpperCase()==='OUT').sort((a,b)=>new Date(b[1])-new Date(a[1]));
   const totalIn = inRows.reduce((a,x)=>a+(Number(x[5])||0),0);
   const totalOut = outRows.reduce((a,x)=>a+(Number(x[5])||0),0);
-  const fmtRow = x => `<tr><td>${esc(x[1])}</td><td><b>${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[7])}</td><td>${esc(x[8])}</td></tr>`;
+  const fmtRow = x => `<tr><td>${fmtDate(x[1])}</td><td><b>${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[7])}</td><td>${esc(x[8])}</td></tr>`;
 
   $('modalBody').innerHTML = `
     <h4 style="margin:0 0 8px">Purchases / Imports (IN) — Total: ${totalIn}</h4>
@@ -535,13 +626,13 @@ function editProductForm(em){
        <label>Location<input id="eploc" value="${esc(p.Location||'')}"></label>
        <label>Cost Price<input id="epcost" type="number" value="${esc(p['Cost Price']||'')}"></label>
        <label>Sale Price<input id="epprice" type="number" value="${esc(p['Sale Price']||'')}"></label>
-       <label>Reorder Level<input id="eprlevel" type="number" value="${esc(p['Reorder Level']||5)}"></label>
+       <label>Reorder Level<input id="eprlevel" type="number" value="${reorderOf(p)}"></label>
        <label>Product Image<input id="epimg" type="file" accept="image/*"></label>
        <label class="wide">Remarks<textarea id="eprem">${esc(p.Remarks||'')}</textarea></label>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
-       <button class="btn primary" onclick="saveProductEdit('${encodeURIComponent(m)}')">Save Changes</button>
+       <button class="btn primary" onclick="saveProductEdit('${encA(m)}')">Save Changes</button>
      </div>`);
 }
 
@@ -593,38 +684,53 @@ function productForm(){
 }
 
 async function saveProduct(){
+  const model = $('pm').value.trim();
+  if (!model) return toast('Model / Part No. zaroori hai.', true);
+  if (findProd(model)) return toast('Ye product pehle se maujood hai: ' + model, true);
+  const op = Number($('pop').value || 0), rl = Number($('prlevel').value || 5);
+  if (isNaN(op) || op < 0) return toast('Opening stock galat hai.', true);
+  if (isNaN(rl) || rl < 0) return toast('Reorder level galat hai.', true);
   const f = $('pimg').files[0];
-  let b = '';
-  if (f) b = await file64(f);
-  const r = await api('saveProduct', {
-    model:$('pm').value, category:$('pcat').value, description:$('pdesc').value,
-    brand:$('pbrand').value, unit:$('punit').value, location:$('ploc').value,
-    costPrice:$('pcost').value, salePrice:$('pprice').value,
-    openingStock:$('pop').value, reorderLevel:$('prlevel').value,
-    remarks:$('prem').value, imageBase64:b, imageName:f?.name
+  if (f && f.size > 3*1024*1024) return toast('Image 3MB se chhoti rakhein.', true);
+  await guardedSave(async () => {
+    let b = '';
+    if (f) b = await file64(f);
+    const r = await api('saveProduct', {
+      model, category:$('pcat').value, description:$('pdesc').value,
+      brand:$('pbrand').value, unit:$('punit').value, location:$('ploc').value,
+      costPrice:$('pcost').value, salePrice:$('pprice').value,
+      openingStock:op, reorderLevel:rl,
+      remarks:$('prem').value, imageBase64:b, imageName:f?.name
+    });
+    if (!r.ok) return toast(r.error, true);
+    closeModal(); await refresh(); toast('Product saved.');
   });
-  if (!r.ok) return toast(r.error, true);
-  closeModal(); await refresh(); toast('Product saved.');
 }
 
 /* ---------- INWARD ---------- */
 function renderInward(){
-  $('idate').value = new Date().toISOString().slice(0,10);
-  if (!$('suplist') && $('isupplier')) {
-    $('isupplier').insertAdjacentHTML('afterend',
-      `<datalist id="suplist">${S.suppliers.map(s=>`<option value="${esc(s['Supplier Name'])}">`).join('')}</datalist>`);
-  }
+  $('idate').value = todayStr();
 }
 
 let SFS_SAVING = false;
 async function guardedSave(fn){ if (SFS_SAVING) return; SFS_SAVING = true; try { await fn(); } finally { SFS_SAVING = false; } }
 
 async function saveInward(){
+  const prod = findProd($('imodel').value);
+  const qty = Number($('iqty').value);
+  const cost = $('icost').value;
+  const supplier = $('isupplier').value.trim();
+  if (!prod) return toast('Product list mein nahi hai. Pehle Products mein add karein.', true);
+  if (!(qty > 0)) return toast('Quantity 0 se zyada honi chahiye.', true);
+  if (cost !== '' && !(Number(cost) >= 0)) return toast('Purchase cost galat hai.', true);
+  if (Number(cost) > 0 && !supplier) {
+    if (!confirm('Supplier khali hai — is purchase ka amount Supplier Payable mein count nahi hoga. Phir bhi save karein?')) return;
+  }
   await guardedSave(async () => {
     const r = await api('saveInward', {
-      date:$('idate').value, sourceType:$('itype').value, model:$('imodel').value,
-      quantity:$('iqty').value, supplier:$('isupplier').value,
-      supplierReference:$('iref').value, purchaseCost:$('icost').value, remarks:$('irem').value
+      date:$('idate').value || todayStr(), sourceType:$('itype').value, model:prod['Model / Part No.'],
+      quantity:qty, supplier:supplier,
+      supplierReference:$('iref').value, purchaseCost:cost, remarks:$('irem').value
     });
     if (!r.ok) return toast(r.error, true);
     toast('Inward saved. Stock increased.');
@@ -634,39 +740,119 @@ async function saveInward(){
 
 /* ---------- DC ---------- */
 let dcl = [], ivl = [];
-function renderDC(){ dcl = []; addDc(); $('dcdate').value = new Date().toISOString().slice(0,10); }
+let EDIT_DC = null;   // {no, oldQty:{model:qty}} jab purani DC edit ho rahi ho
+
+function renderDC(){ EDIT_DC = null; dcl = []; addDc(); $('dcdate').value = todayStr(); }
 function addDc(){ dcl.push({model:'', qty:'', unit:'Pcs'}); renderDcLines(); }
 
 function renderDcLines(){
   if (!$('dclines')) return;
-  $('dclines').innerHTML = dcl.map((x,i) =>
-    `<tr>
+  $('dclines').innerHTML = dcl.map((x,i) => {
+    const pr = findProd(x.model);
+    return `<tr>
        <td><input value="${esc(x.model)}" list="ml" onchange="dcl[${i}].model=this.value;renderDcLines()"></td>
-       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
-       <td><input type="number" value="${x.qty}" onchange="dcl[${i}].qty=this.value"></td>
-       <td><input value="${x.unit}" onchange="dcl[${i}].unit=this.value"></td>
+       <td>${esc(pr ? (pr.Description||'') : '')}${pr ? `<div class="muted small">Stock: ${esc(pr.currentStock)}</div>` : (x.model ? '<div class="muted small" style="color:#c0392b">Product nahi mila</div>' : '')}</td>
+       <td><input type="number" min="0" step="any" value="${esc(x.qty)}" onchange="dcl[${i}].qty=this.value"></td>
+       <td><input value="${esc(x.unit)}" onchange="dcl[${i}].unit=this.value"></td>
        <td><button class="btn small" onclick="dcl.splice(${i},1);renderDcLines()">×</button></td>
-     </tr>`).join('');
-  $('dclines').insertAdjacentHTML('afterend', `<datalist id="ml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);
+     </tr>`;
+  }).join('');
+}
+
+/* Customer select hone par ID / address / NTN / STN khud bhar do */
+function pickCustomer(kind){
+  const c = findCust($(kind === 'dc' ? 'dccust' : 'ivcust').value);
+  if (!c) return;
+  const set = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+  if (kind === 'dc') {
+    set('dcid', c['Customer ID']); set('dcaddr', c.Address); set('dcntn', c['NTN/Tax ID']); set('dcstn', stnOf(c));
+  } else {
+    set('ivcid', c['Customer ID']); set('ivntn', c['NTN/Tax ID']); set('ivstn', stnOf(c));
+  }
+}
+
+function checkCustomer(name){
+  name = String(name || '').trim();
+  if (!name) return {error:'Customer ka naam likhein.'};
+  const c = findCust(name);
+  if (!c) {
+    if (!confirm('"' + name + '" Customers list mein nahi hai. Ledger / Outstanding sahi rakhne ke liye pehle Customer add karein.\n\nPhir bhi save karein?')) return {error:'cancel', silent:true};
+    return {name:name, cust:null};
+  }
+  if (String(c.Status || 'Active').toLowerCase() === 'inactive') return {error:'Customer inactive hai: ' + c['Customer Name']};
+  return {name:c['Customer Name'], cust:c};
+}
+
+/* Same product do baar ho to merge, stock check cumulative */
+function collectDcItems(){
+  const merged = {}, order = [];
+  for (const x of dcl) {
+    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // khali line skip
+    const pr = findProd(x.model);
+    if (!pr) return {error:'Product nahi mila: ' + (x.model || '(khali)')};
+    if (String(pr.Status || 'Active').toLowerCase() === 'inactive') return {error:'Inactive product use nahi ho sakta: ' + pr['Model / Part No.']};
+    const qty = Number(x.qty);
+    if (!(qty > 0)) return {error:'Quantity galat hai: ' + pr['Model / Part No.']};
+    const key = pr['Model / Part No.'];
+    if (!merged[key]) { merged[key] = {model:key, desc:pr.Description || '', qty:0, unit:x.unit || pr.Unit || 'Pcs'}; order.push(key); }
+    merged[key].qty += qty;
+  }
+  const items = order.map(k => merged[k]);
+  if (!items.length) return {error:'Kam az kam ek item add karein.'};
+  for (const it of items) {
+    const pr = findProd(it.model);
+    const avail = (Number(pr.currentStock) || 0) + ((EDIT_DC && EDIT_DC.oldQty[it.model]) || 0);
+    if (it.qty > avail) return {error:'Stock kam hai: ' + it.model + ' — available ' + avail + ', requested ' + it.qty};
+  }
+  return {items:items};
 }
 
 async function saveDC(print){
-  if (!dcl.length) return;
+  const cu = checkCustomer($('dccust').value);
+  if (cu.error) { if (!cu.silent) toast(cu.error, true); return; }
+  const col = collectDcItems();
+  if (col.error) return toast(col.error, true);
   await guardedSave(async () => {
+    const editing = !!EDIT_DC;
     const p = {
-      no:$('dcno').value, date:$('dcdate').value, customer:$('dccust').value,
-      customerId:$('dcid').value, po:$('dcpo').value, poDate:$('dcpodate').value,
-      stn:$('dcstn').value, ntn:$('dcntn').value, address:$('dcaddr').value, items:dcl
+      no: editing ? EDIT_DC.no : $('dcno').value.trim(),
+      date: $('dcdate').value || todayStr(), customer: cu.name,
+      customerId: $('dcid').value || (cu.cust ? cu.cust['Customer ID'] : ''),
+      po:$('dcpo').value, poDate:$('dcpodate').value,
+      stn:$('dcstn').value, ntn:$('dcntn').value, address:$('dcaddr').value, items: col.items
     };
-    const r = await api('saveDC', p);
+    const r = await api(editing ? 'updateDC' : 'saveDC', p);
     if (!r.ok) return toast(r.error, true);
+    p.no = r.id || p.no;                       // auto-number bhi print mein aaye
     if (print) printDC(p);
-    toast('Delivery Challan saved and stock reduced.');
-    dcl = []; await refresh();
-    // Refresh history if on that page
+    toast(editing ? 'Delivery Challan update ho gaya.' : 'Delivery Challan saved and stock reduced.');
+    EDIT_DC = null; dcl = [];
+    await refresh();
     if ($('dchRows')) loadDCHistory();
   });
 }
+
+function editDC(noEnc){
+  const no = decodeURIComponent(noEnc);
+  const d = DCH_CACHE.find(x => x.no === no);
+  if (!d) return;
+  if (d.invoiced) return toast('Is DC ka invoice ban chuka hai — edit nahi ho sakti.', true);
+  const btn = document.querySelector(`.navbtn[onclick*="'dc'"]`);
+  showPage('dc', btn);
+  const oldQty = {};
+  d.items.forEach(x => { oldQty[x.model] = (oldQty[x.model] || 0) + (Number(x.qty) || 0); });
+  EDIT_DC = {no:d.no, oldQty:oldQty};
+  $('dcno').value = d.no; $('dcno').readOnly = true;
+  $('dcdate').value = toInputDate(d.date) || todayStr();
+  $('dccust').value = d.customer || ''; $('dcid').value = d.customerId || '';
+  $('dcpo').value = d.po || ''; $('dcpodate').value = toInputDate(d.poDate);
+  $('dcstn').value = d.stn || ''; $('dcntn').value = d.ntn || ''; $('dcaddr').value = d.address || '';
+  dcl = d.items.map(x => ({model:x.model, qty:x.qty, unit:x.unit || 'Pcs'}));
+  renderDcLines();
+  $('dcTitle').textContent = 'Edit Delivery Challan — ' + d.no;
+  $('dcEditBanner').innerHTML = '<div class="muted" style="margin:6px 0 12px">Edit mode: purana stock wapas hoga aur naya stock kam hoga. <button class="btn small" onclick="cancelEditDC()">Cancel Edit</button></div>';
+}
+function cancelEditDC(){ EDIT_DC = null; showPage('dc', document.querySelector(`.navbtn[onclick*="'dc'"]`)); }
 
 /* ---------- DC HISTORY ---------- */
 let DCH_CACHE = [];
@@ -674,14 +860,18 @@ async function loadDCHistory(){
   const tbody = $('dchRows');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
-  const r = await api('getReports', {mode:'docs', type:'DC'});
+  const [r, ir] = await Promise.all([
+    api('getReports', {mode:'docs', type:'DC'}),
+    api('getReports', {mode:'docs', type:'INVOICE'})
+  ]);
   if (!r.ok) {
     tbody.innerHTML = `<tr><td colspan="7" class="empty">${esc(r.error||'Could not load history')}</td></tr>`;
     return;
   }
+  const invoicedDcs = new Set(ir.ok ? (ir.documents||[]).map(x => String(x.dc||'').trim()).filter(Boolean) : []);
   DCH_CACHE = (r.documents||[]).map(d => {
     const totalQty = d.items.reduce((a,x)=>a+(+x.qty||0), 0);
-    return {...d, totalQty, searchText: [d.no, d.customer, d.customerId, d.po, ...d.items.map(x=>x.model), ...d.items.map(x=>x.desc)].join(' ').toLowerCase()};
+    return {...d, totalQty, invoiced: invoicedDcs.has(String(d.no).trim()), searchText: [d.no, d.customer, d.customerId, d.po, ...d.items.map(x=>x.model), ...d.items.map(x=>x.desc)].join(' ').toLowerCase()};
   });
   filterDCHistory();
 }
@@ -704,8 +894,9 @@ function filterDCHistory(){
       <td>${d.items.length}</td>
       <td>${d.totalQty}</td>
       <td>
-        <button class="btn small" onclick="viewDC('${encodeURIComponent(d.no)}')">View</button>
-        <button class="btn small" onclick="viewDC('${encodeURIComponent(d.no)}',true)">Print</button>
+        <button class="btn small" onclick="viewDC('${encA(d.no)}')">View</button>
+        <button class="btn small" onclick="viewDC('${encA(d.no)}',true)">Print</button>
+        ${d.invoiced ? '<span class="muted small">Invoiced</span>' : `<button class="btn small" onclick="editDC('${encA(d.no)}')">Edit</button>`}
       </td>
     </tr>`).join('');
 }
@@ -745,7 +936,7 @@ function viewDC(noEnc, print){
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Close</button>
-       <button class="btn primary" onclick="viewDC('${encodeURIComponent(no)}',true)">Print</button>
+       <button class="btn primary" onclick="viewDC('${encA(no)}',true)">Print</button>
      </div>`);
 }
 
@@ -760,34 +951,94 @@ function renderIVHistory(){
   loadIVHistory();
 }
 
-function renderInvoice(){ ivl = []; addInv(); $('ivdate').value = new Date().toISOString().slice(0,10); }
+function renderInvoice(){ ivl = []; addInv(); $('ivdate').value = todayStr(); }
 function addInv(){ ivl.push({model:'', qty:'', rate:''}); renderIvLines(); }
+
+function updateIvTotals(){
+  const sub = ivl.reduce((a,x) => a + (+x.qty||0)*(+x.rate||0), 0);
+  const g = Number($('ivgst')?.value);
+  const gst = sub * ((isNaN(g) ? 0 : g) / 100);
+  if ($('ivtotal'))  $('ivtotal').textContent  = money(sub);
+  if ($('ivgstamt')) $('ivgstamt').textContent = money(gst);
+  if ($('ivgrand'))  $('ivgrand').textContent  = money(sub + gst);
+}
 
 function renderIvLines(){
   if (!$('ivlines')) return;
-  $('ivlines').innerHTML = ivl.map((x,i) =>
-    `<tr>
-       <td><input value="${esc(x.model)}" list="ivml" onchange="ivl[${i}].model=this.value;renderIvLines()"></td>
-       <td>${esc((S.products.find(p=>p['Model / Part No.']===x.model)||{}).Description||'')}</td>
-       <td><input type="number" value="${x.qty}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td>
-       <td><input type="number" value="${x.rate}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td>
-       <td>${((+x.qty||0)*(+x.rate||0)).toFixed(2)}</td>
+  $('ivlines').innerHTML = ivl.map((x,i) => {
+    const pr = findProd(x.model);
+    return `<tr>
+       <td><input value="${esc(x.model)}" list="ivml" onchange="ivModelChanged(${i},this.value)"></td>
+       <td>${esc(pr ? (pr.Description||'') : '')}${x.model && !pr ? '<div class="muted small" style="color:#c0392b">Product nahi mila</div>' : ''}</td>
+       <td><input type="number" min="0" step="any" value="${esc(x.qty)}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td>
+       <td><input type="number" min="0" step="any" value="${esc(x.rate)}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td>
+       <td>${money((+x.qty||0)*(+x.rate||0))}</td>
        <td><button class="btn small" onclick="ivl.splice(${i},1);renderIvLines()">×</button></td>
-     </tr>`).join('');
-  $('ivlines').insertAdjacentHTML('afterend', `<datalist id="ivml">${S.products.map(p=>`<option value="${esc(p['Model / Part No.'])}">`).join('')}</datalist>`);
-  $('ivtotal').textContent = ivl.reduce((a,x) => a + (+x.qty||0)*(+x.rate||0), 0).toFixed(2);
+     </tr>`;
+  }).join('');
+  updateIvTotals();
+}
+
+/* Model chuni to rate khali ho tab Sale Price khud aa jata hai */
+function ivModelChanged(i, v){
+  ivl[i].model = v;
+  const pr = findProd(v);
+  if (pr && (ivl[i].rate === '' || ivl[i].rate == null) && Number(pr['Sale Price']) > 0) ivl[i].rate = pr['Sale Price'];
+  renderIvLines();
+}
+
+/* DC number likh kar "Load DC" — customer, PO, items khud aa jate hain (dobara type nahi karna) */
+async function loadDcIntoInvoice(){
+  const no = $('ivdc').value.trim();
+  if (!no) return toast('Pehle DC # likhein.', true);
+  const r = await api('getReports', {mode:'document', type:'DC', no:no});
+  if (!r.ok) return toast(r.error || 'DC nahi mila.', true);
+  const d = r.document;
+  $('ivcust').value = d.customer || '';
+  pickCustomer('iv');
+  if (d.customerId) $('ivcid').value = d.customerId;
+  $('ivpo').value = d.po || '';
+  $('ivpodate').value = toInputDate(d.poDate);
+  $('ivdcdate').value = toInputDate(d.date);
+  if (d.stn) $('ivstn').value = d.stn;
+  if (d.ntn) $('ivntn').value = d.ntn;
+  ivl = (d.items || []).map(x => {
+    const pr = findProd(x.model);
+    return {model:x.model, qty:x.qty, rate: (pr && Number(pr['Sale Price']) > 0) ? pr['Sale Price'] : ''};
+  });
+  if (!ivl.length) ivl = [{model:'', qty:'', rate:''}];
+  renderIvLines();
+  toast('DC load ho gaya — rates check karein.');
 }
 
 async function saveInvoice(print){
+  const cu = checkCustomer($('ivcust').value);
+  if (cu.error) { if (!cu.silent) toast(cu.error, true); return; }
+  const gstRaw = $('ivgst').value;
+  if (gstRaw === '' || isNaN(Number(gstRaw)) || Number(gstRaw) < 0 || Number(gstRaw) > 100) return toast('GST % 0 se 100 ke beech likhein (0 bhi ho sakta hai).', true);
+  const items = [];
+  for (const x of ivl) {
+    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // khali line skip
+    const pr = findProd(x.model);
+    if (!pr) return toast('Product nahi mila: ' + (x.model || '(khali)'), true);
+    const qty = Number(x.qty), rate = Number(x.rate);
+    if (!(qty > 0)) return toast('Quantity galat hai: ' + pr['Model / Part No.'], true);
+    if (!(rate > 0)) return toast('Rate likhein: ' + pr['Model / Part No.'], true);
+    items.push({model:pr['Model / Part No.'], desc:pr.Description || '', qty:qty, rate:rate});
+  }
+  if (!items.length) return toast('Kam az kam ek item add karein.', true);
   await guardedSave(async () => {
     const p = {
-      no:$('ivno').value, date:$('ivdate').value, customer:$('ivcust').value,
-      po:$('ivpo').value, poDate:$('ivpodate').value, dc:$('ivdc').value,
-      dcDate:$('ivdcdate').value, stn:$('ivstn').value, ntn:$('ivntn').value, items:ivl
+      no:$('ivno').value.trim(), date:$('ivdate').value || todayStr(), customer:cu.name,
+      customerId:$('ivcid').value || (cu.cust ? cu.cust['Customer ID'] : ''),
+      po:$('ivpo').value, poDate:$('ivpodate').value, dc:$('ivdc').value.trim(),
+      dcDate:$('ivdcdate').value, stn:$('ivstn').value, ntn:$('ivntn').value,
+      gstPercent:Number(gstRaw), items:items
     };
     const r = await api('saveInvoice', p);
     if (!r.ok) return toast(r.error, true);
-    if (print) printInvoice({...p, total:r.subtotal});
+    p.no = r.id || p.no;                       // auto-number bhi print mein aaye
+    if (print) printInvoice(p);
     toast('Invoice saved.');
     await refresh();
     if ($('ivhRows')) loadIVHistory();
@@ -830,8 +1081,8 @@ function filterIVHistory(){
       <td>${esc(d.po||'—')}</td>
       <td class="right">${money(d.grandTotal)}</td>
       <td>
-        <button class="btn small" onclick="viewInvoice('${encodeURIComponent(d.no)}')">View</button>
-        <button class="btn small" onclick="viewInvoice('${encodeURIComponent(d.no)}',true)">Print</button>
+        <button class="btn small" onclick="viewInvoice('${encA(d.no)}')">View</button>
+        <button class="btn small" onclick="viewInvoice('${encA(d.no)}',true)">Print</button>
       </td>
     </tr>`).join('');
 }
@@ -877,7 +1128,7 @@ function viewInvoice(noEnc, print){
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Close</button>
-       <button class="btn primary" onclick="viewInvoice('${encodeURIComponent(no)}',true)">Print</button>
+       <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
      </div>`);
 }
 
@@ -892,25 +1143,25 @@ async function loadAccounts(){
 
   const outRows = custOut.ok ? (custOut.rows||[]) : [];
   const outHost = $('custOutRows');
-  if (outHost) outHost.innerHTML = outRows.map(r=>`<tr><td>${esc(r.no)}</td><td>${esc(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encodeURIComponent(r.no)}','${encodeURIComponent(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No outstanding invoices — all settled!</td></tr>';
+  if (outHost) outHost.innerHTML = outRows.map(r=>`<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No outstanding invoices — all settled!</td></tr>';
 
   const pays = custPay.ok ? (custPay.payments||[]) : [];
   const payHost = $('custPayRows');
-  if (payHost) payHost.innerHTML = pays.slice(0,30).map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>';
+  if (payHost) payHost.innerHTML = pays.slice(0,30).map(x=>`<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>';
 
   const supRows = supOut.ok ? (supOut.rows||[]) : [];
   const supOutHost = $('supOutRows');
-  if (supOutHost) supOutHost.innerHTML = supRows.map(r=>`<tr><td>${esc(r.supplier)}</td><td>${money(r.purchased)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openSupPayModal('${encodeURIComponent(r.supplier)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">No outstanding supplier balances — all settled!</td></tr>';
+  if (supOutHost) supOutHost.innerHTML = supRows.map(r=>`<tr><td>${esc(r.supplier)}</td><td>${money(r.purchased)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openSupPayModal('${encA(r.supplier)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">No outstanding supplier balances — all settled!</td></tr>';
 
   const supPays = supPay.ok ? (supPay.payments||[]) : [];
   const supPayHost = $('supPayRows');
-  if (supPayHost) supPayHost.innerHTML = supPays.slice(0,30).map(x=>`<tr><td>${esc(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>';
+  if (supPayHost) supPayHost.innerHTML = supPays.slice(0,30).map(x=>`<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>';
 }
 function renderAccounts(){ loadAccounts(); }
 
 function openCustPayModal(invEnc, custEnc, outstanding){
   const inv = decodeURIComponent(invEnc), cust = decodeURIComponent(custEnc);
-  modal('Record Payment — '+inv, `<div class="form-grid"><label>Invoice #<input id="payinv" value="${esc(inv)}" readonly></label><label>Customer<input value="${esc(cust)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Received<input id="payamt" type="number" step="0.01" value="${outstanding}" onfocus="this.select()"></label><label>Date<input id="paydate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Method<select id="paymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="payref"></label><label class="wide">Remarks<input id="payrem"></label></div><div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
+  modal('Record Payment — '+inv, `<div class="form-grid"><label>Invoice #<input id="payinv" value="${esc(inv)}" readonly></label><label>Customer<input value="${esc(cust)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Received<input id="payamt" type="number" step="0.01" value="${round2(outstanding)}" onfocus="this.select()"></label><label>Date<input id="paydate" type="date" value="${todayStr()}"></label><label>Method<select id="paymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="payref"></label><label class="wide">Remarks<input id="payrem"></label></div><div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
 }
 async function submitCustPayment(){
   await guardedSave(async () => {
@@ -927,7 +1178,7 @@ async function submitCustPayment(){
 
 function openSupPayModal(supEnc, outstanding){
   const sup = decodeURIComponent(supEnc);
-  modal('Pay Supplier — '+sup, `<div class="form-grid"><label>Supplier<input id="spaysup" value="${esc(sup)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Paid<input id="spayamt" type="number" step="0.01" value="${outstanding}" onfocus="this.select()"></label><label>Date<input id="spaydate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Method<select id="spaymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="spayref"></label><label class="wide">Remarks<input id="spayrem"></label></div><div class="actions"><button class="btn primary" onclick="submitSupPayment()">Save Payment</button></div>`);
+  modal('Pay Supplier — '+sup, `<div class="form-grid"><label>Supplier<input id="spaysup" value="${esc(sup)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Paid<input id="spayamt" type="number" step="0.01" value="${round2(outstanding)}" onfocus="this.select()"></label><label>Date<input id="spaydate" type="date" value="${todayStr()}"></label><label>Method<select id="spaymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="spayref"></label><label class="wide">Remarks<input id="spayrem"></label></div><div class="actions"><button class="btn primary" onclick="submitSupPayment()">Save Payment</button></div>`);
 }
 async function submitSupPayment(){
   await guardedSave(async () => {
@@ -950,9 +1201,9 @@ function renderCustomers(){
        <b>${esc(c['Customer Name'])}</b>${status==='Inactive'?' <span class="muted">(Inactive)</span>':''} — <span class="muted">${esc(c['Customer ID'])}</span><br>
        ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
        ${esc(c.Address)}<br>
-       <button class="btn small" onclick="ledger('Customer','${encodeURIComponent(c['Customer Name'])}')">Ledger</button>
-       <button class="btn small" onclick="editPartyForm('Customer','${encodeURIComponent(c['Customer Name'])}')">Edit</button>
-       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Customer','${encodeURIComponent(c['Customer Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
+       <button class="btn small" onclick="ledger('Customer','${encA(c['Customer Name'])}')">Ledger</button>
+       <button class="btn small" onclick="editPartyForm('Customer','${encA(c['Customer Name'])}')">Edit</button>
+       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Customer','${encA(c['Customer Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`;
   }).join('') || '<div class="muted">No customers yet.</div>';
 }
@@ -964,9 +1215,9 @@ function renderSuppliers(){
        <b>${esc(c['Supplier Name'])}</b>${status==='Inactive'?' <span class="muted">(Inactive)</span>':''} — <span class="muted">${esc(c['Supplier ID'])}</span><br>
        ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
        ${esc(c.Address)}<br>
-       <button class="btn small" onclick="ledger('Supplier','${encodeURIComponent(c['Supplier Name'])}')">Ledger</button>
-       <button class="btn small" onclick="editPartyForm('Supplier','${encodeURIComponent(c['Supplier Name'])}')">Edit</button>
-       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Supplier','${encodeURIComponent(c['Supplier Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
+       <button class="btn small" onclick="ledger('Supplier','${encA(c['Supplier Name'])}')">Ledger</button>
+       <button class="btn small" onclick="editPartyForm('Supplier','${encA(c['Supplier Name'])}')">Edit</button>
+       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Supplier','${encA(c['Supplier Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`;
   }).join('') || '<div class="muted">No suppliers yet.</div>';
 }
@@ -986,7 +1237,7 @@ function editPartyForm(type, nameEnc){
        <label>Email<input id="epemail" value="${esc(c.Email||'')}"></label>
        <label>NTN/Tax ID<input id="epntn" value="${esc(c['NTN/Tax ID']||'')}"></label>
        <label class="wide">Address<textarea id="epaddr">${esc(c.Address||'')}</textarea></label>
-       <label class="wide">Remarks<textarea id="eprem2">${esc(c.Remarks||'')}</textarea></label>
+       <label class="wide">Remarks (STN aise likhein: STN: 1234)<textarea id="eprem2">${esc(c.Remarks||'')}</textarea></label>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1033,53 +1284,115 @@ function partyForm(type){
 }
 
 async function saveParty(type){
-  const r = await api(type==='Customer'?'saveCustomer':'saveSupplier', {
-    name:$('pn').value, contact:$('pcontact').value, phone:$('pphone').value,
-    email:$('pemail').value, city:$('pcity').value, ntn:$('pntn').value,
-    stn:$('pstn').value, address:$('paddr').value, remarks:$('pr').value
+  const name = $('pn').value.trim();
+  if (!name) return toast('Name zaroori hai.', true);
+  const list = type === 'Customer' ? S.customers : S.suppliers;
+  const key = type === 'Customer' ? 'Customer Name' : 'Supplier Name';
+  if (list.some(x => norm(x[key]) === norm(name))) return toast(type + ' is naam se pehle se maujood hai.', true);
+  /* Backend City / STN ke liye alag column nahi rakhta — is liye City address mein aur STN remarks mein save hota hai */
+  const city = $('pcity').value.trim(), stn = $('pstn').value.trim();
+  const address = [$('paddr').value.trim(), city].filter(Boolean).join(', ');
+  const remarks = [stn ? 'STN: ' + stn : '', $('pr').value.trim()].filter(Boolean).join('\n');
+  await guardedSave(async () => {
+    const r = await api(type === 'Customer' ? 'saveCustomer' : 'saveSupplier', {
+      name, contact:$('pcontact').value, phone:$('pphone').value,
+      email:$('pemail').value, ntn:$('pntn').value, address, remarks
+    });
+    if (!r.ok) return toast(r.error, true);
+    closeModal(); await refresh();
+    toast(type + ' saved.');
   });
-  if (!r.ok) return toast(r.error, true);
-  closeModal(); await refresh();
-  toast(type + ' saved.');
 }
 
-async function ledger(type, name){
-  const r = await api('getLedger', {type, name:decodeURIComponent(name)});
-  if (!r.ok) return toast(r.error, true);
-  modal(type + ' Ledger — ' + decodeURIComponent(name),
-    `<table>
-       <tr><th>Date</th><th>Type</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr>
-       ${r.transactions.map(x => `<tr><td>${esc(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.ref)}</td><td>${x.debit}</td><td>${x.credit}</td><td>${esc(x.remarks)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No transactions.</td></tr>'}
-     </table>`);
+async function ledger(type, nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  const isCust = type === 'Customer';
+  modal(type + ' Ledger — ' + name, '<p class="muted">Loading…</p>');
+  const calls = isCust
+    ? [api('getOutstanding', {customer:name, includeSettled:true}), api('getPaymentHistory', {customer:name}), api('getLedger', {type:type, name:name})]
+    : [api('getSupplierOutstanding', {supplier:name, includeSettled:true}), api('getSupplierPaymentHistory', {supplier:name}), api('getLedger', {type:type, name:name})];
+  const [inv, pay, mv] = await Promise.all(calls);
+  let html = '';
+
+  if (inv.ok && pay.ok) {
+    if (isCust) {
+      const entries = [];
+      (inv.rows||[]).forEach(r => entries.push({t:new Date(r.date).getTime()||0, ord:0, date:r.date, kind:'Invoice', ref:r.no, debit:Number(r.total)||0, credit:0}));
+      (pay.payments||[]).forEach(x => entries.push({t:new Date(x.Date).getTime()||0, ord:1, date:x.Date, kind:'Payment', ref:[x['Invoice No.'], x.Method, x.Reference].filter(Boolean).join(' • '), debit:0, credit:Number(x.Amount)||0}));
+      entries.sort((a,b) => (a.t - b.t) || (a.ord - b.ord));
+      let bal = 0, dr = 0, cr = 0;
+      const rows = entries.map(e => {
+        bal += e.debit - e.credit; dr += e.debit; cr += e.credit;
+        return `<tr><td>${fmtDate(e.date)}</td><td>${e.kind}</td><td>${esc(e.ref)}</td><td class="right">${e.debit ? money(e.debit) : ''}</td><td class="right">${e.credit ? money(e.credit) : ''}</td><td class="right"><b>${money(bal)}</b></td></tr>`;
+      }).join('');
+      html += `<h4 style="margin:0 0 8px">Account Statement</h4>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th class="right">Debit</th><th class="right">Credit</th><th class="right">Balance</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" class="empty">No invoices or payments.</td></tr>'}</tbody>
+          <tfoot><tr><td colspan="3"><b>Total</b></td><td class="right"><b>${money(dr)}</b></td><td class="right"><b>${money(cr)}</b></td><td class="right"><b>${money(dr - cr)}</b></td></tr></tfoot>
+        </table></div>
+        <div class="muted small">Debit = invoices (GST ke saath), Credit = payments. Balance positive = customer ne dena hai.</div>`;
+    } else {
+      const row = (inv.rows||[])[0] || {purchased:0, paid:0, outstanding:0};
+      const prow = (pay.payments||[]).map(x => `<tr><td>${fmtDate(x.Date)}</td><td class="right">${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('');
+      html += `<h4 style="margin:0 0 8px">Supplier Account</h4>
+        <div class="table-wrap"><table>
+          <thead><tr><th class="right">Purchased</th><th class="right">Paid</th><th class="right">Outstanding</th></tr></thead>
+          <tbody><tr><td class="right">${money(row.purchased)}</td><td class="right">${money(row.paid)}</td><td class="right"><b>${money(row.outstanding)}</b></td></tr></tbody>
+        </table></div>
+        <h4 style="margin:16px 0 8px">Payments</h4>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Date</th><th class="right">Amount</th><th>Method</th><th>Reference</th></tr></thead>
+          <tbody>${prow || '<tr><td colspan="4" class="empty">No payments yet.</td></tr>'}</tbody>
+        </table></div>`;
+    }
+  } else {
+    html += '<p class="muted">Paisay ka statement dekhne ke liye Accounts module ka access chahiye.</p>';
+  }
+
+  if (mv.ok) {
+    const mrows = (mv.transactions||[]).map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.ref)}</td><td class="right">${x.debit||''}</td><td class="right">${x.credit||''}</td></tr>`).join('');
+    html += `<h4 style="margin:18px 0 8px">Goods Movement (Qty)</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th class="right">Qty Out</th><th class="right">Qty In</th></tr></thead>
+        <tbody>${mrows || '<tr><td colspan="5" class="empty">No movements.</td></tr>'}</tbody>
+      </table></div>`;
+  }
+  $('modalBody').innerHTML = html;
 }
 
 /* ---------- REPORTS ---------- */
 async function renderReports(){
-  const r = await api('getReports', {year:$('ry')?.value || new Date().getFullYear()});
-  if (!r.ok) return toast(r.error, true);
+  const sel = $('ry');
+  if (sel && !sel.options.length) {
+    const cy = new Date().getFullYear();
+    for (let y = cy; y >= cy - 5; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
+  }
+  const year = sel ? sel.value : new Date().getFullYear();
+  const host = $('reports');
+  if (host) host.innerHTML = '<div class="muted">Loading…</div>';
+  const r = await api('getReports', {year});
+  if (!r.ok) { if (host) host.innerHTML = ''; return toast(r.error, true); }
+  const mv = (r.movements || []).slice().sort((a,b) => new Date(b.Date) - new Date(a.Date)).slice(0, 200);
+  if (!$('reports')) return;
   $('reports').innerHTML =
     `<div class="cards">
-       <div class="card"><span>Invoices</span><strong>${r.sales.length}</strong></div>
-       <div class="card"><span>Sales</span><strong>${r.sales.reduce((a,x)=>a+(+x.total||0),0).toLocaleString()}</strong></div>
+       <div class="card"><span>Invoice Lines</span><strong>${(r.sales||[]).length}</strong></div>
+       <div class="card"><span>Sales (excl. GST)</span><strong>${money((r.sales||[]).reduce((a,x)=>a+(+x.total||0),0))}</strong></div>
      </div>
-     <div class="panel"><h3>Sales by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${c}</span><b>${(r.categorySales[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
-     <div class="panel table-wrap"><h3>Recent Stock Movement</h3>
+     <div class="panel"><h3>Units Delivered by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${esc(c)}</span><b>${((r.categorySales||{})[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
+     <div class="panel table-wrap"><h3>Recent Stock Movement (latest 200)</h3>
        <table>
-         <tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr>
-         ${r.movements.map(x => `<tr><td>${esc(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('')}
+         <thead><tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr></thead>
+         <tbody>${mv.map(x => `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No movements.</td></tr>'}</tbody>
        </table>
      </div>`;
 }
 
 /* ---------- SETTINGS ---------- */
 function renderSettings(){}
-function saveSettings(){
-  S.api = $('apiurl').value.trim();
-  localStorage.sfsApiUrl = S.api;
-  toast('Backend URL saved. Login again.');
-  logout();
-}
 async function refreshSource(){
+  if (!confirm('Source snapshot refresh karne se Products list source sheet se dobara banti hai.\n\nWarning: jo products sirf is app se add kiye gaye hain (source sheet mein nahi) wo list se hat sakte hain.\n\nKya aap ne backup le liya hai? Continue?')) return;
   const r = await api('refreshSource');
   toast(r.ok ? 'Source snapshot refreshed.' : r.error, !r.ok);
   await refresh();
@@ -1098,6 +1411,7 @@ function changePasswordForm(){
 }
 async function changePassword(){
   if ($('cp2').value !== $('cp3').value) return toast('Passwords do not match', true);
+  if ($('cp2').value.length < 6) return toast('New password kam az kam 6 characters ka ho.', true);
   const r = await api('changePassword', {currentPassword:$('cp1').value, newPassword:$('cp2').value});
   if (!r.ok) return toast(r.error, true);
   closeModal(); toast('Password changed. Login again.'); logout();
@@ -1123,8 +1437,8 @@ async function renderUsers(){
         <div class="modules-row">${modBadges}</div>
       </div>
       <div class="user-actions">
-        <button class="btn small" onclick="userForm('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Name||'')}','${encodeURIComponent(u.Role||'')}',${JSON.stringify(mods).replace(/"/g,'&quot;')})">Edit Modules</button>
-        <button class="btn small" onclick="toggleUser('${encodeURIComponent(u.Username)}','${encodeURIComponent(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button>
+        <button class="btn small" onclick="userForm('${encA(u.Username)}','${encA(u.Name||'')}','${encA(u.Role||'')}',${JSON.stringify(mods).replace(/"/g,'&quot;')})">Edit Modules</button>
+        <button class="btn small" onclick="toggleUser('${encA(u.Username)}','${encA(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button>
       </div>
     </div>`;
   }).join('') || '<div class="muted">No users.</div>';
@@ -1154,7 +1468,7 @@ function userForm(editUsername, editName, editRole, editModules){
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
-       <button class="btn primary" onclick="saveUser(${isEdit?`'${esc(u)}'`:'null'})">${isEdit?'Save Changes':'Create User'}</button>
+       <button class="btn primary" onclick="saveUser(${isEdit?'true':'null'})">${isEdit?'Save Changes':'Create User'}</button>
      </div>`);
 }
 
@@ -1170,6 +1484,8 @@ async function saveUser(editUsername){
   };
   if (!payload.username) return toast('Username is required', true);
   if (!isEdit && !payload.password) return toast('Password is required', true);
+  if (payload.password && payload.password.length < 6) return toast('Password kam az kam 6 characters ka ho.', true);
+  if (isEdit && S.user && norm(payload.username) === norm(S.user.username) && payload.role !== 'ADMIN') return toast('Aap apna khud ka ADMIN role change nahi kar sakte.', true);
 
   const r = await api(isEdit ? 'updateUser' : 'saveUser', payload);
   if (!r.ok) return toast(r.error, true);
@@ -1179,7 +1495,13 @@ async function saveUser(editUsername){
 }
 
 async function toggleUser(u, st){
-  const r = await api('disableUser', {username:decodeURIComponent(u), status:decodeURIComponent(st)==='Active'?'Inactive':'Active'});
+  const username = decodeURIComponent(u);
+  const next = decodeURIComponent(st) === 'Active' ? 'Inactive' : 'Active';
+  if (next === 'Inactive') {
+    if (S.user && norm(S.user.username) === norm(username)) return toast('Aap apna khud ka account disable nahi kar sakte.', true);
+    if (!confirm(username + ' ko disable karein?')) return;
+  }
+  const r = await api('disableUser', {username, status:next});
   if (!r.ok) return toast(r.error, true);
   renderUsers();
 }
@@ -1342,7 +1664,7 @@ function printInvoice(d){
     <div class="doc-meta">
       <div class="meta-left">
         <div class="meta-line"><span class="meta-tag">M/S:</span><span>${esc(d.customer)}</span></div>
-        <div class="meta-line"><span class="meta-tag">Address:</span><span>${esc(d.address||'')}</span></div>
+        <div class="meta-line"><span class="meta-tag">Address:</span><span>${esc(d.address || ((findCust(d.customer)||{}).Address) || '')}</span></div>
         <div class="meta-line" style="margin-top:10px">
           <span class="meta-tag">P.O#:</span><span>${esc(d.po)}</span>
           <span class="meta-tag" style="margin-left:14px">Date:</span><span>${fmtDate(d.poDate)}</span>
@@ -1447,19 +1769,23 @@ function showLogin(){
 }
 
 function init(){
-  S.api = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || localStorage.sfsApiUrl || '';
+  S.api = DEFAULT_API;
   if (S.session && S.api){
+    SFS_BOOTING = true;
     api('bootstrap').then(r => {
+      SFS_BOOTING = false;
       if (r.ok){
         S.user = r.user;
         S.products = r.products || [];
         S.customers = r.customers || [];
         S.suppliers = r.suppliers || [];
         S.tx = r.transactions || [];
+        syncDatalists();
         enter();
       } else {
-        sessionStorage.clear();
+        if (r.error === 'Unauthorized') sessionStorage.clear();   // network error par session mat mitao
         showLogin();
+        if (r.error && r.error !== 'Unauthorized' && $('loginError')) $('loginError').textContent = r.error;
       }
     });
   } else {
@@ -1496,7 +1822,6 @@ window.togglePartyStatus = togglePartyStatus;
 window.ledger = ledger;
 window.renderReports = renderReports;
 window.renderSettings = renderSettings;
-window.saveSettings = saveSettings;
 window.refreshSource = refreshSource;
 window.changePasswordForm = changePasswordForm;
 window.changePassword = changePassword;
@@ -1514,4 +1839,10 @@ window.loadIVHistory = loadIVHistory;
 window.filterIVHistory = filterIVHistory;
 window.viewInvoice = viewInvoice;
 window.renderAccounts = renderAccounts;
+window.pickCustomer = pickCustomer;
+window.editDC = editDC;
+window.cancelEditDC = cancelEditDC;
+window.loadDcIntoInvoice = loadDcIntoInvoice;
+window.ivModelChanged = ivModelChanged;
+window.updateIvTotals = updateIvTotals;
 window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
