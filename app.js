@@ -1455,7 +1455,7 @@ function userForm(editUsername, editName, editRole, editModules){
     `<div class="form-grid">
        <label>Name<input id="un" value="${esc(n)}"></label>
        <label>Username<input id="uu" value="${esc(u)}" ${isEdit?'readonly':''}></label>
-       <label>Password ${isEdit?'<span class="muted small">(khaali chhoro agar change nahi karni)</span>':''}<input id="up" type="password"></label>
+       <label>Password ${isEdit?'<span class="muted small">(Leave it blank if you don't want to change it)</span>':''}<input id="up" type="password"></label>
        <label>Role<select id="ur">
          <option value="STAFF" ${ro==='STAFF'?'selected':''}>STAFF</option>
          <option value="ADMIN" ${ro==='ADMIN'?'selected':''}>ADMIN</option>
@@ -1464,7 +1464,7 @@ function userForm(editUsername, editName, editRole, editModules){
      <div class="modules-block">
        <div class="modules-title">Module Access</div>
        ${ALL_MODULES.map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" ${mods.indexOf(m.id)!==-1?'checked':''}> ${m.label}</label>`).join('')}
-       <div class="muted small">Note: ADMIN role ko hamesha full access milta hai — modules ki zaroorat nahi.</div>
+       <div class="muted small">Note: The ADMIN role always gets full access — no modules needed.</div>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
