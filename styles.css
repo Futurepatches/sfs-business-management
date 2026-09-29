@@ -38,10 +38,11 @@ input,select,textarea{font-family:inherit;font-size:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ---------- LOGIN ---------- */
-.login-screen{min-height:100vh;display:flex;position:relative;background:radial-gradient(circle at 15% 20%, rgba(59,91,219,.28), transparent 45%),radial-gradient(circle at 85% 80%, rgba(16,185,129,.18), transparent 45%),linear-gradient(160deg,#0B1B2B 0%,#081524 100%)}
-.login-screen::after{content:"Standard Fluid Systems";position:absolute;left:48px;bottom:28px;color:rgba(255,255,255,.45);font-family:var(--font-display);font-size:14px;font-weight:600;letter-spacing:.04em}
-.login-card{background:var(--surface);margin-left:auto;display:flex;flex-direction:column;justify-content:center;padding:48px 56px;width:100%;max-width:440px;text-align:left;box-shadow:-20px 0 60px rgba(0,0,0,.15)}
-.login-logo{height:42px;margin-bottom:22px;display:block}
+.login-screen{min-height:100vh;display:flex;position:relative;background:#eef2f6 url("login-bg.webp") center center/cover no-repeat;overflow:hidden}
+.login-screen::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.02) 52%,rgba(11,27,43,.08) 100%);pointer-events:none}
+.login-screen::after{content:"";position:absolute;left:34px;bottom:22px;color:rgba(11,27,43,.55);font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.04em}
+.login-card{position:relative;z-index:2;background:rgba(255,255,255,.96);margin-left:auto;display:flex;flex-direction:column;justify-content:center;padding:42px 48px;width:100%;max-width:390px;min-height:100vh;text-align:left;box-shadow:-18px 0 45px rgba(11,27,43,.12);backdrop-filter:blur(5px)}
+.login-logo{height:42px;margin-bottom:20px;display:block}
 .login-card .eyebrow{color:var(--brand);font-size:11px;letter-spacing:.1em;font-weight:700;margin-bottom:6px;text-transform:uppercase}
 .login-card h1{font-family:var(--font-display);font-size:30px;font-weight:700;margin:0 0 28px;color:var(--ink);letter-spacing:-.01em}
 .login-card label{display:block;font-size:12.5px;font-weight:600;color:var(--steel);margin-bottom:16px}
@@ -49,7 +50,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .login-card input:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(59,91,219,.12)}
 .login-card .muted{color:var(--bad);font-size:12.5px;min-height:16px;margin:-6px 0 14px;font-weight:500}
 .login-card .btn.full{width:100%;margin-top:6px;padding:12px}
-@media (max-width:760px){.login-screen{display:block}.login-screen::after{display:none}.login-card{margin:0 auto;max-width:400px;padding:36px 28px;min-height:100vh;box-shadow:none}}
+@media (max-width:760px){.login-screen{display:block;background-position:center top}.login-screen::after{display:none}.login-card{margin:0 auto;max-width:400px;padding:36px 28px;min-height:100vh;box-shadow:0 0 30px rgba(11,27,43,.12)}}
 
 /* ---------- APP SHELL ---------- */
 #app{display:flex;min-height:100vh}
