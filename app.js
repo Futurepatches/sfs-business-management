@@ -397,11 +397,11 @@ function renderDashboard(){
 
   $('dash').innerHTML = `
     <div class="cards">
-      <div class="card"><span>Products</span><strong>${S.products.length}</strong></div>
-      <div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div>
-      <div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div>
-      <div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div>
-      <div class="card" style="${lowStock.length?'border-color:#c0392b':''}"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></div>
+      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${S.products.length}</strong></button>` : `<div class="card"><span>Products</span><strong>${S.products.length}</strong></div>`}
+      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></button>` : `<div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div>`}
+      ${hasMod('parties') ? `<button type="button" class="card card-click" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong></button>` : `<div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div>`}
+      ${hasMod('parties') ? `<button type="button" class="card card-click" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong> ${S.suppliers.length}</strong></button>` : `<div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div>`}
+      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></button>` : `<div class="card" style="${lowStock.length?'border-color:#c0392b':''}"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></div>`}
     </div>
     ${lowStock.length ? `<div class="panel">
       <div class="panel-head">
