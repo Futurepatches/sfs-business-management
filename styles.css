@@ -37,12 +37,30 @@ button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* ---------- LOGIN ---------- */
-.login-screen{min-height:100vh;display:flex;position:relative;background:#eef2f6 url("login-bg.webp") center center/cover no-repeat;overflow:hidden}
-.login-screen::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.02) 52%,rgba(11,27,43,.08) 100%);pointer-events:none}
-.login-screen::after{content:"";position:absolute;left:34px;bottom:22px;color:rgba(11,27,43,.55);font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.04em}
+/* ---------- LOGIN ----------
+   login-bg.webp 1798x576 ka wide banner hai (logo + "ERP Access Portal" image ke andar hi hai).
+   Isliye ise poori screen par "cover" nahi karte (logo/products kat jate the).
+   Banner upar ki patti mein full width lagta hai (::before) aur neeche page ke rang mein fade ho jata hai. */
+.login-screen{
+  --bn-bg:#e9eef1;
+  --bn-h:clamp(230px,32vw,640px);
+  min-height:100vh;min-height:100dvh;
+  display:flex;position:relative;
+  background:var(--bn-bg);
+  overflow:hidden;isolation:isolate;
+}
+.login-screen::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:var(--bn-h);z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(to bottom,rgba(233,238,241,0) 0%,rgba(233,238,241,0) 62%,#e9eef1 100%),
+    url("login-bg.webp");
+  background-size:100% 100%,cover;
+  background-position:top left,left top;
+  background-repeat:no-repeat;
+}
 .login-card{position:relative;z-index:2;background:rgba(255,255,255,.96);margin:auto;display:flex;flex-direction:column;justify-content:center;padding:42px 48px;width:100%;max-width:390px;min-height:auto;text-align:left;border-radius:16px;box-shadow:0 18px 55px rgba(11,27,43,.18);backdrop-filter:blur(5px)}
-.login-logo{height:42px;margin-bottom:20px;display:block}
+/* Logo ab banner (login-bg.webp) mein hai, is liye card ke andar wala logo chhupa diya */
+.login-logo{display:none}
 .login-card .eyebrow{color:var(--brand);font-size:11px;letter-spacing:.1em;font-weight:700;margin-bottom:6px;text-transform:uppercase}
 .login-card h1{font-family:var(--font-display);font-size:30px;font-weight:700;margin:0 0 28px;color:var(--ink);letter-spacing:-.01em}
 .login-card label{display:block;font-size:12.5px;font-weight:600;color:var(--steel);margin-bottom:16px}
@@ -50,7 +68,19 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .login-card input:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(59,91,219,.12)}
 .login-card .muted{color:var(--bad);font-size:12.5px;min-height:16px;margin:-6px 0 14px;font-weight:500}
 .login-card .btn.full{width:100%;margin-top:6px;padding:12px}
-@media (max-width:760px){.login-screen{display:block;background-position:center top}.login-screen::after{display:none}.login-card{margin:0 auto;max-width:400px;padding:36px 28px;min-height:100vh;box-shadow:0 0 30px rgba(11,27,43,.12)}}
+/* Mobile: chhota banner (sirf logo wala left hissa), card banner ke neeche, poori screen nahi dhakta */
+@media (max-width:760px){
+  .login-screen{display:block;--bn-h:230px;padding-bottom:24px}
+  .login-screen::before{
+    background-image:
+      linear-gradient(to bottom,rgba(233,238,241,0) 0%,rgba(233,238,241,0) 68%,#e9eef1 100%),
+      url("login-bg-mobile.webp");
+    background-size:100% 100%,auto 100%;
+    background-position:top left,left top;
+  }
+  .login-card{margin:150px auto 0;width:calc(100% - 32px);max-width:400px;padding:32px 24px;min-height:auto;border-radius:16px;box-shadow:0 12px 36px rgba(11,27,43,.16)}
+  .login-card h1{font-size:26px;margin-bottom:22px}
+}
 
 /* ---------- APP SHELL ---------- */
 #app{display:flex;min-height:100vh}
