@@ -119,6 +119,7 @@ function toggleSidebar(){
 
 /* ---------- Enter key on login fields ---------- */
 document.addEventListener('DOMContentLoaded', function(){
+  if (typeof generateCaptcha === 'function') generateCaptcha();
   ['loginUser','loginPass','captchaAnswer'].forEach(function(id){
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', function(e){
