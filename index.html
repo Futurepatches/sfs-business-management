@@ -24,11 +24,11 @@
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
     </label>
 
-    <label id="captchaLabel">What is 1 + 1? 
+    <label id="captchaLabel">What is 1 + 1?
       <input id="captchaAnswer" type="text" placeholder="Your answer">
     </label>
 
-    <div id="loginError" class="muted"></div>
+    <div id="loginError" class="muted" role="alert" aria-live="polite"></div>
 
     <button id="loginBtn" type="button" class="btn primary full">Sign In</button>
   </div>
@@ -36,8 +36,6 @@
 
 <!-- ============ APP SHELL ============ -->
 <div id="app" class="hidden">
-
-  <!-- SIDEBAR -->
   <aside id="sidebar">
     <div class="brand">
       <img src="logo.png" alt="SFS">
@@ -45,8 +43,9 @@
         <b>Standard Fluid</b>
         <small>Business Management</small>
       </div>
-      <button class="collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="collapse-btn" type="button" onclick="toggleSidebar()" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
@@ -57,11 +56,10 @@
     <div class="userbox">
       <b id="who">—</b>
       <small id="role">—</small>
-      <button class="btn" onclick="logout()">Logout</button>
+      <button class="btn" type="button" onclick="logout()">Logout</button>
     </div>
   </aside>
 
-  <!-- MAIN -->
   <main>
     <header>
       <div>
@@ -71,13 +69,12 @@
       </div>
       <div class="header-actions">
         <span id="busy" class="busy hidden">Working…</span>
-        <button class="btn" onclick="refresh()">↻ Refresh</button>
+        <button class="btn" type="button" onclick="refresh()">↻ Refresh</button>
       </div>
     </header>
 
     <div id="content"></div>
   </main>
-
 </div>
 
 <!-- ============ MODAL ============ -->
@@ -85,19 +82,16 @@
   <div class="modal-card">
     <div class="modal-head">
       <h3 id="modalTitle">—</h3>
-      <button onclick="closeModal()" aria-label="Close">×</button>
+      <button type="button" onclick="closeModal()" aria-label="Close">×</button>
     </div>
     <div id="modalBody"></div>
   </div>
 </div>
 
-<!-- ============ TOASTS ============ -->
 <div id="toastHost" class="toast-host"></div>
-
-<!-- ============ PRINT AREA ============ -->
 <div id="printArea"></div>
 
-<!-- ============ SCRIPTS ============ -->
+<!-- Load order matters: keep app.js before modules that extend it. -->
 <script src="config.js?v=20261001"></script>
 <script src="dev-mode.js?v=20261001"></script>
 <script src="app.js?v=20261001"></script>
@@ -105,63 +99,64 @@
 <script src="erp-overrides.js?v=20261001"></script>
 <script src="erp-api-bridge.js?v=20261001"></script>
 <script src="stock-fix.js?v=20261001"></script>
-<script>
-/* Emergency login bridge: keeps Sign In usable even if another frontend module fails. */
-(function(){
-  function wire(){
-    var b=document.getElementById('loginBtn');
-    if(!b || b.dataset.loginBridge) return;
-    b.dataset.loginBridge='1';
-    b.addEventListener('click', async function(e){
-      if(typeof window.login==='function') return; // normal app login
-      e.preventDefault();
-      var u=document.getElementById('loginUser'), p=document.getElementById('loginPass'), a=document.getElementById('captchaAnswer'), err=document.getElementById('loginError');
-      var cfg=window.SFS_CONFIG||{}, api=cfg.API_URL;
-      if(!u||!p||!a||!err||!api){ if(err) err.textContent='Login system configuration error.'; return; }
-      if(!u.value.trim()||!p.value){err.textContent='Username and password are required.';return;}
-      err.textContent='Signing in...';
-      try{
-        var r=await fetch(api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',username:u.value.trim(),password:p.value})});
-        var j=JSON.parse(await r.text());
-        if(!j.ok){err.textContent=j.error||'Invalid username or password';return;}
-        sessionStorage.sfsSession=j.session;
-        sessionStorage.sfsUser=JSON.stringify(j.user||{});
-        location.reload();
-      }catch(x){err.textContent='Backend connection error. Please try again.';console.error(x);}
-    },true);
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
-})();
-</script>
 
 <script>
-/* ---------- Sidebar collapse toggle ---------- */
-function toggleSidebar(){
-  const sb = document.getElementById('sidebar');
-  if (!sb) return;
-  sb.classList.toggle('collapsed');
-  try { localStorage.setItem('sfsSidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+
+  sidebar.classList.toggle('collapsed');
+  try {
+    localStorage.setItem(
+      'sfsSidebarCollapsed',
+      sidebar.classList.contains('collapsed') ? '1' : '0'
+    );
+  } catch (e) {
+    console.warn('Could not save sidebar preference.', e);
+  }
 }
-(function(){
+
+document.addEventListener('DOMContentLoaded', function () {
   try {
     if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
       document.getElementById('sidebar')?.classList.add('collapsed');
     }
-  } catch(e) {}
-})();
+  } catch (e) {
+    console.warn('Could not read sidebar preference.', e);
+  }
 
-/* ---------- Enter key on login fields ---------- */
-document.addEventListener('DOMContentLoaded', function(){
-  ['loginUser','loginPass','captchaAnswer'].forEach(function(id){
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('keydown', function(e){
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (typeof window.login === 'function') window.login();
-        else document.getElementById('loginBtn')?.click();
+  ['loginUser', 'loginPass', 'captchaAnswer'].forEach(function (id) {
+    const input = document.getElementById(id);
+    if (!input) return;
+
+    input.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+
+      if (typeof window.login === 'function') {
+        window.login();
+      } else {
+        const error = document.getElementById('loginError');
+        if (error) {
+          error.textContent = 'Login is not ready. Reload the page and check the browser console.';
+        }
+        console.error('Login function is unavailable. Check app.js for initialization errors.');
       }
     });
   });
+
+  const loginButton = document.getElementById('loginBtn');
+  if (loginButton) {
+    loginButton.addEventListener('click', function () {
+      if (typeof window.login === 'function') return;
+
+      const error = document.getElementById('loginError');
+      if (error) {
+        error.textContent = 'Login is not ready. Reload the page and check the browser console.';
+      }
+      console.error('Login function is unavailable. Check app.js for initialization errors.');
+    });
+  }
 });
 </script>
 
