@@ -1792,7 +1792,7 @@ function init(){
     showLogin();
   }
 }
-init();
+
 
 /* ---------- GLOBAL EXPORTS ---------- */
 window.login = login;
@@ -1846,3 +1846,13 @@ window.loadDcIntoInvoice = loadDcIntoInvoice;
 window.ivModelChanged = ivModelChanged;
 window.updateIvTotals = updateIvTotals;
 window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
+
+
+/* Initialize only after all public functions are exported. */
+try {
+  init();
+} catch (err) {
+  console.error('SFS ERP init error:', err);
+  const el = document.getElementById('loginError');
+  if (el) el.textContent = 'ERP initialization error. Please refresh the page.';
+}
