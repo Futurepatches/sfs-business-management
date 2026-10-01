@@ -105,6 +105,34 @@
 <script src="erp-overrides.js?v=20260820"></script>
 <script src="erp-api-bridge.js?v=20260820"></script>
 <script src="stock-fix.js?v=20260820"></script>
+<script>
+/* Emergency login bridge: keeps Sign In usable even if another frontend module fails. */
+(function(){
+  function wire(){
+    var b=document.getElementById('loginBtn');
+    if(!b || b.dataset.loginBridge) return;
+    b.dataset.loginBridge='1';
+    b.addEventListener('click', async function(e){
+      if(typeof window.login==='function') return; // normal app login
+      e.preventDefault();
+      var u=document.getElementById('loginUser'), p=document.getElementById('loginPass'), a=document.getElementById('captchaAnswer'), err=document.getElementById('loginError');
+      var cfg=window.SFS_CONFIG||{}, api=cfg.API_URL;
+      if(!u||!p||!a||!err||!api){ if(err) err.textContent='Login system configuration error.'; return; }
+      if(!u.value.trim()||!p.value){err.textContent='Username and password are required.';return;}
+      err.textContent='Signing in...';
+      try{
+        var r=await fetch(api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',username:u.value.trim(),password:p.value})});
+        var j=JSON.parse(await r.text());
+        if(!j.ok){err.textContent=j.error||'Invalid username or password';return;}
+        sessionStorage.sfsSession=j.session;
+        sessionStorage.sfsUser=JSON.stringify(j.user||{});
+        location.reload();
+      }catch(x){err.textContent='Backend connection error. Please try again.';console.error(x);}
+    },true);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+})();
+</script>
 
 <script>
 /* ---------- Sidebar collapse toggle ---------- */
