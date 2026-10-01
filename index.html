@@ -152,30 +152,13 @@ function toggleSidebar(){
 
 /* ---------- Enter key on login fields ---------- */
 document.addEventListener('DOMContentLoaded', function(){
-  if (typeof generateCaptcha === 'function') generateCaptcha();
-
-  const loginBtn = document.getElementById('loginBtn');
-  if (loginBtn) {
-    loginBtn.addEventListener('click', function(){
-      if (typeof window.login === 'function') {
-        window.login();
-      } else {
-        const box = document.getElementById('loginError');
-        if (box) box.textContent = 'Login system load nahi hua. Page ko Ctrl + F5 se refresh karein.';
-      }
-    });
-  }
-
   ['loginUser','loginPass','captchaAnswer'].forEach(function(id){
     const el = document.getElementById(id);
     if (el) el.addEventListener('keydown', function(e){
       if (e.key === 'Enter') {
         e.preventDefault();
         if (typeof window.login === 'function') window.login();
-        else {
-          const box = document.getElementById('loginError');
-          if (box) box.textContent = 'Login system load nahi hua. Page ko Ctrl + F5 se refresh karein.';
-        }
+        else document.getElementById('loginBtn')?.click();
       }
     });
   });
