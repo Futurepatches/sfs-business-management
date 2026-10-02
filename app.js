@@ -242,8 +242,9 @@ async function login(){
   $('loginError').textContent = 'Signing in...';
   SFS_LOGGING_IN = true;
   let r;
-  try { r = await api('login', {username:user, password:pass}); } finally { SFS_LOGGING_IN = false; }
-  if (!r.ok) { $('loginError').textContent = r.error || 'Invalid username or password'; generateCaptcha(); return; }
+  try { r = await api('login', {username:user, password:pass}); } catch(e) { console.error('LOGIN ERROR',e); $('loginError').textContent='Login error: '+(e&&e.message?e.message:'Connection error'); return; } finally { SFS_LOGGING_IN = false; }
+  console.log('SFS LOGIN RESPONSE',r);
+  if (!r || !r.ok) { $('loginError').textContent=(r&&r.error)||'Invalid username or password'; generateCaptcha(); return; }
 
   SFS_EXPIRED = false;
   $('loginPass').value = '';
