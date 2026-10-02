@@ -1,164 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Standard Fluid Systems — Business Management</title>
-<link rel="icon" href="logo.png">
-<link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Arham Electronics ERP</title>
+  <link rel="stylesheet" href="styles.css?v=20260924-2">
 </head>
 <body>
-
-<!-- ============ LOGIN SCREEN ============ -->
-<div id="login" class="login-screen">
-  <div class="login-card">
-    <img src="logo.png" alt="SFS" class="login-logo">
-    <div class="eyebrow">Standard Fluid Systems</div>
-    <h1>Business Management</h1>
-
-    <label>Username
-      <input id="loginUser" type="text" autocomplete="username" placeholder="admin">
-    </label>
-
-    <label>Password
-      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
-    </label>
-
-    <label id="captchaLabel">What is 1 + 1?
-      <input id="captchaAnswer" type="text" placeholder="Your answer">
-    </label>
-
-    <div id="loginError" class="muted" role="alert" aria-live="polite"></div>
-
-    <button id="loginBtn" type="button" class="btn primary full">Sign In</button>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">AE</div><div><b>ARHAM</b><span>ELECTRONICS ERP</span></div></div>
+      <nav>
+        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
+        <button class="nav" data-page="products">▤ <span>Products</span></button>
+        <button class="nav" data-page="stock">▥ <span>Stock</span></button>
+        <button class="nav" data-page="customers">♙ <span>Customers</span></button>
+        <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
+        <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
+        <button class="nav" data-page="sales">▰ <span>Sales</span></button>
+        <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
+        <button class="nav" data-page="payments">৳ <span>Payments</span></button>
+        <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
+      </nav>
+      <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div></div><button id="refreshBtn" class="btn secondary">↻ Refresh</button></header>
+      <section id="toast" class="toast hidden"></section>
+      <section id="content"></section>
+    </main>
   </div>
-</div>
-
-<!-- ============ APP SHELL ============ -->
-<div id="app" class="hidden">
-  <aside id="sidebar">
-    <div class="brand">
-      <img src="logo.png" alt="SFS">
-      <div>
-        <b>Standard Fluid</b>
-        <small>Business Management</small>
-      </div>
-      <button class="collapse-btn" type="button" onclick="toggleSidebar()" title="Collapse sidebar">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-    </div>
-
-    <nav id="nav"></nav>
-
-    <div class="userbox">
-      <b id="who">—</b>
-      <small id="role">—</small>
-      <button class="btn" type="button" onclick="logout()">Logout</button>
-    </div>
-  </aside>
-
-  <main>
-    <header>
-      <div>
-        <div class="eyebrow">Standard Fluid Systems</div>
-        <h1 id="pageTitle">Dashboard</h1>
-        <p>Inventory • Purchases • Sales • Documents</p>
-      </div>
-      <div class="header-actions">
-        <span id="busy" class="busy hidden">Working…</span>
-        <button class="btn" type="button" onclick="refresh()">↻ Refresh</button>
-      </div>
-    </header>
-
-    <div id="content"></div>
-  </main>
-</div>
-
-<!-- ============ MODAL ============ -->
-<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3 id="modalTitle">—</h3>
-      <button type="button" onclick="closeModal()" aria-label="Close">×</button>
-    </div>
-    <div id="modalBody"></div>
-  </div>
-</div>
-
-<div id="toastHost" class="toast-host"></div>
-<div id="printArea"></div>
-
-<!-- Load order matters: keep app.js before modules that extend it. -->
-<script src="config.js?v=20261001"></script>
-<script src="dev-mode.js?v=20261001"></script>
-<script src="app.js?v=20261001"></script>
-<script src="price-list.js?v=20261001"></script>
-<script src="erp-overrides.js?v=20261001"></script>
-<script src="erp-api-bridge.js?v=20261001"></script>
-<script src="stock-fix.js?v=20261001"></script>
-
-<script>
-function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  if (!sidebar) return;
-
-  sidebar.classList.toggle('collapsed');
-  try {
-    localStorage.setItem(
-      'sfsSidebarCollapsed',
-      sidebar.classList.contains('collapsed') ? '1' : '0'
-    );
-  } catch (e) {
-    console.warn('Could not save sidebar preference.', e);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-  try {
-    if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
-      document.getElementById('sidebar')?.classList.add('collapsed');
-    }
-  } catch (e) {
-    console.warn('Could not read sidebar preference.', e);
-  }
-
-  ['loginUser', 'loginPass', 'captchaAnswer'].forEach(function (id) {
-    const input = document.getElementById(id);
-    if (!input) return;
-
-    input.addEventListener('keydown', function (event) {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-
-      if (typeof window.login === 'function') {
-        window.login();
-      } else {
-        const error = document.getElementById('loginError');
-        if (error) {
-          error.textContent = 'Login is not ready. Reload the page and check the browser console.';
-        }
-        console.error('Login function is unavailable. Check app.js for initialization errors.');
-      }
-    });
-  });
-
-  const loginButton = document.getElementById('loginBtn');
-  if (loginButton) {
-    loginButton.addEventListener('click', function () {
-      if (typeof window.login === 'function') return;
-
-      const error = document.getElementById('loginError');
-      if (error) {
-        error.textContent = 'Login is not ready. Reload the page and check the browser console.';
-      }
-      console.error('Login function is unavailable. Check app.js for initialization errors.');
-    });
-  }
-});
-</script>
-
+  <script src="app.js?v=20260926-fix1"></script>
 </body>
 </html>
