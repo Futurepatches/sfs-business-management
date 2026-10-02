@@ -185,7 +185,7 @@ async function api(action, data = {}){
     } finally {
       if (timer) clearTimeout(timer);
     }
-    if (result && result.error === 'Unauthorized' && action !== 'login' && action !== 'logout' && S.session && !SFS_BOOTING) sessionExpired();
+    /* IMPORTANT: do not auto-reload on Unauthorized. It hides the real login/session problem. */
     return result;
   } finally {
     setBusy(-1);
@@ -249,10 +249,30 @@ async function login(){
   SFS_EXPIRED = false;
   $('loginPass').value = '';
   $('loginError').textContent = '';
-  S.session = r.session;
-  S.user = r.user;
-  sessionStorage.sfsSession = S.session;
-  sessionStorage.sfsUser = JSON.stringify(S.user || {});
+  S.session = String(r.session || '');
+  S.user = r.user || null;
+  if (!S.session) {
+    $('loginError').textContent = 'Backend ne login diya lekin session token nahi diya.';
+    return;
+  }
+  sessionStorage.setItem('sfsSession', S.session);
+  sessionStorage.setItem('sfsUser', JSON.stringify(S.user || {}));
+  /* Verify the returned session before opening the ERP. */
+  const boot = await api('bootstrap');
+  if (!boot || !boot.ok) {
+    S.session = '';
+    sessionStorage.removeItem('sfsSession');
+    showLogin();
+    $('loginError').textContent = 'Login response aa gaya, lekin session verify nahi hua: ' + ((boot && boot.error) || 'Unknown error');
+    return;
+  }
+  S.user = boot.user || S.user;
+  S.products = boot.products || [];
+  S.customers = boot.customers || [];
+  S.suppliers = boot.suppliers || [];
+  S.tx = boot.transactions || [];
+  syncDatalists();
+  $('loginError').textContent = '';
   enter();
 }
 
@@ -286,7 +306,13 @@ async function logout(){
 async function refresh(){
   const r = await api('bootstrap');
   if (!r.ok){
-    if (r.error === 'Unauthorized') { $('loginError').textContent = 'Session/backend authentication issue. Please sign in again.'; showLogin(); return; }
+    if (r.error === 'Unauthorized') {
+      S.session = '';
+      sessionStorage.removeItem('sfsSession');
+      showLogin();
+      $('loginError').textContent = 'Login successful hua, lekin backend session accept nahi kar raha. Backend deployment/session mismatch hai.';
+      return;
+    }
     toast(r.error || 'Could not load data', true);
     return;
   }
