@@ -1455,7 +1455,7 @@ function userForm(editUsername, editName, editRole, editModules){
     `<div class="form-grid">
        <label>Name<input id="un" value="${esc(n)}"></label>
        <label>Username<input id="uu" value="${esc(u)}" ${isEdit?'readonly':''}></label>
-       <label>Password ${isEdit?'<span class="muted small">(Leave it blank if you don't want to change it)</span>':''}<input id="up" type="password"></label>
+       <label>Password ${isEdit?'<span class="muted small">(Leave it blank if you do not want to change it)</span>':''}<input id="up" type="password"></label>
        <label>Role<select id="ur">
          <option value="STAFF" ${ro==='STAFF'?'selected':''}>STAFF</option>
          <option value="ADMIN" ${ro==='ADMIN'?'selected':''}>ADMIN</option>
