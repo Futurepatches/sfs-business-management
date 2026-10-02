@@ -285,7 +285,7 @@ async function logout(){
 async function refresh(){
   const r = await api('bootstrap');
   if (!r.ok){
-    if (r.error === 'Unauthorized') { logout(); return; }
+    if (r.error === 'Unauthorized') { $('loginError').textContent = 'Session/backend authentication issue. Please sign in again.'; showLogin(); return; }
     toast(r.error || 'Could not load data', true);
     return;
   }
