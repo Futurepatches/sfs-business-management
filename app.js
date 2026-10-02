@@ -1921,3 +1921,236 @@ window.loadDcIntoInvoice = loadDcIntoInvoice;
 window.ivModelChanged = ivModelChanged;
 window.updateIvTotals = updateIvTotals;
 window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
+
+/* ============================================================
+   [ADDED] TOP LOADING BAR — see the block below. Nothing above
+   this line has been changed.
+   ============================================================ */
+/* ============================================================
+   SFS BUSINESS MANAGEMENT — TOP LOADING BAR  (v1.0)
+   ------------------------------------------------------------
+   Ye block app.js ke AAKHIR mein add kiya gaya hai (app ka koi
+   purana function / data / variable is se change nahi hota).
+   Kaam:
+     - Har button / link / nav click par top loading bar
+     - showPage() se page change par bar
+     - Backend API (fetch / XHR) ke doran bar
+     - Pehli load, reload aur back/forward par bhi bar
+   Manual: SFSLoader.start() | SFSLoader.finish() | SFSLoader.pulse()
+   Band karna: kisi button par class="no-loader" laga dein.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.SFSLoader && window.SFSLoader.__v) return;   // double-load guard
+
+  var MIN_SHOW = 420, TRICKLE_MS = 250, MAX_TRICKLE = 92;
+
+  /* ---------- CSS (agar index.html mein pehle se hai to inject nahi karega) ---------- */
+  if (!document.getElementById('sfsProgressStyles')) {
+    var CSS = [
+      '#sfsProgress{position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483000;',
+        'pointer-events:none;opacity:0;transition:opacity .25s ease}',
+      '#sfsProgress.sfs-active{opacity:1}',
+      '#sfsProgressBar{position:relative;height:100%;width:0;border-radius:0 3px 3px 0;',
+        'background:linear-gradient(90deg,#3B5BDB 0%,#5B7CFA 45%,#10B981 100%);',
+        'box-shadow:0 0 8px rgba(59,91,219,.55),0 0 14px rgba(16,185,129,.35);',
+        'transition:width .25s ease}',
+      '#sfsProgressBar::after{content:"";position:absolute;right:0;top:0;bottom:0;width:90px;',
+        'background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.8));',
+        'border-radius:0 3px 3px 0;opacity:.9}',
+      '@media print{#sfsProgress{display:none!important}}',
+      '@media (prefers-reduced-motion:reduce){#sfsProgressBar{transition:none!important}}'
+    ].join('');
+    var styleEl = document.createElement('style');
+    styleEl.id = 'sfsProgressStyles';
+    styleEl.textContent = CSS;
+    (document.head || document.documentElement).appendChild(styleEl);
+  }
+
+  /* ---------- Bar element (agar index.html mein pehle se hai to dobara nahi banayega) ---------- */
+  function mount() {
+    var el = document.getElementById('sfsProgress');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'sfsProgress';
+      el.setAttribute('role', 'progressbar');
+      el.setAttribute('aria-label', 'Loading');
+      var b = document.createElement('div');
+      b.id = 'sfsProgressBar';
+      el.appendChild(b);
+      (document.body || document.documentElement).appendChild(el);
+    }
+    if (!document.getElementById('sfsProgressBar')) {
+      var b2 = document.createElement('div');
+      b2.id = 'sfsProgressBar';
+      el.appendChild(b2);
+    }
+    return el;
+  }
+  if (document.body) mount();
+  else document.addEventListener('DOMContentLoaded', mount);
+
+  function rootEl() { return document.getElementById('sfsProgress'); }
+  function barEl()  { return document.getElementById('sfsProgressBar'); }
+  function setWidth(p) { var b = barEl(); if (b) b.style.width = p + '%'; }
+
+  /* ---------- engine ---------- */
+  var count = 0, running = false, startedAt = 0, progress = 0, gen = 0;
+  var trickleTimer = null, completeTimer = null, hideTimer = null;
+
+  function trickle() {
+    clearTimeout(trickleTimer);
+    trickleTimer = setTimeout(function () {
+      if (!running || count === 0) return;
+      progress += Math.max(0.7, (MAX_TRICKLE - progress) * 0.11);
+      if (progress > MAX_TRICKLE) progress = MAX_TRICKLE;
+      setWidth(progress);
+      trickle();
+    }, TRICKLE_MS);
+  }
+
+  function start() {
+    var r = rootEl(), b = barEl();
+    if (!r || !b) return gen;
+    count++; gen++;
+    if (completeTimer) { clearTimeout(completeTimer); completeTimer = null; }
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    if (!running) {
+      running = true; startedAt = Date.now(); progress = 8;
+      r.style.display = 'block';
+      void r.offsetWidth;
+      r.classList.add('sfs-active');
+      b.style.transition = 'width .25s ease';
+      setWidth(progress);
+      trickle();
+    }
+    return gen;
+  }
+
+  function complete() {
+    if (!running) return;
+    var myGen = gen;
+    var wait = Math.max(0, MIN_SHOW - (Date.now() - startedAt));
+    clearTimeout(completeTimer);
+    completeTimer = setTimeout(function () {
+      if (gen !== myGen || count > 0) return;
+      var r = rootEl(), b = barEl();
+      if (!r || !b) { running = false; return; }
+      running = false;
+      clearTimeout(trickleTimer); trickleTimer = null;
+      b.style.transition = 'width .18s ease';
+      setWidth(100);
+      hideTimer = setTimeout(function () {
+        r.classList.remove('sfs-active');
+        hideTimer = setTimeout(function () {
+          r.style.display = 'none';
+          b.style.transition = 'none';
+          setWidth(0);
+          void r.offsetWidth;
+          b.style.transition = 'width .25s ease';
+          progress = 0;
+        }, 250);
+      }, 200);
+    }, wait);
+  }
+
+  function finish() { count = Math.max(0, count - 1); if (count > 0) return; complete(); }
+  function pulse()  { start(); finish(); }
+
+  window.SFSLoader = { __v: '1.0', start: start, finish: finish, done: finish, pulse: pulse };
+
+  /* ============================================================
+     HOOKS  (sab try/catch mein — app par koi asar nahi)
+     ============================================================ */
+  var safe = function (fn) { try { fn(); } catch (e) { /* app kabhi na toote */ } };
+
+  /* 1) Pehli page load */
+  safe(function () {
+    start();
+    var end = function () { finish(); };
+    if (document.readyState === 'complete') setTimeout(end, 150);
+    else { window.addEventListener('load', end, { once: true }); setTimeout(end, 6000); }
+  });
+
+  /* 2) Reload / navigate / back-forward */
+  safe(function () {
+    window.addEventListener('beforeunload', function () { start(); });
+    window.addEventListener('pageshow', function () { pulse(); });
+    window.addEventListener('popstate', function () { pulse(); });
+    window.addEventListener('hashchange', function () { pulse(); });
+  });
+
+  /* 3) Har button / link click (event delegation) */
+  safe(function () {
+    document.addEventListener('click', function (e) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var el = e.target && e.target.closest
+        ? e.target.closest('button, a, [role="button"], .navbtn, input[type="submit"], input[type="button"]')
+        : null;
+      if (!el || el.disabled) return;
+      if (el.closest('.no-loader') || el.hasAttribute('data-no-loader')) return;
+      if (el.closest('#sfsProgress')) return;
+      pulse();
+    }, true);
+  });
+
+  /* 4) fetch() — backend data aane tak bar chalti rahegi */
+  safe(function () {
+    if (typeof window.fetch !== 'function' || window.fetch.__sfsWrapped) return;
+    var orig = window.fetch;
+    var wrapped = function () {
+      start();
+      var p;
+      try { p = orig.apply(this, arguments); }
+      catch (err) { finish(); throw err; }
+      if (p && typeof p.then === 'function') {
+        return p.then(function (r) { finish(); return r; },
+                      function (err) { finish(); throw err; });
+      }
+      finish();
+      return p;
+    };
+    wrapped.__sfsWrapped = true;
+    window.fetch = wrapped;
+  });
+
+  /* 5) XMLHttpRequest (agar kahin use ho) */
+  safe(function () {
+    var XP = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+    if (!XP || XP.__sfsPatched) return;
+    var origOpen = XP.open, origSend = XP.send;
+    XP.open = function () { try { this.__sfsTrack = true; } catch (e) {} return origOpen.apply(this, arguments); };
+    XP.send = function () {
+      var self = this;
+      if (self.__sfsTrack) {
+        start();
+        var end = function () { if (self.__sfsDone) return; self.__sfsDone = true; finish(); };
+        try { self.addEventListener('loadend', end); } catch (e) { setTimeout(end, 3000); }
+      }
+      return origSend.apply(this, arguments);
+    };
+    XP.__sfsPatched = true;
+  });
+
+  /* 6) SPA router — showPage() wrap (app.js ke baad chalne ki wajah se ye available hai) */
+  safe(function () {
+    var patch = function () {
+      if (typeof window.showPage !== 'function' || window.showPage.__sfsWrapped) return false;
+      var orig = window.showPage;
+      var wrapped = function () {
+        start();
+        var out;
+        try { out = orig.apply(this, arguments); }
+        catch (err) { finish(); throw err; }
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () { setTimeout(finish, 120); });
+        });
+        return out;
+      };
+      wrapped.__sfsWrapped = true;
+      window.showPage = wrapped;
+      return true;
+    };
+    if (!patch()) document.addEventListener('DOMContentLoaded', patch);
+  });
+})();
