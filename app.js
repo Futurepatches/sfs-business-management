@@ -427,7 +427,9 @@ function renderDashboard(){
 async function loadSalesSummary(){
   if (!hasMod('reports')) { const h = $('salesSummarySection'); if (h) h.innerHTML = ''; return; }
   const currentYear = new Date().getFullYear();
-  const years = Array.from({length:3}, (_,i) => currentYear - i);
+  /* Show previous 2 years + current year + next 3 years so Admin can
+     enter a future annual target before that year starts. */
+  const years = Array.from({length:6}, (_,i) => currentYear - 2 + i);
   const results = await Promise.all(years.map(year => api('getSalesSummary', {year})));
   const host = $('salesSummarySection');
   if (!host) return;
@@ -467,8 +469,20 @@ function changeSalesTargetYear(year){
 
 function renderSelectedSalesYear(year){
   const summaries = window.SALES_YEAR_SUMMARIES || [];
-  const r = summaries.find(x => Number(x.year) === Number(year));
-  if (!r) return;
+  let r = summaries.find(x => Number(x.year) === Number(year));
+  if (!r) {
+    /* Future years may not have been loaded yet. Fetch the selected year
+       directly; backend already supports saving targets for any year. */
+    api('getSalesSummary', {year:Number(year)}).then(res => {
+      if (!res || !res.ok) return toast(res && res.error || 'Could not load sales target.', true);
+      const idx = summaries.findIndex(x => Number(x.year) === Number(year));
+      if (idx >= 0) summaries[idx] = {...res, year:Number(year)};
+      else summaries.push({...res, year:Number(year)});
+      window.SALES_YEAR_SUMMARIES = summaries;
+      renderSelectedSalesYear(Number(year));
+    });
+    return;
+  }
 
   const targetHost = $('selectedYearSalesTarget');
   const customerHost = $('selectedYearTopCustomers');
