@@ -1786,7 +1786,7 @@ function init(){
       } else {
         if (r.error === 'Unauthorized') sessionStorage.clear();   // network error par session mat mitao
         showLogin();
-        if (r.error && r.error !== 'Unauthorized' && $('loginError')) $('loginError').textContent = r.error;
+        if ($('loginError')) $('loginError').textContent = r.error ? ('Backend: ' + r.error) : 'Could not initialize ERP.';
       }
     });
   } else {
