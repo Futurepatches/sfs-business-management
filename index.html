@@ -6,8 +6,27 @@
 <title>Standard Fluid Systems — Business Management</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="styles.css">
+<style id="sfsProgressStyles">
+  /* --- SFS top loading bar (added) --- */
+  #sfsProgress{position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483000;
+    pointer-events:none;opacity:0;transition:opacity .25s ease}
+  #sfsProgress.sfs-active{opacity:1}
+  #sfsProgressBar{position:relative;height:100%;width:0;border-radius:0 3px 3px 0;
+    background:linear-gradient(90deg,#3B5BDB 0%,#5B7CFA 45%,#10B981 100%);
+    box-shadow:0 0 8px rgba(59,91,219,.55),0 0 14px rgba(16,185,129,.35);
+    transition:width .25s ease}
+  #sfsProgressBar::after{content:"";position:absolute;right:0;top:0;bottom:0;width:90px;
+    background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.8));
+    border-radius:0 3px 3px 0;opacity:.9}
+  @media print{#sfsProgress{display:none!important}}
+  @media (prefers-reduced-motion:reduce){#sfsProgressBar{transition:none!important}}
+</style>
 </head>
 <body>
+
+<!-- --- SFS top loading bar (added) --- -->
+<div id="sfsProgress" role="progressbar" aria-label="Loading"><div id="sfsProgressBar"></div></div>
+
 
 <!-- ============ LOGIN SCREEN ============ -->
 <div id="login" class="login-screen">
