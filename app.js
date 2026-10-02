@@ -181,11 +181,11 @@ async function api(action, data = {}){
          (password URL mein leak na ho). Config mein ALLOW_JSONP_LOGIN:true se login fallback on hota hai. */
       if (action === 'bootstrap') result = await jsonpRequest(S.api, payload);
       else if (action === 'login' && window.SFS_CONFIG && window.SFS_CONFIG.ALLOW_JSONP_LOGIN === true) result = await jsonpRequest(S.api, payload);
-      else result = {ok:false, error:'Connection error'};
+      else result = {ok:false, error:'Connection error. Internet check karke dobara koshish karein.'};
     } finally {
       if (timer) clearTimeout(timer);
     }
-    /* IMPORTANT: do not auto-reload on Unauthorized. It hides the real login/session problem. */
+    if (result && result.error === 'Unauthorized' && action !== 'login' && action !== 'logout' && S.session && !SFS_BOOTING) sessionExpired();
     return result;
   } finally {
     setBusy(-1);
@@ -242,37 +242,16 @@ async function login(){
   $('loginError').textContent = 'Signing in...';
   SFS_LOGGING_IN = true;
   let r;
-  try { r = await api('login', {username:user, password:pass}); } catch(e) { console.error('LOGIN ERROR',e); $('loginError').textContent='Login error: '+(e&&e.message?e.message:'Connection error'); return; } finally { SFS_LOGGING_IN = false; }
-  console.log('SFS LOGIN RESPONSE',r);
-  if (!r || !r.ok) { $('loginError').textContent=(r&&r.error)||'Invalid username or password'; generateCaptcha(); return; }
+  try { r = await api('login', {username:user, password:pass}); } finally { SFS_LOGGING_IN = false; }
+  if (!r.ok) { $('loginError').textContent = r.error || 'Invalid username or password'; generateCaptcha(); return; }
 
   SFS_EXPIRED = false;
   $('loginPass').value = '';
   $('loginError').textContent = '';
-  S.session = String(r.session || '');
-  S.user = r.user || null;
-  if (!S.session) {
-    $('loginError').textContent = 'Backend ne login diya lekin session token nahi diya.';
-    return;
-  }
-  sessionStorage.setItem('sfsSession', S.session);
-  sessionStorage.setItem('sfsUser', JSON.stringify(S.user || {}));
-  /* Verify the returned session before opening the ERP. */
-  const boot = await api('bootstrap');
-  if (!boot || !boot.ok) {
-    S.session = '';
-    sessionStorage.removeItem('sfsSession');
-    showLogin();
-    $('loginError').textContent = 'Login response aa gaya, lekin session verify nahi hua: ' + ((boot && boot.error) || 'Unknown error');
-    return;
-  }
-  S.user = boot.user || S.user;
-  S.products = boot.products || [];
-  S.customers = boot.customers || [];
-  S.suppliers = boot.suppliers || [];
-  S.tx = boot.transactions || [];
-  syncDatalists();
-  $('loginError').textContent = '';
+  S.session = r.session;
+  S.user = r.user;
+  sessionStorage.sfsSession = S.session;
+  sessionStorage.sfsUser = JSON.stringify(S.user || {});
   enter();
 }
 
@@ -306,13 +285,7 @@ async function logout(){
 async function refresh(){
   const r = await api('bootstrap');
   if (!r.ok){
-    if (r.error === 'Unauthorized') {
-      S.session = '';
-      sessionStorage.removeItem('sfsSession');
-      showLogin();
-      $('loginError').textContent = 'Login successful hua, lekin backend session accept nahi kar raha. Backend deployment/session mismatch hai.';
-      return;
-    }
+    if (r.error === 'Unauthorized') { logout(); return; }
     toast(r.error || 'Could not load data', true);
     return;
   }
@@ -370,15 +343,15 @@ const pages = {
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
-<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><h3>Recent Customer Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="custPayRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><h3>Recent Supplier Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 </div>`,
   customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,
   suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">The original live inventory is read-only. This software only writes data to its own separate database.</p><p class="muted">The backend connection is configured in the config.js file and cannot be modified from this location.</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory read-only hai. Ye software sirf apni separate database mein likhta hai.</p><p class="muted">Backend connection config.js file se set hoti hai (yahan se change nahi hoti).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -424,11 +397,11 @@ function renderDashboard(){
 
   $('dash').innerHTML = `
     <div class="cards">
-      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${S.products.length}</strong></button>` : `<div class="card"><span>Products</span><strong>${S.products.length}</strong></div>`}
-      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></button>` : `<div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div>`}
-      ${hasMod('parties') ? `<button type="button" class="card card-click" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong></button>` : `<div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div>`}
-      ${hasMod('parties') ? `<button type="button" class="card card-click" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong> ${S.suppliers.length}</strong></button>` : `<div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div>`}
-      ${hasMod('products') ? `<button type="button" class="card card-click" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></button>` : `<div class="card" style="${lowStock.length?'border-color:#c0392b':''}"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></div>`}
+      <div class="card"><span>Products</span><strong>${S.products.length}</strong></div>
+      <div class="card"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong></div>
+      <div class="card"><span>Customers</span><strong>${S.customers.length}</strong></div>
+      <div class="card"><span>Suppliers</span><strong>${S.suppliers.length}</strong></div>
+      <div class="card" style="${lowStock.length?'border-color:#c0392b':''}"><span>⚠ Low Stock</span><strong style="${lowStock.length?'color:#c0392b':''}">${lowStock.length}</strong></div>
     </div>
     ${lowStock.length ? `<div class="panel">
       <div class="panel-head">
@@ -1084,7 +1057,8 @@ async function loadIVHistory(){
     return;
   }
   IVH_CACHE = (r.documents||[]).map(d => {
-    const total = (d.subtotal||0) * (1 + (Number(d.gstPercent)||18)/100);
+    const gstN = (d.gstPercent === '' || d.gstPercent == null || isNaN(Number(d.gstPercent))) ? 18 : Number(d.gstPercent);
+    const total = (d.subtotal||0) * (1 + gstN/100);
     return {...d, grandTotal: total, searchText: [d.no, d.customer, d.customerId, d.dc, d.po, ...d.items.map(x=>x.model), ...d.items.map(x=>x.desc)].join(' ').toLowerCase()};
   });
   filterIVHistory();
@@ -1150,7 +1124,7 @@ function viewInvoice(noEnc, print){
      </div>
      <div class="doc-totals">
        <div><span>Sub Total</span><span>${money(d.subtotal)}</span></div>
-       <div><span>GST ${d.gstPercent||18}%</span><span>${money(d.grandTotal - d.subtotal)}</span></div>
+       <div><span>GST ${(d.gstPercent === '' || d.gstPercent == null || isNaN(Number(d.gstPercent))) ? 18 : Number(d.gstPercent)}%</span><span>${money(d.grandTotal - d.subtotal)}</span></div>
        <div><b>TOTAL</b><b>${money(d.grandTotal)}</b></div>
      </div>
      <div class="actions">
@@ -1168,13 +1142,12 @@ async function loadAccounts(){
     api('getSupplierPaymentHistory', {})
   ]);
 
-  const outRows = custOut.ok ? (custOut.rows||[]) : [];
-  const outHost = $('custOutRows');
-  if (outHost) outHost.innerHTML = outRows.map(r=>`<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No outstanding invoices — all settled!</td></tr>';
-
-  const pays = custPay.ok ? (custPay.payments||[]) : [];
-  const payHost = $('custPayRows');
-  if (payHost) payHost.innerHTML = pays.slice(0,30).map(x=>`<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>';
+  ACC.outErr = custOut.ok ? '' : (custOut.error || 'Could not load outstanding');
+  ACC.payErr = custPay.ok ? '' : (custPay.error || 'Could not load payments');
+  ACC.out = (custOut.ok ? (custOut.rows||[]) : []).map(r => Object.assign({}, r, {_hay: accHay([r.no, r.customer, ...accDateParts(r.date), ...accAmountParts(r.total), ...accAmountParts(r.paid), ...accAmountParts(r.outstanding)])}));
+  ACC.pays = (custPay.ok ? (custPay.payments||[]) : []).map(x => Object.assign({}, x, {_hay: accHay([x['Invoice No.'], x['Customer Name'], x.Reference, x.Method, x.Remarks, ...accDateParts(x.Date), ...accAmountParts(x.Amount)])}));
+  filterCustOut();
+  filterCustPay();
 
   const supRows = supOut.ok ? (supOut.rows||[]) : [];
   const supOutHost = $('supOutRows');
@@ -1185,6 +1158,64 @@ async function loadAccounts(){
   if (supPayHost) supPayHost.innerHTML = supPays.slice(0,30).map(x=>`<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>';
 }
 function renderAccounts(){ loadAccounts(); }
+
+/* ---------- ACCOUNTS SEARCH (Customer Outstanding + Customer Payments) ---------- */
+let ACC = {out:[], pays:[], outErr:'', payErr:''};
+const ACC_PAY_DEFAULT_LIMIT = 100;   // search khali ho to latest itni payments; search karne par SAARI records mein dhoondta hai
+
+function accHay(parts){ return parts.map(v => String(v == null ? '' : v)).join(' | ').toLowerCase(); }
+function accMatch(hay, q){
+  const toks = String(q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return toks.every(tk => hay.includes(tk));      // saare words milne chahiyen (e.g. "INV-000012 cash")
+}
+function accDateParts(v){
+  const d = new Date(v);
+  if (!v || isNaN(d)) return [String(v || '')];
+  const dd = String(d.getDate()).padStart(2,'0'), mm = String(d.getMonth()+1).padStart(2,'0'), yy = d.getFullYear();
+  return [fmtDate(v), toInputDate(v), dd+'/'+mm+'/'+yy, dd+'-'+mm+'-'+yy];
+}
+function accAmountParts(n){ const a = Number(n) || 0; return [String(a), money(a), money(a).replace(/,/g,'')]; }
+
+function custOutRowHtml(r){
+  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`;
+}
+function filterCustOut(){
+  const host = $('custOutRows');
+  if (!host) return;
+  const q = (($('custOutSearch') || {}).value || '').trim();
+  const hits = q ? ACC.out.filter(r => accMatch(r._hay, q)) : ACC.out;
+  host.innerHTML = ACC.outErr
+    ? `<tr><td colspan="7" class="empty">${esc(ACC.outErr)}</td></tr>`
+    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'Koi invoice nahi mila.' : 'No outstanding invoices — all settled!'}</td></tr>`);
+  const info = $('custOutInfo');
+  if (info) {
+    const tot = hits.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
+    info.textContent = ACC.outErr ? '' : (q ? `${hits.length} of ${ACC.out.length} invoice(s) • Outstanding ${money(tot)}` : `${ACC.out.length} invoice(s) • Outstanding ${money(tot)}`);
+  }
+}
+
+function custPayRowHtml(x){
+  return `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td><td class="muted">${esc(x.Remarks || '')}</td></tr>`;
+}
+function filterCustPay(){
+  const host = $('custPayRows');
+  if (!host) return;
+  const q = (($('custPaySearch') || {}).value || '').trim();
+  const all = ACC.pays;
+  const hits = q ? all.filter(x => accMatch(x._hay, q)) : all;
+  const shown = q ? hits : hits.slice(0, ACC_PAY_DEFAULT_LIMIT);
+  host.innerHTML = ACC.payErr
+    ? `<tr><td colspan="7" class="empty">${esc(ACC.payErr)}</td></tr>`
+    : (shown.map(custPayRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'Koi payment nahi mili.' : 'No payments recorded yet.'}</td></tr>`);
+  const info = $('custPayInfo');
+  if (info) {
+    const tot = hits.reduce((a, x) => a + (Number(x.Amount) || 0), 0);
+    info.textContent = ACC.payErr ? '' : (q
+      ? `${hits.length} payment(s) mili • Total ${money(tot)}`
+      : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • purani payments ke liye search karein` : `${all.length} payment(s) • Total ${money(tot)}`));
+  }
+}
+function clearPaySearch(){ const el = $('custPaySearch'); if (el) { el.value = ''; filterCustPay(); el.focus(); } }
 
 function openCustPayModal(invEnc, custEnc, outstanding){
   const inv = decodeURIComponent(invEnc), cust = decodeURIComponent(custEnc);
@@ -1482,7 +1513,7 @@ function userForm(editUsername, editName, editRole, editModules){
     `<div class="form-grid">
        <label>Name<input id="un" value="${esc(n)}"></label>
        <label>Username<input id="uu" value="${esc(u)}" ${isEdit?'readonly':''}></label>
-       <label>Password ${isEdit?'<span class="muted small">(Leave it blank if you do not want to change it)</span>':''}<input id="up" type="password"></label>
+       <label>Password ${isEdit?'<span class="muted small">(khaali chhoro agar change nahi karni)</span>':''}<input id="up" type="password"></label>
        <label>Role<select id="ur">
          <option value="STAFF" ${ro==='STAFF'?'selected':''}>STAFF</option>
          <option value="ADMIN" ${ro==='ADMIN'?'selected':''}>ADMIN</option>
@@ -1491,7 +1522,7 @@ function userForm(editUsername, editName, editRole, editModules){
      <div class="modules-block">
        <div class="modules-title">Module Access</div>
        ${ALL_MODULES.map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" ${mods.indexOf(m.id)!==-1?'checked':''}> ${m.label}</label>`).join('')}
-       <div class="muted small">Note: The ADMIN role always gets full access — no modules needed.</div>
+       <div class="muted small">Note: ADMIN role ko hamesha full access milta hai — modules ki zaroorat nahi.</div>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1812,14 +1843,14 @@ function init(){
       } else {
         if (r.error === 'Unauthorized') sessionStorage.clear();   // network error par session mat mitao
         showLogin();
-        if ($('loginError')) $('loginError').textContent = r.error ? ('Backend: ' + r.error) : 'Could not initialize ERP.';
+        if (r.error && r.error !== 'Unauthorized' && $('loginError')) $('loginError').textContent = r.error;
       }
     });
   } else {
     showLogin();
   }
 }
-
+init();
 
 /* ---------- GLOBAL EXPORTS ---------- */
 window.login = login;
@@ -1866,6 +1897,9 @@ window.loadIVHistory = loadIVHistory;
 window.filterIVHistory = filterIVHistory;
 window.viewInvoice = viewInvoice;
 window.renderAccounts = renderAccounts;
+window.filterCustOut = filterCustOut;
+window.filterCustPay = filterCustPay;
+window.clearPaySearch = clearPaySearch;
 window.pickCustomer = pickCustomer;
 window.editDC = editDC;
 window.cancelEditDC = cancelEditDC;
@@ -1873,13 +1907,3 @@ window.loadDcIntoInvoice = loadDcIntoInvoice;
 window.ivModelChanged = ivModelChanged;
 window.updateIvTotals = updateIvTotals;
 window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
-
-
-/* Initialize only after all public functions are exported. */
-try {
-  init();
-} catch (err) {
-  console.error('SFS ERP init error:', err);
-  const el = document.getElementById('loginError');
-  if (el) el.textContent = 'ERP initialization error. Please refresh the page.';
-}
