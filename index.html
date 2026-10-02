@@ -1,39 +1,169 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>Arham Electronics ERP</title>
-  <link rel="stylesheet" href="styles.css?v=20260924-2">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standard Fluid Systems — Business Management</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">AE</div><div><b>ARHAM</b><span>ELECTRONICS ERP</span></div></div>
-      <nav>
-        <button class="nav active" data-page="dashboard">▦ <span>Dashboard</span></button>
-        <button class="nav" data-page="products">▤ <span>Products</span></button>
-        <button class="nav" data-page="stock">▥ <span>Stock</span></button>
-        <button class="nav" data-page="customers">♙ <span>Customers</span></button>
-        <button class="nav" data-page="suppliers">♧ <span>Suppliers</span></button>
-        <button class="nav" data-page="ledger">▣ <span>Ledger</span></button>
-        <button class="nav" data-page="sales">▰ <span>Sales</span></button>
-        <button class="nav" data-page="purchases">▱ <span>Purchases</span></button>
-        <button class="nav" data-page="payments">৳ <span>Payments</span></button>
-        <button class="nav" data-page="expenses">◈ <span>Expenses</span></button>
-      </nav>
-      <div class="side-note">Production database<br>Google Sheets + Apps Script</div>
-    </aside>
-    <main class="main">
-      <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><div class="crumb">Arham Electronics / <span id="crumb">Dashboard</span></div></div><button id="refreshBtn" class="btn secondary">↻ Refresh</button></header>
-      <section id="toast" class="toast hidden"></section>
-      <section id="content"></section>
-    </main>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login" class="login-screen">
+  <div class="login-card">
+    <img src="logo.png" alt="SFS" class="login-logo">
+    <div class="eyebrow">Standard Fluid Systems</div>
+    <h1>Business Management</h1>
+
+    <label>Username
+      <input id="loginUser" type="text" autocomplete="username" placeholder="admin">
+    </label>
+
+    <label>Password
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+    </label>
+
+    <label id="captchaLabel">What is 1 + 1? 
+      <input id="captchaAnswer" type="text" placeholder="Your answer">
+    </label>
+
+    <div id="loginError" class="muted"></div>
+
+    <button id="loginBtn" type="button" class="btn primary full">Sign In</button>
   </div>
-  <script src="app.js?v=20260926-fix1"></script>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app" class="hidden">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="brand">
+      <img src="logo.png" alt="SFS">
+      <div>
+        <b>Standard Fluid</b>
+        <small>Business Management</small>
+      </div>
+      <button class="collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="userbox">
+      <b id="who">—</b>
+      <small id="role">—</small>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Standard Fluid Systems</div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p>Inventory • Purchases • Sales • Documents</p>
+      </div>
+      <div class="header-actions">
+        <span id="busy" class="busy hidden">Working…</span>
+        <button class="btn" onclick="refresh()">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div id="content"></div>
+  </main>
+
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modalTitle">—</h3>
+      <button onclick="closeModal()" aria-label="Close">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div id="toastHost" class="toast-host"></div>
+
+<!-- ============ PRINT AREA ============ -->
+<div id="printArea"></div>
+
+<!-- ============ SCRIPTS ============ -->
+<script src="config.js?v=20261001"></script>
+<script src="dev-mode.js?v=20261001"></script>
+<script src="app.js?v=20261001"></script>
+<script src="price-list.js?v=20261001"></script>
+<script src="erp-overrides.js?v=20261001"></script>
+<script src="erp-api-bridge.js?v=20261001"></script>
+<script src="stock-fix.js?v=20261001"></script>
+<script>
+/* Emergency login bridge: keeps Sign In usable even if another frontend module fails. */
+(function(){
+  function wire(){
+    var b=document.getElementById('loginBtn');
+    if(!b || b.dataset.loginBridge) return;
+    b.dataset.loginBridge='1';
+    b.addEventListener('click', async function(e){
+      if(typeof window.login==='function') return; // normal app login
+      e.preventDefault();
+      var u=document.getElementById('loginUser'), p=document.getElementById('loginPass'), a=document.getElementById('captchaAnswer'), err=document.getElementById('loginError');
+      var cfg=window.SFS_CONFIG||{}, api=cfg.API_URL;
+      if(!u||!p||!a||!err||!api){ if(err) err.textContent='Login system configuration error.'; return; }
+      if(!u.value.trim()||!p.value){err.textContent='Username and password are required.';return;}
+      err.textContent='Signing in...';
+      try{
+        var r=await fetch(api,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',username:u.value.trim(),password:p.value})});
+        var j=JSON.parse(await r.text());
+        if(!j.ok){err.textContent=j.error||'Invalid username or password';return;}
+        sessionStorage.sfsSession=j.session;
+        sessionStorage.sfsUser=JSON.stringify(j.user||{});
+        location.reload();
+      }catch(x){err.textContent='Backend connection error. Please try again.';console.error(x);}
+    },true);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+})();
+</script>
+
+<script>
+/* ---------- Sidebar collapse toggle ---------- */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try { localStorage.setItem('sfsSidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+}
+(function(){
+  try {
+    if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
+      document.getElementById('sidebar')?.classList.add('collapsed');
+    }
+  } catch(e) {}
+})();
+
+/* ---------- Enter key on login fields ---------- */
+document.addEventListener('DOMContentLoaded', function(){
+  ['loginUser','loginPass','captchaAnswer'].forEach(function(id){
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (typeof window.login === 'function') window.login();
+        else document.getElementById('loginBtn')?.click();
+      }
+    });
+  });
+});
+</script>
+
 </body>
 </html>
