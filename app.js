@@ -336,8 +336,8 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
-  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button><button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
@@ -718,6 +718,60 @@ async function saveProduct(){
     });
     if (!r.ok) return toast(r.error, true);
     closeModal(); await refresh(); toast('Product saved.');
+  });
+}
+
+/* ---------- BULK PRODUCT / INWARD ---------- */
+function bulkProductForm(){
+  modal('Add Products in Bulk',
+    `<div class="muted" style="margin-bottom:10px">Paste CSV/Excel-style rows. Header optional: Model, Description, Category, Brand, Unit, Location, Cost Price, Sale Price, Opening Stock, Reorder Level, Remarks.</div>
+     <textarea id="bulkProductsText" style="width:100%;min-height:240px;font-family:monospace" placeholder="MODEL\tDESCRIPTION\tCATEGORY\tBRAND\tUNIT\tLOCATION\tCOST PRICE\tSALE PRICE\tOPENING STOCK\tREORDER LEVEL\tREMARKS"></textarea>
+     <div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveBulkProducts()">Import Products</button></div>`);
+}
+function parseBulkRows(text){
+  const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.length) return [];
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  let rows=lines.map(line=>line.split(delim).map(x=>x.trim().replace(/^"(.*)"$/,'$1')));
+  const first=rows[0].map(x=>x.toLowerCase());
+  if(first[0]==='model' || first[0].includes('model / part no')) rows.shift();
+  return rows;
+}
+async function saveBulkProducts(){
+  const rows=parseBulkRows($('bulkProductsText').value);
+  if(!rows.length) return toast('Products ka data paste karein.',true);
+  const items=rows.map((r,i)=>({
+    model:r[0]||'', description:r[1]||'', category:r[2]||'Others', brand:r[3]||'',
+    unit:r[4]||'Pcs', location:r[5]||'', costPrice:r[6]||'', salePrice:r[7]||'',
+    openingStock:r[8]||0, reorderLevel:r[9]||5, remarks:r[10]||''
+  }));
+  await guardedSave(async()=>{
+    const r=await api('saveProductsBatch',{items});
+    if(!r.ok) return toast(r.error,true);
+    closeModal(); await refresh(); toast(r.count+' products added successfully.');
+  });
+}
+function bulkInwardForm(){
+  modal('Bulk Inward / Import',
+    `<div class="muted" style="margin-bottom:10px">Paste Model + Quantity. One row per item. Header optional. Example: MODEL\tQUANTITY</div>
+     <textarea id="bulkInwardText" style="width:100%;min-height:240px;font-family:monospace" placeholder="MODEL\tQUANTITY"></textarea>
+     <div class="form-grid">
+       <label>Date<input id="bidate" type="date" value="${todayStr()}"></label>
+       <label>Source Type<select id="bitype"><option>Import</option><option>Local Purchase</option><option>Opening</option><option>Customer Return</option></select></label>
+       <label>Supplier<input id="bisupplier" list="suplist"></label>
+       <label>Supplier Reference<input id="biref"></label>
+       <label class="wide">Remarks<input id="birem"></label>
+     </div>
+     <div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveBulkInward()">Save All Inward</button></div>`);
+}
+async function saveBulkInward(){
+  const rows=parseBulkRows($('bulkInwardText').value);
+  if(!rows.length) return toast('Inward items ka data paste karein.',true);
+  const items=rows.map(r=>({model:r[0]||'',quantity:r[1]||0}));
+  await guardedSave(async()=>{
+    const r=await api('saveInwardBatch',{items,date:$('bidate').value||todayStr(),sourceType:$('bitype').value,supplier:$('bisupplier').value.trim(),supplierReference:$('biref').value,remarks:$('birem').value});
+    if(!r.ok) return toast(r.error,true);
+    closeModal(); await refresh(); toast(r.count+' inward items saved successfully.');
   });
 }
 
@@ -1872,6 +1926,10 @@ window.logout = logout;
 window.refresh = refresh;
 window.showPage = showPage;
 window.productForm = productForm;
+window.bulkProductForm = bulkProductForm;
+window.saveBulkProducts = saveBulkProducts;
+window.bulkInwardForm = bulkInwardForm;
+window.saveBulkInward = saveBulkInward;
 window.saveProduct = saveProduct;
 window.productDetail = productDetail;
 window.editProductForm = editProductForm;
