@@ -739,7 +739,7 @@ function parseBulkRows(text){
 }
 async function saveBulkProducts(){
   const rows=parseBulkRows($('bulkProductsText').value);
-  if(!rows.length) return toast('Products ka data paste karein.',true);
+  if(!rows.length) return toast('Please paste the product data right here.',true);
   const items=rows.map((r,i)=>({
     model:r[0]||'', description:r[1]||'', category:r[2]||'Others', brand:r[3]||'',
     unit:r[4]||'Pcs', location:r[5]||'', costPrice:r[6]||'', salePrice:r[7]||'',
