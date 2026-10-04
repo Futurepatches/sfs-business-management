@@ -177,8 +177,8 @@ async function api(action, data = {}){
       if (!result) result = {ok:false, error:'The server returned an unexpected response. Please try again.'};
     } catch(e){
       console.warn('POST failed', e);
-      /* JSONP fallback sirf read-only bootstrap ke liye. Login/writes GET URL par nahi jate
-         (password URL mein leak na ho). Config mein ALLOW_JSONP_LOGIN:true se login fallback on hota hai. */
+      /* JSONP fallback is only for read-only bootstrap. Login/write requests are never sent through GET
+         (prevents passwords from appearing in URLs). Set ALLOW_JSONP_LOGIN:true in config to enable the login fallback. */
       if (action === 'bootstrap') result = await jsonpRequest(S.api, payload);
       else if (action === 'login' && window.SFS_CONFIG && window.SFS_CONFIG.ALLOW_JSONP_LOGIN === true) result = await jsonpRequest(S.api, payload);
       else result = {ok:false, error:'Connection error. Please check your internet connection and try again.'};
@@ -819,7 +819,7 @@ function renderDcLines(){
     const pr = findProd(x.model);
     return `<tr>
        <td><input value="${esc(x.model)}" list="ml" onchange="dcl[${i}].model=this.value;renderDcLines()"></td>
-       <td>${esc(pr ? (pr.Description||'') : '')}${pr ? `<div class="muted small">Stock: ${esc(pr.currentStock)}</div>` : (x.model ? '<div class="muted small" style="color:#c0392b">Product nahi mila</div>' : '')}</td>
+       <td>${esc(pr ? (pr.Description||'') : '')}${pr ? `<div class="muted small">Stock: ${esc(pr.currentStock)}</div>` : (x.model ? '<div class="muted small" style="color:#c0392b">Product not found</div>' : '')}</td>
        <td><input type="number" min="0" step="any" value="${esc(x.qty)}" onchange="dcl[${i}].qty=this.value"></td>
        <td><input value="${esc(x.unit)}" onchange="dcl[${i}].unit=this.value"></td>
        <td><button class="btn small" onclick="dcl.splice(${i},1);renderDcLines()">×</button></td>
@@ -857,7 +857,7 @@ function collectDcItems(){
   for (const x of dcl) {
     if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // skip empty line
     const pr = findProd(x.model);
-    if (!pr) return {error:'Product not found: ' + (x.model || '(khali)')};
+    if (!pr) return {error:'Product not found: ' + (x.model || '(blank)')};
     if (String(pr.Status || 'Active').toLowerCase() === 'inactive') return {error:'Inactive product cannot be used: ' + pr['Model / Part No.']};
     const qty = Number(x.qty);
     if (!(qty > 0)) return {error:'Invalid quantity: ' + pr['Model / Part No.']};
@@ -918,7 +918,7 @@ function editDC(noEnc){
   dcl = d.items.map(x => ({model:x.model, qty:x.qty, unit:x.unit || 'Pcs'}));
   renderDcLines();
   $('dcTitle').textContent = 'Edit Delivery Challan — ' + d.no;
-  $('dcEditBanner').innerHTML = '<div class="muted" style="margin:6px 0 12px">Edit mode: purana stock wapas hoga aur naya stock kam hoga. <button class="btn small" onclick="cancelEditDC()">Cancel Edit</button></div>';
+  $('dcEditBanner').innerHTML = '<div class="muted" style="margin:6px 0 12px">Edit mode: the previous stock deduction will be reversed and the new stock deduction will be applied. <button class="btn small" onclick="cancelEditDC()">Cancel Edit</button></div>';
 }
 function cancelEditDC(){ EDIT_DC = null; showPage('dc', document.querySelector(`.navbtn[onclick*="'dc'"]`)); }
 
@@ -1037,7 +1037,7 @@ function renderIvLines(){
     const pr = findProd(x.model);
     return `<tr>
        <td><input value="${esc(x.model)}" list="ivml" onchange="ivModelChanged(${i},this.value)"></td>
-       <td>${esc(pr ? (pr.Description||'') : '')}${x.model && !pr ? '<div class="muted small" style="color:#c0392b">Product nahi mila</div>' : ''}</td>
+       <td>${esc(pr ? (pr.Description||'') : '')}${x.model && !pr ? '<div class="muted small" style="color:#c0392b">Product not found</div>' : ''}</td>
        <td><input type="number" min="0" step="any" value="${esc(x.qty)}" onchange="ivl[${i}].qty=this.value;renderIvLines()"></td>
        <td><input type="number" min="0" step="any" value="${esc(x.rate)}" onchange="ivl[${i}].rate=this.value;renderIvLines()"></td>
        <td>${money((+x.qty||0)*(+x.rate||0))}</td>
@@ -1047,7 +1047,7 @@ function renderIvLines(){
   updateIvTotals();
 }
 
-/* Model chuni to rate khali ho tab Sale Price khud aa jata hai */
+/* When a model is selected and the rate is blank, the Sale Price is filled automatically */
 function ivModelChanged(i, v){
   ivl[i].model = v;
   const pr = findProd(v);
@@ -1055,12 +1055,12 @@ function ivModelChanged(i, v){
   renderIvLines();
 }
 
-/* DC number likh kar "Load DC" — customer, PO, items khud aa jate hain (dobara type nahi karna) */
+/* Enter the DC number and select "Load DC" — customer, PO, and items are loaded automatically */
 async function loadDcIntoInvoice(){
   const no = $('ivdc').value.trim();
-  if (!no) return toast('Pehle DC # likhein.', true);
+  if (!no) return toast('Please enter the DC # first.', true);
   const r = await api('getReports', {mode:'document', type:'DC', no:no});
-  if (!r.ok) return toast(r.error || 'DC nahi mila.', true);
+  if (!r.ok) return toast(r.error || 'DC not found.', true);
   const d = r.document;
   $('ivcust').value = d.customer || '';
   pickCustomer('iv');
@@ -1076,22 +1076,22 @@ async function loadDcIntoInvoice(){
   });
   if (!ivl.length) ivl = [{model:'', qty:'', rate:''}];
   renderIvLines();
-  toast('DC load ho gaya — rates check karein.');
+  toast('DC loaded — please check the rates.');
 }
 
 async function saveInvoice(print){
   const cu = checkCustomer($('ivcust').value);
   if (cu.error) { if (!cu.silent) toast(cu.error, true); return; }
   const gstRaw = $('ivgst').value;
-  if (gstRaw === '' || isNaN(Number(gstRaw)) || Number(gstRaw) < 0 || Number(gstRaw) > 100) return toast('GST % 0 se 100 ke beech likhein (0 bhi ho sakta hai).', true);
+  if (gstRaw === '' || isNaN(Number(gstRaw)) || Number(gstRaw) < 0 || Number(gstRaw) > 100) return toast('Enter GST % between 0 and 100 (0 is allowed).', true);
   const items = [];
   for (const x of ivl) {
     if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // skip empty line
     const pr = findProd(x.model);
-    if (!pr) return toast('Product not found: ' + (x.model || '(khali)'), true);
+    if (!pr) return toast('Product not found: ' + (x.model || '(blank)'), true);
     const qty = Number(x.qty), rate = Number(x.rate);
     if (!(qty > 0)) return toast('Invalid quantity: ' + pr['Model / Part No.'], true);
-    if (!(rate > 0)) return toast('Rate likhein: ' + pr['Model / Part No.'], true);
+    if (!(rate > 0)) return toast('Enter a rate: ' + pr['Model / Part No.'], true);
     items.push({model:pr['Model / Part No.'], desc:pr.Description || '', qty:qty, rate:rate});
   }
   if (!items.length) return toast('Please add at least one item.', true);
@@ -1229,7 +1229,7 @@ function renderAccounts(){ loadAccounts(); }
 
 /* ---------- ACCOUNTS SEARCH (Customer Outstanding + Customer Payments) ---------- */
 let ACC = {out:[], pays:[], outErr:'', payErr:''};
-const ACC_PAY_DEFAULT_LIMIT = 100;   // search khali ho to latest itni payments; search karne par SAARI records mein dhoondta hai
+const ACC_PAY_DEFAULT_LIMIT = 100;   // when search is blank, show the latest payments; when searching, search all records
 
 function accHay(parts){ return parts.map(v => String(v == null ? '' : v)).join(' | ').toLowerCase(); }
 function accMatch(hay, q){
@@ -1254,7 +1254,7 @@ function filterCustOut(){
   const hits = q ? ACC.out.filter(r => accMatch(r._hay, q)) : ACC.out;
   host.innerHTML = ACC.outErr
     ? `<tr><td colspan="7" class="empty">${esc(ACC.outErr)}</td></tr>`
-    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'Koi invoice nahi mila.' : 'No outstanding invoices — all settled!'}</td></tr>`);
+    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
   const info = $('custOutInfo');
   if (info) {
     const tot = hits.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
@@ -1274,13 +1274,13 @@ function filterCustPay(){
   const shown = q ? hits : hits.slice(0, ACC_PAY_DEFAULT_LIMIT);
   host.innerHTML = ACC.payErr
     ? `<tr><td colspan="7" class="empty">${esc(ACC.payErr)}</td></tr>`
-    : (shown.map(custPayRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'Koi payment nahi mili.' : 'No payments recorded yet.'}</td></tr>`);
+    : (shown.map(custPayRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'No payment found.' : 'No payments recorded yet.'}</td></tr>`);
   const info = $('custPayInfo');
   if (info) {
     const tot = hits.reduce((a, x) => a + (Number(x.Amount) || 0), 0);
     info.textContent = ACC.payErr ? '' : (q
       ? `${hits.length} payment(s) mili • Total ${money(tot)}`
-      : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • purani payments ke liye search karein` : `${all.length} payment(s) • Total ${money(tot)}`));
+      : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • search for older payments` : `${all.length} payment(s) • Total ${money(tot)}`));
   }
 }
 function clearPaySearch(){ const el = $('custPaySearch'); if (el) { el.value = ''; filterCustPay(); el.focus(); } }
@@ -1363,7 +1363,7 @@ function editPartyForm(type, nameEnc){
        <label>Email<input id="epemail" value="${esc(c.Email||'')}"></label>
        <label>NTN/Tax ID<input id="epntn" value="${esc(c['NTN/Tax ID']||'')}"></label>
        <label class="wide">Address<textarea id="epaddr">${esc(c.Address||'')}</textarea></label>
-       <label class="wide">Remarks (STN aise likhein: STN: 1234)<textarea id="eprem2">${esc(c.Remarks||'')}</textarea></label>
+       <label class="wide">Remarks (Enter STN as: STN: 1234)<textarea id="eprem2">${esc(c.Remarks||'')}</textarea></label>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1411,11 +1411,11 @@ function partyForm(type){
 
 async function saveParty(type){
   const name = $('pn').value.trim();
-  if (!name) return toast('Name zaroori hai.', true);
+  if (!name) return toast('Name is required.', true);
   const list = type === 'Customer' ? S.customers : S.suppliers;
   const key = type === 'Customer' ? 'Customer Name' : 'Supplier Name';
-  if (list.some(x => norm(x[key]) === norm(name))) return toast(type + ' is naam se pehle se maujood hai.', true);
-  /* Backend City / STN ke liye alag column nahi rakhta — is liye City address mein aur STN remarks mein save hota hai */
+  if (list.some(x => norm(x[key]) === norm(name))) return toast(type + ' already exists.', true);
+  /* Backend does not have separate City / STN columns, so City is saved in Address and STN is saved in Remarks */
   const city = $('pcity').value.trim(), stn = $('pstn').value.trim();
   const address = [$('paddr').value.trim(), city].filter(Boolean).join(', ');
   const remarks = [stn ? 'STN: ' + stn : '', $('pr').value.trim()].filter(Boolean).join('\n');
@@ -1473,7 +1473,7 @@ async function ledger(type, nameEnc){
         </table></div>`;
     }
   } else {
-    html += '<p class="muted">Paisay ka statement dekhne ke liye Accounts module ka access chahiye.</p>';
+    html += '<p class="muted">Accounts module access is required to view the statement.</p>';
   }
 
   if (mv.ok) {
@@ -1537,7 +1537,7 @@ function changePasswordForm(){
 }
 async function changePassword(){
   if ($('cp2').value !== $('cp3').value) return toast('Passwords do not match', true);
-  if ($('cp2').value.length < 6) return toast('New password kam az kam 6 characters ka ho.', true);
+  if ($('cp2').value.length < 6) return toast('New password must be at least 6 characters.', true);
   const r = await api('changePassword', {currentPassword:$('cp1').value, newPassword:$('cp2').value});
   if (!r.ok) return toast(r.error, true);
   closeModal(); toast('Password changed. Login again.'); logout();
@@ -1581,7 +1581,7 @@ function userForm(editUsername, editName, editRole, editModules){
     `<div class="form-grid">
        <label>Name<input id="un" value="${esc(n)}"></label>
        <label>Username<input id="uu" value="${esc(u)}" ${isEdit?'readonly':''}></label>
-       <label>Password ${isEdit?'<span class="muted small">(khaali chhoro agar change nahi karni)</span>':''}<input id="up" type="password"></label>
+       <label>Password ${isEdit?'<span class="muted small">(leave blank if you do not want to change it)</span>':''}<input id="up" type="password"></label>
        <label>Role<select id="ur">
          <option value="STAFF" ${ro==='STAFF'?'selected':''}>STAFF</option>
          <option value="ADMIN" ${ro==='ADMIN'?'selected':''}>ADMIN</option>
@@ -1610,8 +1610,8 @@ async function saveUser(editUsername){
   };
   if (!payload.username) return toast('Username is required', true);
   if (!isEdit && !payload.password) return toast('Password is required', true);
-  if (payload.password && payload.password.length < 6) return toast('Password kam az kam 6 characters ka ho.', true);
-  if (isEdit && S.user && norm(payload.username) === norm(S.user.username) && payload.role !== 'ADMIN') return toast('Aap apna khud ka ADMIN role change nahi kar sakte.', true);
+  if (payload.password && payload.password.length < 6) return toast('Password must be at least 6 characters.', true);
+  if (isEdit && S.user && norm(payload.username) === norm(S.user.username) && payload.role !== 'ADMIN') return toast('You cannot change your own ADMIN role.', true);
 
   const r = await api(isEdit ? 'updateUser' : 'saveUser', payload);
   if (!r.ok) return toast(r.error, true);
@@ -1624,8 +1624,8 @@ async function toggleUser(u, st){
   const username = decodeURIComponent(u);
   const next = decodeURIComponent(st) === 'Active' ? 'Inactive' : 'Active';
   if (next === 'Inactive') {
-    if (S.user && norm(S.user.username) === norm(username)) return toast('Aap apna khud ka account disable nahi kar sakte.', true);
-    if (!confirm(username + ' ko disable karein?')) return;
+    if (S.user && norm(S.user.username) === norm(username)) return toast('You cannot disable your own account.', true);
+    if (!confirm(username + '? Disable this account')) return;
   }
   const r = await api('disableUser', {username, status:next});
   if (!r.ok) return toast(r.error, true);
@@ -1987,15 +1987,15 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
 /* ============================================================
    SFS BUSINESS MANAGEMENT — TOP LOADING BAR  (v1.0)
    ------------------------------------------------------------
-   Ye block app.js ke AAKHIR mein add kiya gaya hai (app ka koi
+   This block was added at the END of app.js (it does not change any
    purana function / data / variable is se change nahi hota).
    Kaam:
-     - Har button / link / nav click par top loading bar
-     - showPage() se page change par bar
+     - Top loading bar on every button / link / navigation click
+     - Loading bar on page changes through showPage()
      - Backend API (fetch / XHR) ke doran bar
-     - Pehli load, reload aur back/forward par bhi bar
+     - Loading bar on initial load, reload, and back/forward navigation
    Manual: SFSLoader.start() | SFSLoader.finish() | SFSLoader.pulse()
-   Band karna: kisi button par class="no-loader" laga dein.
+   To disable it: add class="no-loader" to a button.
    ============================================================ */
 (function () {
   'use strict';
