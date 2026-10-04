@@ -7,7 +7,7 @@
    - DC History + Invoice History (NEW)
    - Module permissions (Add Staff)
    - Sidebar collapse
-   - DATA SAFETY: kuch delete nahi karta
+   - DATA SAFETY: does not delete existing data
    ============================================================ */
 
 const DEFAULT_API = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || '';
@@ -34,7 +34,7 @@ let S = {
 const $  = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm = s => String(s||'').toLowerCase().trim();
-/* encA: onclick="fn('...')" ke andar safe encoding (apostrophe bhi encode hota hai) */
+/* encA: safe encoding inside onclick="fn('...')" (apostrophes are encoded too) */
 const encA = s => encodeURIComponent(String(s ?? '')).replace(/'/g, '%27');
 function toInputDate(v){
   if (!v) return '';
@@ -42,7 +42,7 @@ function toInputDate(v){
   if (isNaN(d)) return '';
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-/* Local (Karachi) date — toISOString() UTC deta hai jis se raat/subah ki date ek din peeche ho jati thi */
+/* Local (Karachi) date — toISOString() uses UTC and can shift the date backward around midnight */
 function todayStr(){ return toInputDate(new Date()); }
 function reorderOf(p){ const v = p ? p['Reorder Level'] : ''; return (v === '' || v == null || isNaN(Number(v))) ? 5 : Number(v); }
 function findProd(model){ const t = norm(model); return t ? S.products.find(p => norm(p['Model / Part No.']) === t) : null; }
@@ -108,7 +108,7 @@ function nav(){
     ).join('')
   ).join('');
 
-  // Default: Dashboard agar available, warna pehla item
+  // Default: Dashboard if available, otherwise the first item
   if (!document.querySelector('.navbtn.active')) {
     const first = items.find(x => x.id === 'dashboard') || items[0];
     if (first) {
@@ -153,7 +153,7 @@ function sessionExpired(){
   if (SFS_EXPIRED) return;
   SFS_EXPIRED = true;
   sessionStorage.clear();
-  alert('Session expire ho gayi hai. Dobara login karein.');
+  alert('Your session has expired. Please sign in again.');
   location.reload();
 }
 
@@ -174,14 +174,14 @@ async function api(action, data = {}){
       });
       var text = await r.text();
       try { result = JSON.parse(text); } catch(e){ result = null; }
-      if (!result) result = {ok:false, error:'Server ne unexpected jawab diya. Dobara koshish karein.'};
+      if (!result) result = {ok:false, error:'The server returned an unexpected response. Please try again.'};
     } catch(e){
       console.warn('POST failed', e);
       /* JSONP fallback sirf read-only bootstrap ke liye. Login/writes GET URL par nahi jate
          (password URL mein leak na ho). Config mein ALLOW_JSONP_LOGIN:true se login fallback on hota hai. */
       if (action === 'bootstrap') result = await jsonpRequest(S.api, payload);
       else if (action === 'login' && window.SFS_CONFIG && window.SFS_CONFIG.ALLOW_JSONP_LOGIN === true) result = await jsonpRequest(S.api, payload);
-      else result = {ok:false, error:'Connection error. Internet check karke dobara koshish karein.'};
+      else result = {ok:false, error:'Connection error. Please check your internet connection and try again.'};
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -192,7 +192,7 @@ async function api(action, data = {}){
   }
 }
 
-/* Datalists (customer / product / supplier autocomplete) — pehle clist aur mlist define hi nahi thay */
+/* Datalists (customer / product / supplier autocomplete) — clist and mlist were previously undefined */
 function syncDatalists(){
   let host = $('sfsLists');
   if (!host) {
@@ -351,7 +351,7 @@ const pages = {
   customers:()=>`<div class="wrap"><div class="panel-head"><h3>Customers</h3><button class="btn primary" onclick="partyForm('Customer')">+ Add Customer</button></div><div class="panel"><div id="customers"></div></div></div>`,
   suppliers:()=>`<div class="wrap"><div class="panel-head"><h3>Suppliers</h3><button class="btn primary" onclick="partyForm('Supplier')">+ Add Supplier</button></div><div class="panel"><div id="suppliers"></div></div></div>`,
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory read-only hai. Ye software sirf apni separate database mein likhta hai.</p><p class="muted">Backend connection config.js file se set hoti hai (yahan se change nahi hoti).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -699,13 +699,13 @@ function productForm(){
 
 async function saveProduct(){
   const model = $('pm').value.trim();
-  if (!model) return toast('Model / Part No. zaroori hai.', true);
-  if (findProd(model)) return toast('Ye product pehle se maujood hai: ' + model, true);
+  if (!model) return toast('Model / Part No. is required.', true);
+  if (findProd(model)) return toast('This product already exists: ' + model, true);
   const op = Number($('pop').value || 0), rl = Number($('prlevel').value || 5);
-  if (isNaN(op) || op < 0) return toast('Opening stock galat hai.', true);
-  if (isNaN(rl) || rl < 0) return toast('Reorder level galat hai.', true);
+  if (isNaN(op) || op < 0) return toast('Invalid opening stock.', true);
+  if (isNaN(rl) || rl < 0) return toast('Invalid reorder level.', true);
   const f = $('pimg').files[0];
-  if (f && f.size > 3*1024*1024) return toast('Image 3MB se chhoti rakhein.', true);
+  if (f && f.size > 3*1024*1024) return toast('Image must be smaller than 3MB.', true);
   await guardedSave(async () => {
     let b = '';
     if (f) b = await file64(f);
@@ -739,7 +739,7 @@ function parseBulkRows(text){
 }
 async function saveBulkProducts(){
   const rows=parseBulkRows($('bulkProductsText').value);
-  if(!rows.length) return toast('Please paste the product data right here.',true);
+  if(!rows.length) return toast('Please paste the product data here.',true);
   const items=rows.map((r,i)=>({
     model:r[0]||'', description:r[1]||'', category:r[2]||'Others', brand:r[3]||'',
     unit:r[4]||'Pcs', location:r[5]||'', costPrice:r[6]||'', salePrice:r[7]||'',
@@ -766,7 +766,7 @@ function bulkInwardForm(){
 }
 async function saveBulkInward(){
   const rows=parseBulkRows($('bulkInwardText').value);
-  if(!rows.length) return toast('Inward items ka data paste karein.',true);
+  if(!rows.length) return toast('Please paste the inward items data.',true);
   const items=rows.map(r=>({model:r[0]||'',quantity:r[1]||0}));
   await guardedSave(async()=>{
     const r=await api('saveInwardBatch',{items,date:$('bidate').value||todayStr(),sourceType:$('bitype').value,supplier:$('bisupplier').value.trim(),supplierReference:$('biref').value,remarks:$('birem').value});
@@ -788,11 +788,11 @@ async function saveInward(){
   const qty = Number($('iqty').value);
   const cost = $('icost').value;
   const supplier = $('isupplier').value.trim();
-  if (!prod) return toast('Product list mein nahi hai. Pehle Products mein add karein.', true);
-  if (!(qty > 0)) return toast('Quantity 0 se zyada honi chahiye.', true);
-  if (cost !== '' && !(Number(cost) >= 0)) return toast('Purchase cost galat hai.', true);
+  if (!prod) return toast('Product is not in the product list. Please add it to Products first.', true);
+  if (!(qty > 0)) return toast('Quantity must be greater than zero.', true);
+  if (cost !== '' && !(Number(cost) >= 0)) return toast('Invalid purchase cost.', true);
   if (Number(cost) > 0 && !supplier) {
-    if (!confirm('Supplier khali hai — is purchase ka amount Supplier Payable mein count nahi hoga. Phir bhi save karein?')) return;
+    if (!confirm('Supplier is empty — this purchase amount will not be included in Supplier Payable. Save anyway?')) return;
   }
   await guardedSave(async () => {
     const r = await api('saveInward', {
@@ -808,7 +808,7 @@ async function saveInward(){
 
 /* ---------- DC ---------- */
 let dcl = [], ivl = [];
-let EDIT_DC = null;   // {no, oldQty:{model:qty}} jab purani DC edit ho rahi ho
+let EDIT_DC = null;   // {no, oldQty:{model:qty}} when an existing DC is being edited
 
 function renderDC(){ EDIT_DC = null; dcl = []; addDc(); $('dcdate').value = todayStr(); }
 function addDc(){ dcl.push({model:'', qty:'', unit:'Pcs'}); renderDcLines(); }
@@ -827,7 +827,7 @@ function renderDcLines(){
   }).join('');
 }
 
-/* Customer select hone par ID / address / NTN / STN khud bhar do */
+/* Automatically populate ID / address / NTN / STN when a customer is selected */
 function pickCustomer(kind){
   const c = findCust($(kind === 'dc' ? 'dccust' : 'ivcust').value);
   if (!c) return;
@@ -841,36 +841,36 @@ function pickCustomer(kind){
 
 function checkCustomer(name){
   name = String(name || '').trim();
-  if (!name) return {error:'Customer ka naam likhein.'};
+  if (!name) return {error:'Please enter the customer name.'};
   const c = findCust(name);
   if (!c) {
-    if (!confirm('"' + name + '" Customers list mein nahi hai. Ledger / Outstanding sahi rakhne ke liye pehle Customer add karein.\n\nPhir bhi save karein?')) return {error:'cancel', silent:true};
+    if (!confirm('"' + name + '" is not in the Customers list. Add the customer first to keep the Ledger / Outstanding accurate.\n\nSave anyway?')) return {error:'cancel', silent:true};
     return {name:name, cust:null};
   }
   if (String(c.Status || 'Active').toLowerCase() === 'inactive') return {error:'Customer inactive hai: ' + c['Customer Name']};
   return {name:c['Customer Name'], cust:c};
 }
 
-/* Same product do baar ho to merge, stock check cumulative */
+/* Merge duplicate products and check cumulative stock */
 function collectDcItems(){
   const merged = {}, order = [];
   for (const x of dcl) {
-    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // khali line skip
+    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // skip empty line
     const pr = findProd(x.model);
-    if (!pr) return {error:'Product nahi mila: ' + (x.model || '(khali)')};
-    if (String(pr.Status || 'Active').toLowerCase() === 'inactive') return {error:'Inactive product use nahi ho sakta: ' + pr['Model / Part No.']};
+    if (!pr) return {error:'Product not found: ' + (x.model || '(khali)')};
+    if (String(pr.Status || 'Active').toLowerCase() === 'inactive') return {error:'Inactive product cannot be used: ' + pr['Model / Part No.']};
     const qty = Number(x.qty);
-    if (!(qty > 0)) return {error:'Quantity galat hai: ' + pr['Model / Part No.']};
+    if (!(qty > 0)) return {error:'Invalid quantity: ' + pr['Model / Part No.']};
     const key = pr['Model / Part No.'];
     if (!merged[key]) { merged[key] = {model:key, desc:pr.Description || '', qty:0, unit:x.unit || pr.Unit || 'Pcs'}; order.push(key); }
     merged[key].qty += qty;
   }
   const items = order.map(k => merged[k]);
-  if (!items.length) return {error:'Kam az kam ek item add karein.'};
+  if (!items.length) return {error:'Please add at least one item.'};
   for (const it of items) {
     const pr = findProd(it.model);
     const avail = (Number(pr.currentStock) || 0) + ((EDIT_DC && EDIT_DC.oldQty[it.model]) || 0);
-    if (it.qty > avail) return {error:'Stock kam hai: ' + it.model + ' — available ' + avail + ', requested ' + it.qty};
+    if (it.qty > avail) return {error:'Insufficient stock: ' + it.model + ' — available ' + avail + ', requested ' + it.qty};
   }
   return {items:items};
 }
@@ -891,9 +891,9 @@ async function saveDC(print){
     };
     const r = await api(editing ? 'updateDC' : 'saveDC', p);
     if (!r.ok) return toast(r.error, true);
-    p.no = r.id || p.no;                       // auto-number bhi print mein aaye
+    p.no = r.id || p.no;                       // auto-number will also appear on print
     if (print) printDC(p);
-    toast(editing ? 'Delivery Challan update ho gaya.' : 'Delivery Challan saved and stock reduced.');
+    toast(editing ? 'Delivery Challan updated.' : 'Delivery Challan saved and stock reduced.');
     EDIT_DC = null; dcl = [];
     await refresh();
     if ($('dchRows')) loadDCHistory();
@@ -904,7 +904,7 @@ function editDC(noEnc){
   const no = decodeURIComponent(noEnc);
   const d = DCH_CACHE.find(x => x.no === no);
   if (!d) return;
-  if (d.invoiced) return toast('Is DC ka invoice ban chuka hai — edit nahi ho sakti.', true);
+  if (d.invoiced) return toast('An invoice has already been created for this DC — it cannot be edited.', true);
   const btn = document.querySelector(`.navbtn[onclick*="'dc'"]`);
   showPage('dc', btn);
   const oldQty = {};
@@ -1086,15 +1086,15 @@ async function saveInvoice(print){
   if (gstRaw === '' || isNaN(Number(gstRaw)) || Number(gstRaw) < 0 || Number(gstRaw) > 100) return toast('GST % 0 se 100 ke beech likhein (0 bhi ho sakta hai).', true);
   const items = [];
   for (const x of ivl) {
-    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // khali line skip
+    if (!String(x.model || '').trim() && !(Number(x.qty) > 0)) continue;   // skip empty line
     const pr = findProd(x.model);
-    if (!pr) return toast('Product nahi mila: ' + (x.model || '(khali)'), true);
+    if (!pr) return toast('Product not found: ' + (x.model || '(khali)'), true);
     const qty = Number(x.qty), rate = Number(x.rate);
-    if (!(qty > 0)) return toast('Quantity galat hai: ' + pr['Model / Part No.'], true);
+    if (!(qty > 0)) return toast('Invalid quantity: ' + pr['Model / Part No.'], true);
     if (!(rate > 0)) return toast('Rate likhein: ' + pr['Model / Part No.'], true);
     items.push({model:pr['Model / Part No.'], desc:pr.Description || '', qty:qty, rate:rate});
   }
-  if (!items.length) return toast('Kam az kam ek item add karein.', true);
+  if (!items.length) return toast('Please add at least one item.', true);
   await guardedSave(async () => {
     const p = {
       no:$('ivno').value.trim(), date:$('ivdate').value || todayStr(), customer:cu.name,
@@ -1105,7 +1105,7 @@ async function saveInvoice(print){
     };
     const r = await api('saveInvoice', p);
     if (!r.ok) return toast(r.error, true);
-    p.no = r.id || p.no;                       // auto-number bhi print mein aaye
+    p.no = r.id || p.no;                       // auto-number will also appear on print
     if (print) printInvoice(p);
     toast('Invoice saved.');
     await refresh();
