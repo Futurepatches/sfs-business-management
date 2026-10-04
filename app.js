@@ -746,9 +746,16 @@ async function saveBulkProducts(){
     openingStock:r[8]||0, reorderLevel:r[9]||5, remarks:r[10]||''
   }));
   await guardedSave(async()=>{
-    const r=await api('saveProductsBatch',{items});
-    if(!r.ok) return toast(r.error,true);
-    closeModal(); await refresh(); toast(r.count+' products added successfully.');
+    // Use the existing server action for each validated row. This keeps bulk add
+    // compatible even when the deployed Apps Script has not yet received the
+    // optional batch action.
+    let saved = 0;
+    for (const item of items) {
+      const r = await api('saveProduct', item);
+      if (!r || !r.ok) return toast((r && r.error) || 'Could not save product: ' + item.model, true);
+      saved++;
+    }
+    closeModal(); await refresh(); toast(saved + ' products added successfully.');
   });
 }
 function bulkInwardForm(){
@@ -769,9 +776,23 @@ async function saveBulkInward(){
   if(!rows.length) return toast('Please paste the inward items data.',true);
   const items=rows.map(r=>({model:r[0]||'',quantity:r[1]||0}));
   await guardedSave(async()=>{
-    const r=await api('saveInwardBatch',{items,date:$('bidate').value||todayStr(),sourceType:$('bitype').value,supplier:$('bisupplier').value.trim(),supplierReference:$('biref').value,remarks:$('birem').value});
-    if(!r.ok) return toast(r.error,true);
-    closeModal(); await refresh(); toast(r.count+' inward items saved successfully.');
+    // Use the existing inward action row-by-row so this works with the
+    // currently deployed Apps Script as well as the newer batch backend.
+    let saved = 0;
+    for (const item of items) {
+      const r = await api('saveInward',{
+        date:$('bidate').value||todayStr(),
+        sourceType:$('bitype').value,
+        model:item.model,
+        quantity:item.quantity,
+        supplier:$('bisupplier').value.trim(),
+        supplierReference:$('biref').value,
+        remarks:$('birem').value
+      });
+      if (!r || !r.ok) return toast((r && r.error) || 'Could not save inward item: ' + item.model, true);
+      saved++;
+    }
+    closeModal(); await refresh(); toast(saved + ' inward items saved successfully.');
   });
 }
 
