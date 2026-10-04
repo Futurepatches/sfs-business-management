@@ -128,7 +128,7 @@ function doPost(e) {
     // requests (e.g. a fast double-click, or a slow network retry) can
     // never both pass a stock check before either one has actually
     // written its update.
-    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','savePayment','saveSupplierPayment'];
+    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveInwardBatch','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','saveProductsBatch','savePayment','saveSupplierPayment'];
     let lock = null;
     if (STOCK_LOCKED_ACTIONS.indexOf(action) !== -1) {
       lock = LockService.getScriptLock();
@@ -715,6 +715,47 @@ function saveProduct(p) {
   return {ok:true,id:id};
 }
 
+function saveProductsBatch_(p) {
+  const items = Array.isArray(p.items) ? p.items : [];
+  if (!items.length) throw Error('No products supplied.');
+
+  // Validate the entire batch first. This prevents obvious partial saves.
+  const seen = {};
+  items.forEach((x, i) => {
+    const model = String(x.model || '').trim();
+    if (!model) throw Error('Row ' + (i + 1) + ': Model / Part No. is required.');
+    const key = model.toLowerCase();
+    if (seen[key]) throw Error('Duplicate model in batch: ' + model);
+    seen[key] = true;
+    if (findProduct(model)) throw Error('Product already exists: ' + model);
+    const opening = Number(x.openingStock || 0);
+    if (!isFinite(opening) || opening < 0) throw Error('Row ' + (i + 1) + ': invalid Opening Stock.');
+    const reorder = Number(x.reorderLevel == null || x.reorderLevel === '' ? 5 : x.reorderLevel);
+    if (!isFinite(reorder) || reorder < 0) throw Error('Row ' + (i + 1) + ': invalid Reorder Level.');
+  });
+
+  // Use the existing single-product routine so all current ID, image-free
+  // product and opening-stock rules remain unchanged.
+  const saved = [];
+  items.forEach(x => {
+    saved.push(saveProduct({
+      model:String(x.model || '').trim(),
+      category:x.category || '',
+      description:x.description || '',
+      brand:x.brand || '',
+      unit:x.unit || 'Pcs',
+      location:x.location || '',
+      costPrice:x.costPrice || '',
+      salePrice:x.salePrice || '',
+      openingStock:Number(x.openingStock || 0),
+      reorderLevel:Number(x.reorderLevel == null || x.reorderLevel === '' ? 5 : x.reorderLevel),
+      remarks:x.remarks || '',
+      user:p.user || 'Staff'
+    }));
+  });
+  return {ok:true, count:saved.length, ids:saved.map(x => x.id)};
+}
+
 /* ---------- STOCK MOVEMENT ---------- */
 
 function getMovementRows_() {
@@ -810,6 +851,40 @@ function getSourceStockForModel_(model) {
 }
 
 /* ---------- INWARD ---------- */
+
+function saveInwardBatch_(p) {
+  const items = Array.isArray(p.items) ? p.items : [];
+  if (!items.length) throw Error('No inward items supplied.');
+
+  // Validate all products/quantities before writing anything.
+  const checked = items.map((x, i) => {
+    const model = String(x.model || '').trim();
+    const prod = findProduct(model);
+    if (!prod) throw Error('Row ' + (i + 1) + ': Product not found: ' + model);
+    const qty = Number(x.quantity || x.qty || 0);
+    if (!isFinite(qty) || qty <= 0) throw Error('Row ' + (i + 1) + ': quantity must be greater than zero.');
+    const cost = x.purchaseCost == null || x.purchaseCost === '' ? '' : Number(x.purchaseCost);
+    if (cost !== '' && (!isFinite(cost) || cost < 0)) throw Error('Row ' + (i + 1) + ': invalid purchase cost.');
+    return {model, quantity:qty, purchaseCost:cost, prod};
+  });
+
+  const saved = [];
+  checked.forEach(x => {
+    saved.push(saveInward({
+      date:p.date || new Date(),
+      sourceType:p.sourceType || '',
+      model:x.model,
+      quantity:x.quantity,
+      supplier:p.supplier || '',
+      supplierReference:p.supplierReference || '',
+      purchaseCost:x.purchaseCost,
+      remarks:p.remarks || '',
+      user:p.user || 'Staff'
+    }));
+  });
+
+  return {ok:true, count:saved.length, ids:saved.map(x => x.id)};
+}
 
 function saveInward(p) {
   const id=nextSafeId_('IN-','Inward',1);
