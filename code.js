@@ -571,19 +571,33 @@ function updateProduct(p) {
   const sh = SpreadsheetApp.getActive().getSheetByName('Products');
   const row = prod.row;
 
+  // Resolve columns by header name instead of fixed column numbers.
+  // This prevents Reorder Level from being written into Status if the
+  // deployed Products sheet has a different column order.
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const col = name => {
+    const i = headers.findIndex(h => h.trim().toLowerCase() === String(name).trim().toLowerCase());
+    return i >= 0 ? i + 1 : 0;
+  };
+  const put = (name, value) => {
+    const c = col(name);
+    if (c) sh.getRange(row, c).setValue(value);
+  };
+
   const imageUrl = p.imageBase64 ? saveImageToDrive_(p.imageBase64, p.imageName) : (p.image || prod.data[10] || '');
 
-  sh.getRange(row, 3).setValue(p.description || '');
-  sh.getRange(row, 4).setValue(p.category || '');
-  sh.getRange(row, 5).setValue(p.brand || '');
-  sh.getRange(row, 6).setValue(p.unit || 'Pcs');
-  sh.getRange(row, 7).setValue(p.location || '');
-  sh.getRange(row, 8).setValue(p.costPrice || '');
-  sh.getRange(row, 9).setValue(p.salePrice || '');
-  sh.getRange(row, 11).setValue(imageUrl);
-  sh.getRange(row, 12).setValue(p.remarks || '');
+  put('Description', p.description || '');
+  put('Category', p.category || '');
+  put('Brand', p.brand || '');
+  put('Unit', p.unit || 'Pcs');
+  put('Location', p.location || '');
+  put('Cost Price', p.costPrice || '');
+  put('Sale Price', p.salePrice || '');
+  put('Product Image', imageUrl);
+  put('Remarks', p.remarks || '');
+
   if (p.reorderLevel !== undefined && p.reorderLevel !== '') {
-    sh.getRange(row, 14).setValue(Number(p.reorderLevel));
+    put('Reorder Level', Number(p.reorderLevel));
   }
 
   return { ok:true };
