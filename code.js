@@ -43,6 +43,7 @@ const HEADERS = {
   'Stock Movement':['Transaction ID','Date/Time','Type','Product ID','Model / Part No.','Quantity','Source / Destination','Reference Type','Reference No.','Created By'],
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
+  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status'],
@@ -1153,6 +1154,75 @@ function updateDC(p) {
 }
 
 /* ---------- INVOICE ---------- */
+
+
+function ensureQuotationSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName('Quotations');
+  if (!sh) sh = ensureSheet('Quotations', HEADERS.Quotations);
+  return sh;
+}
+
+function saveQuotation(p) {
+  const sh = ensureQuotationSheet_();
+  const no = String(p.no || '').trim() || nextSafeId_('QT-', 'Quotations', 1);
+  const rows = sh.getDataRange().getValues();
+  const duplicate = rows.slice(1).some(r => String(r[0] || '').trim() === no);
+  if (duplicate) throw Error('Quotation number already exists: ' + no);
+
+  const customer = String(p.customer || '').trim();
+  if (!customer) throw Error('Customer is required.');
+
+  const items = Array.isArray(p.items) ? p.items : [];
+  const validItems = items.filter(x => String(x.model || '').trim() && Number(x.qty) > 0);
+  if (!validItems.length) throw Error('At least one quotation item is required.');
+
+  const out = [];
+  validItems.forEach(x => {
+    const model = String(x.model || '').trim();
+    const prod = findProduct(model);
+    if (!prod) throw Error('Product not found: ' + model);
+    const qty = Number(x.qty);
+    const rate = Number(x.rate);
+    if (!isFinite(qty) || qty <= 0) throw Error('Invalid quantity for ' + model);
+    if (!isFinite(rate) || rate < 0) throw Error('Invalid rate for ' + model);
+
+    out.push([
+      no, p.date || new Date(), p.customerId || '', customer, p.address || '',
+      p.po || '', p.poDate || '', p.validity || '30 Days', p.stn || '', p.ntn || '',
+      prod.data[0] || '', model, prod.data[2] || '', qty, x.unit || prod.data[5] || 'Pcs',
+      rate, qty * rate, p.user || 'Staff'
+    ]);
+  });
+
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, HEADERS.Quotations.length).setValues(out);
+  return {ok:true, id:no};
+}
+
+function getQuotationHistory_() {
+  const rows = objectsFromSheet_('Quotations');
+  const byNo = {};
+  const order = [];
+
+  rows.forEach(r => {
+    const no = String(r['Quotation No.'] || '').trim();
+    if (!no) return;
+    if (!byNo[no]) {
+      byNo[no] = {
+        no:no, date:r['Date'], customerId:r['Customer ID'] || '', customer:r['Customer Name'] || '',
+        address:r['Address'] || '', po:r['PO #'] || '', poDate:r['PO Date'] || '',
+        validity:r['Validity'] || '30 Days', stn:r['STN'] || '', ntn:r['NTN'] || '',
+        createdBy:r['Created By'] || '', items:[], subtotal:0
+      };
+      order.push(no);
+    }
+    const qty=Number(r['Quantity'] || 0), rate=Number(r['Rate / Unit'] || 0);
+    byNo[no].items.push({model:r['Model / Part No.'] || '',desc:r['Description'] || '',qty:qty,unit:r['Unit'] || '',rate:rate});
+    byNo[no].subtotal += Number(r['Amount'] || (qty*rate)) || 0;
+  });
+
+  return {ok:true, documents:order.map(no => byNo[no]).reverse()};
+}
 
 function saveInvoice(p) {
   ensureInvoiceGstColumn_();
