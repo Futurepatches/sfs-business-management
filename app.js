@@ -1842,7 +1842,7 @@ function printInvoice(d){
       <tr><td class="tot-label"><b>TOTAL</b></td><td class="r"><b>${money(total)}</b></td></tr>
     </table>
     <div class="doc-endblock doc-footer-note">
-      <div>H.CODE: 84-F<br><b>Description:</b> General Industrial Machinery &amp; Equipment</div>
+
       <div class="doc-sign-block"><i>FOR STANDARD FLUID SYSTEMS</i></div>
     </div>`;
 
