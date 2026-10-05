@@ -83,6 +83,8 @@ function handleRequest_(p) {
     if (!auth.ok) return auth;
     switch (action) {
       case 'saveProduct': case 'product': return saveProduct(p);
+      case 'updateProduct': return updateProduct(p, auth.user);
+      case 'setProductStatus': return setProductStatus_(p, auth.user);
       case 'saveInward': case 'inward': p.user=auth.user.username; return saveInward(p);
       case 'saveDC': case 'dc': p.user=auth.user.username; return saveDC(p);
       case 'saveInvoice': case 'invoice': p.user=auth.user.username; return saveInvoice(p);
@@ -404,6 +406,69 @@ function saveProduct(p) {
   ]);
 
   return {ok:true,id:id};
+}
+
+/* ---------- PRODUCT EDIT / STATUS ---------- */
+
+function updateProduct(p, authUser) {
+  const model = String(p.model || '').trim();
+  const prod = findProduct(model);
+  if (!prod) throw Error('Product not found: ' + model);
+
+  const sh = SpreadsheetApp.getActive().getSheetByName('Products');
+  const row = prod.row;
+
+  // Resolve columns by header name so Reorder Level cannot be confused with Status.
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const col = name => {
+    const target = String(name).trim().toLowerCase();
+    const i = headers.findIndex(h => h.trim().toLowerCase() === target);
+    return i >= 0 ? i + 1 : 0;
+  };
+  const put = (name, value) => {
+    const c = col(name);
+    if (c) sh.getRange(row, c).setValue(value);
+  };
+
+  put('Description', p.description || '');
+  put('Category', p.category || '');
+  put('Brand', p.brand || '');
+  put('Unit', p.unit || 'Pcs');
+  put('Location', p.location || '');
+  put('Cost Price', p.costPrice || '');
+  put('Sale Price', p.salePrice || '');
+  put('Remarks', p.remarks || '');
+
+  if (p.imageBase64 && typeof saveImageToDrive_ === 'function') {
+    put('Product Image', saveImageToDrive_(p.imageBase64, p.imageName));
+  } else if (p.image !== undefined) {
+    put('Product Image', p.image || '');
+  }
+
+  if (p.reorderLevel !== undefined && p.reorderLevel !== '') {
+    put('Reorder Level', Number(p.reorderLevel));
+  }
+
+  return {ok:true};
+}
+
+function setProductStatus_(p, authUser) {
+  if (String(authUser.role || '').toUpperCase() !== 'ADMIN') {
+    return {ok:false, error:'Only an Admin can activate/deactivate products.'};
+  }
+
+  const model = String(p.model || '').trim();
+  const prod = findProduct(model);
+  if (!prod) throw Error('Product not found: ' + model);
+
+  const sh = SpreadsheetApp.getActive().getSheetByName('Products');
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const target = String('Status').toLowerCase();
+  const i = headers.findIndex(h => h.trim().toLowerCase() === target);
+  if (i < 0) throw Error('Status column not found in Products sheet.');
+
+  sh.getRange(prod.row, i + 1).setValue(String(p.status || 'Active'));
+  return {ok:true};
 }
 
 /* ---------- STOCK MOVEMENT ---------- */
