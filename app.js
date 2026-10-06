@@ -344,7 +344,7 @@ const pages = {
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
-  invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>DC #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
+  invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>Delivery Challan #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC(s)</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" onchange="pickQuotationCustomer()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry"></label><label>Enquiry Date<input id="qtpoDate" type="date"></label><label>Validity<input id="qtvalidity" value="30 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
@@ -1084,26 +1084,14 @@ function ivModelChanged(i, v){
 
 /* Enter the DC number and select "Load DC" — customer, PO, and items are loaded automatically */
 async function loadDcIntoInvoice(){
-  const no = $('ivdc').value.trim();
-  if (!no) return toast('Please enter the DC # first.', true);
-  const r = await api('getReports', {mode:'document', type:'DC', no:no});
-  if (!r.ok) return toast(r.error || 'DC not found.', true);
-  const d = r.document;
-  $('ivcust').value = d.customer || '';
-  pickCustomer('iv');
-  if (d.customerId) $('ivcid').value = d.customerId;
-  $('ivpo').value = d.po || '';
-  $('ivpodate').value = toInputDate(d.poDate);
-  $('ivdcdate').value = toInputDate(d.date);
-  if (d.stn) $('ivstn').value = d.stn;
-  if (d.ntn) $('ivntn').value = d.ntn;
-  ivl = (d.items || []).map(x => {
-    const pr = findProd(x.model);
-    return {model:x.model, qty:x.qty, rate: (pr && Number(pr['Sale Price']) > 0) ? pr['Sale Price'] : ''};
-  });
-  if (!ivl.length) ivl = [{model:'', qty:'', rate:''}];
-  renderIvLines();
-  toast('DC loaded — please check the rates.');
+  const raw=$('ivdc').value.trim();if(!raw)return toast('Please enter at least one Delivery Challan #.',true);
+  const nos=raw.split(/[,\n]+/).map(x=>x.trim()).filter(Boolean),docs=[];
+  for(const no of nos){const r=await api('getReports',{mode:'document',type:'DC',no:no});if(!r.ok)return toast((r.error||'DC not found.')+' ['+no+']',true);docs.push(r.document);}
+  const first=docs[0],ck=norm(first.customer);if(docs.some(d=>norm(d.customer)!==ck))return toast('All selected Delivery Challans must belong to the same customer.',true);
+  const merged={},order=[];docs.forEach(d=>(d.items||[]).forEach(x=>{const k=String(x.model||'').trim();if(!k)return;if(!merged[k]){merged[k]={qty:0};order.push(k);}merged[k].qty+=Number(x.qty||0);}));
+  $('ivcust').value=first.customer||'';pickCustomer('iv');$('ivcid').value=first.customerId||$('ivcid').value;$('ivpo').value=first.po||'';$('ivpodate').value=toInputDate(first.poDate);$('ivdcdate').value=docs.length===1?toInputDate(first.date):'';if(first.stn)$('ivstn').value=first.stn;if(first.ntn)$('ivntn').value=first.ntn;
+  ivl=order.map(k=>{const pr=findProd(k);return{model:k,qty:merged[k].qty,rate:(pr&&Number(pr['Sale Price'])>0)?pr['Sale Price']:''};});if(!ivl.length)ivl=[{model:'',qty:'',rate:''}];renderIvLines();
+  toast(nos.length===1?'Delivery Challan loaded — please check the rates.':nos.length+' Delivery Challans loaded and combined — please check the rates.');
 }
 
 async function saveInvoice(print){
@@ -1128,20 +1116,33 @@ async function saveInvoice(print){
       customerId:$('ivcid').value || (cu.cust ? cu.cust['Customer ID'] : ''),
       po:$('ivpo').value, poDate:$('ivpodate').value, dc:$('ivdc').value.trim(),
       dcDate:$('ivdcdate').value, stn:$('ivstn').value, ntn:$('ivntn').value,
-      gstPercent:Number(gstRaw), items:items
+      gstPercent:Number(gstRaw), items:items,
+      edit: !!EDIT_INVOICE
     };
-    const r = await api('saveInvoice', p);
+    const r = await api(EDIT_INVOICE ? 'updateInvoice' : 'saveInvoice', p);
     if (!r.ok) return toast(r.error, true);
     p.no = r.id || p.no;                       // auto-number will also appear on print
     if (print) printInvoice(p);
-    toast('Invoice saved.');
+    toast(EDIT_INVOICE ? 'Invoice updated successfully.' : 'Invoice saved.');
+    EDIT_INVOICE = null;
     await refresh();
     if ($('ivhRows')) loadIVHistory();
   });
 }
 
 /* ---------- INVOICE HISTORY ---------- */
-let IVH_CACHE = [];
+let IVH_CACHE=[];
+let EDIT_INVOICE=null;
+function editInvoice(noEnc){
+ if(!isAdmin())return toast('Only an Admin can edit a saved invoice.',true);
+ const no=decodeURIComponent(noEnc),d=IVH_CACHE.find(x=>x.no===no);if(!d)return;
+ showPage('invoices',document.querySelector(".navbtn[onclick*=\"'invoices'\"]"));EDIT_INVOICE={no:d.no};
+ $('ivno').value=d.no;$('ivno').readOnly=true;$('ivdate').value=toInputDate(d.date)||todayStr();$('ivcust').value=d.customer||'';pickCustomer('iv');$('ivcid').value=d.customerId||$('ivcid').value;$('ivpo').value=d.po||'';$('ivpodate').value=toInputDate(d.poDate);$('ivdc').value=d.dc||'';$('ivdcdate').value=toInputDate(d.dcDate);$('ivstn').value=d.stn||'';$('ivntn').value=d.ntn||'';$('ivgst').value=(d.gstPercent==null||d.gstPercent==='')?18:d.gstPercent;
+ ivl=(d.items||[]).map(x=>({model:x.model,qty:x.qty,rate:x.rate}));if(!ivl.length)ivl=[{model:'',qty:'',rate:''}];renderIvLines();
+ const b=$('ivEditBanner');if(b)b.innerHTML='<div class="muted">Admin edit mode: editing the invoice does not change stock. <button class="btn small" onclick="cancelEditInvoice()">Cancel Edit</button></div>';
+}
+function cancelEditInvoice(){EDIT_INVOICE=null;showPage('invoices',document.querySelector(".navbtn[onclick*=\"'invoices'\"]"));}
+
 async function loadIVHistory(){
   const tbody = $('ivhRows');
   if (!tbody) return;
@@ -1225,6 +1226,7 @@ function viewInvoice(noEnc, print){
      <div class="actions">
        <button class="btn" onclick="closeModal()">Close</button>
        <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
+       ${isAdmin() ? '<button class="btn" onclick="editInvoice(\\''+encA(no)+'\\')">Edit Invoice</button>' : ''}
      </div>`);
 }
 
@@ -2055,6 +2057,8 @@ window.pickCustomer = pickCustomer;
 window.editDC = editDC;
 window.cancelEditDC = cancelEditDC;
 window.loadDcIntoInvoice = loadDcIntoInvoice;
+window.editInvoice = editInvoice;
+window.cancelEditInvoice = cancelEditInvoice;
 window.ivModelChanged = ivModelChanged;
 window.updateIvTotals = updateIvTotals;
 window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.toggleSidebar : function(){};
