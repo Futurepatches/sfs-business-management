@@ -1224,69 +1224,112 @@ function getQuotationHistory_() {
   return {ok:true, documents:order.map(no => byNo[no]).reverse()};
 }
 
-function saveInvoice(p) {
-  ensureInvoiceGstColumn_();
+function normalizeInvoiceDCs_(raw) {
+  return String(raw || '').split(/[,\n]+/).map(x=>x.trim()).filter(Boolean);
+}
 
-  const id=p.no || nextSafeId_('INV-','Invoices',1);
+function validateInvoiceAgainstDCs_(p, allowCurrentInvoiceNo) {
+  const dcNos = normalizeInvoiceDCs_(p.dc);
+  const allDCs = buildDCDocuments_();
+  const invoices = objectsFromSheet_('Invoices');
+  const linked = {};
+  allDCs.forEach(d => linked[d.no] = d);
 
-  if (p.no && numberExistsInSheet_('Invoices', p.no)) {
-    throw Error('Invoice '+p.no+' already exists. If you clicked Save twice, this one was already recorded — check Invoice History.');
-  }
+  if (!dcNos.length) return {dcNos:[], allowed:{}};
 
-  const dcNo = String(p.dc || '').trim();
-  if (dcNo) {
-    const existingForDc = objectsFromSheet_('Invoices').some(r => String(r['DC No.'] || '').trim() === dcNo);
-    if (existingForDc) {
-      throw Error('An invoice already exists for Delivery Challan ' + dcNo + '. Check Invoice History.');
-    }
-  }
+  const allowed = {};
+  dcNos.forEach(no => {
+    const d = linked[no];
+    if (!d) throw Error('Delivery Challan not found: ' + no);
+    const existing = invoices.some(r =>
+      String(r['DC No.'] || '').split(/[,\n]+/).map(x=>x.trim()).indexOf(no) !== -1 &&
+      String(r['Invoice No.'] || '').trim() !== String(allowCurrentInvoiceNo || '').trim()
+    );
+    if (existing) throw Error('Delivery Challan ' + no + ' has already been invoiced.');
+    d.items.forEach(x => {
+      const k = String(x.model || '').trim();
+      if (k) allowed[k] = (allowed[k] || 0) + Number(x.qty || 0);
+    });
+  });
+  return {dcNos:dcNos, allowed:allowed};
+}
 
-  const sh=SpreadsheetApp.getActive().getSheetByName('Invoices');
-  const items=p.items || [];
-
-  if(!items.length) {
-    throw Error('Invoice has no items.');
-  }
-
-  const gstPercent = p.gstPercent !== undefined && p.gstPercent !== '' ? Number(p.gstPercent) : 18;
-
+function writeInvoiceRows_(sh, id, p, items, user) {
   items.forEach(it => {
     const prod=findProduct(it.model);
-
-    if(!prod) {
-      throw Error('Product not found: '+it.model);
-    }
-
-    const qty=Number(it.qty || 0);
-    const rate=Number(it.rate || 0);
-
+    if(!prod) throw Error('Product not found: '+it.model);
+    const qty=Number(it.qty || 0), rate=Number(it.rate || 0);
+    if(qty<=0) throw Error('Invalid quantity for '+it.model);
+    if(rate<=0) throw Error('Enter a valid rate for '+it.model);
     sh.appendRow([
-      id,
-      p.date || new Date(),
-      p.customerId || '',
-      p.customer || '',
-      p.po || '',
-      p.poDate || '',
-      p.dc || '',
-      p.dcDate || '',
-      p.stn || '',
-      p.ntn || '',
-      prod.data[0],
-      it.model,
-      it.desc || prod.data[2],
-      qty,
-      rate,
-      qty*rate,
-      p.user || 'Staff',
-      gstPercent
+      id,p.date || new Date(),p.customerId || '',p.customer || '',
+      p.po || '',p.poDate || '',p.dc || '',p.dcDate || '',
+      p.stn || '',p.ntn || '',prod.data[0],it.model,it.desc || prod.data[2],
+      qty,rate,qty*rate,user || 'Staff',p.gstPercent
     ]);
   });
+}
 
-  return {
-    ok:true,
-    id:id,
-    message:'Invoice saved successfully'
-  };
+function saveInvoice(p) {
+  ensureInvoiceGstColumn_();
+  const id=p.no || nextSafeId_('INV-','Invoices',1);
+  if (p.no && numberExistsInSheet_('Invoices', p.no)) throw Error('Invoice '+p.no+' already exists. Check Invoice History.');
+
+  const items=p.items || [];
+  if(!items.length) throw Error('Invoice has no items.');
+
+  const gstPercent=p.gstPercent !== undefined && p.gstPercent !== '' ? Number(p.gstPercent) : 18;
+  if(!isFinite(gstPercent) || gstPercent<0 || gstPercent>100) throw Error('GST % must be between 0 and 100.');
+
+  const dcCheck=validateInvoiceAgainstDCs_(p,'');
+  if(dcCheck.dcNos.length) {
+    const custs=dcCheck.dcNos.map(no=>buildDCDocuments_().find(d=>d.no===no).customer);
+    if(custs.some(x=>String(x).trim().toLowerCase()!==String(custs[0]).trim().toLowerCase())) throw Error('All Delivery Challans on one invoice must belong to the same customer.');
+  }
+
+  items.forEach(it=>{
+    const qty=Number(it.qty||0);
+    if(qty<=0) throw Error('Invalid quantity for '+it.model);
+    if(dcCheck.dcNos.length && qty > (dcCheck.allowed[String(it.model||'').trim()]||0)) throw Error('Invoice quantity for '+it.model+' exceeds the delivered quantity on the selected Delivery Challan(s).');
+  });
+
+  const sh=SpreadsheetApp.getActive().getSheetByName('Invoices');
+  writeInvoiceRows_(sh,id,p,items,p.user||'Staff');
+  return {ok:true,id:id,message:'Invoice saved successfully'};
+}
+
+function updateInvoice(p, authUser) {
+  if (String(authUser.role || '').toUpperCase() !== 'ADMIN') throw Error('Only an Admin can edit a saved invoice.');
+  const id=String(p.no||'').trim();
+  if(!id) throw Error('Invoice number is required.');
+
+  const sh=SpreadsheetApp.getActive().getSheetByName('Invoices');
+  const values=sh.getDataRange().getValues(), headers=values[0];
+  const noCol=headers.indexOf('Invoice No.');
+  const rows=[];
+  for(let i=1;i<values.length;i++) if(String(values[i][noCol]||'').trim()===id) rows.push(i+1);
+  if(!rows.length) throw Error('Invoice not found: '+id);
+
+  const items=p.items||[];
+  if(!items.length) throw Error('Invoice has no items.');
+  const gstPercent=p.gstPercent !== undefined && p.gstPercent !== '' ? Number(p.gstPercent) : 18;
+  if(!isFinite(gstPercent) || gstPercent<0 || gstPercent>100) throw Error('GST % must be between 0 and 100.');
+
+  const dcCheck=validateInvoiceAgainstDCs_(p,id);
+  if(dcCheck.dcNos.length) {
+    const docs=buildDCDocuments_();
+    const custs=dcCheck.dcNos.map(no=>docs.find(d=>d.no===no).customer);
+    if(custs.some(x=>String(x).trim().toLowerCase()!==String(custs[0]).trim().toLowerCase())) throw Error('All Delivery Challans on one invoice must belong to the same customer.');
+  }
+  items.forEach(it=>{
+    const qty=Number(it.qty||0);
+    if(qty<=0) throw Error('Invalid quantity for '+it.model);
+    if(dcCheck.dcNos.length && qty > (dcCheck.allowed[String(it.model||'').trim()]||0)) throw Error('Invoice quantity for '+it.model+' exceeds the delivered quantity on the selected Delivery Challan(s).');
+  });
+
+  rows.sort((a,b)=>b-a).forEach(r=>sh.deleteRow(r));
+  writeInvoiceRows_(sh,id,p,items,p.user||authUser.username||'Admin');
+  return {ok:true,id:id,message:'Invoice updated successfully'};
 }
 
 /* ---------- LOGIN / USERS ---------- */
