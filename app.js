@@ -1226,7 +1226,7 @@ function viewInvoice(noEnc, print){
      <div class="actions">
        <button class="btn" onclick="closeModal()">Close</button>
        <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
-       ${isAdmin() ? '<button class="btn" onclick="editInvoice(\\''+encA(no)+'\\')">Edit Invoice</button>' : ''}
+       ${isAdmin() ? '<button class="btn" onclick="editInvoice(\'' + encA(no) + '\')">Edit Invoice</button>' : ''}
      </div>`);
 }
 
