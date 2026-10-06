@@ -1290,7 +1290,9 @@ function filterCustOut(){
 }
 
 function custPayRowHtml(x){
-  return `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td><td class="muted">${esc(x.Remarks || '')}</td></tr>`;
+  const tax = (Number(x['Income Tax Deducted'])||0) + (Number(x['WHT Deducted'])||0);
+  const taxNote = tax > 0 ? ` <span class="muted small">(tax ${money(tax)})</span>` : '';
+  return `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Invoice No.'])}</td><td>${esc(x['Customer Name'])}</td><td>${money(x.Amount)}${taxNote}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td><td class="muted">${esc(x.Remarks || '')}</td></tr>`;
 }
 function filterCustPay(){
   const host = $('custPayRows');
@@ -1314,17 +1316,50 @@ function clearPaySearch(){ const el = $('custPaySearch'); if (el) { el.value = '
 
 function openCustPayModal(invEnc, custEnc, outstanding){
   const inv = decodeURIComponent(invEnc), cust = decodeURIComponent(custEnc);
-  modal('Record Payment — '+inv, `<div class="form-grid"><label>Invoice #<input id="payinv" value="${esc(inv)}" readonly></label><label>Customer<input value="${esc(cust)}" readonly></label><label>Outstanding<input value="${money(outstanding)}" readonly></label><label>Amount Received<input id="payamt" type="number" step="0.01" value="${round2(outstanding)}" onfocus="this.select()"></label><label>Date<input id="paydate" type="date" value="${todayStr()}"></label><label>Method<select id="paymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label><label>Reference / Cheque #<input id="payref"></label><label class="wide">Remarks<input id="payrem"></label></div><div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
+  modal('Record Payment — '+inv, `<div class="form-grid">
+    <label>Invoice #<input id="payinv" value="${esc(inv)}" readonly></label>
+    <label>Customer<input value="${esc(cust)}" readonly></label>
+    <label>Outstanding<input id="payout" value="${money(outstanding)}" readonly></label>
+    <label>Amount Received (Cash/Bank)<input id="payamt" type="number" step="0.01" min="0" value="${round2(outstanding)}" onfocus="this.select()" oninput="updatePaySettlement()"></label>
+    <label>Income Tax Deducted<input id="payinctax" type="number" step="0.01" min="0" value="0" oninput="updatePaySettlement()"></label>
+    <label>WHT Deducted<input id="paywht" type="number" step="0.01" min="0" value="0" oninput="updatePaySettlement()"></label>
+    <label>Total Settlement<input id="paysettle" value="${money(outstanding)}" readonly></label>
+    <label>Date<input id="paydate" type="date" value="${todayStr()}"></label>
+    <label>Method<select id="paymethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online</option></select></label>
+    <label>Reference / Cheque #<input id="payref"></label>
+    <label class="wide">Remarks<input id="payrem" placeholder="e.g. 5.5% income tax deducted by client"></label>
+  </div>
+  <p class="muted small" style="margin:8px 0 0">Cash + Income Tax + WHT = invoice settlement (outstanding is se kam hoga).</p>
+  <div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
+}
+function updatePaySettlement(){
+  const a = Number(($('payamt')||{}).value)||0;
+  const t = Number(($('payinctax')||{}).value)||0;
+  const w = Number(($('paywht')||{}).value)||0;
+  const el = $('paysettle');
+  if (el) el.value = money(a + t + w);
 }
 async function submitCustPayment(){
   await guardedSave(async () => {
-    const amt = Number($('payamt').value);
-    if (!(amt>0)) return toast('Enter a valid amount.', true);
-    const p = {invoiceNo:$('payinv').value, amount:amt, date:$('paydate').value, method:$('paymethod').value, reference:$('payref').value, remarks:$('payrem').value};
+    const amt = Number($('payamt').value)||0;
+    const incomeTax = Number($('payinctax').value)||0;
+    const wht = Number($('paywht').value)||0;
+    if (amt < 0 || incomeTax < 0 || wht < 0) return toast('Amounts negative nahi ho sakte.', true);
+    if (amt <= 0 && incomeTax <= 0 && wht <= 0) return toast('Kam az kam cash ya tax amount enter karein.', true);
+    const p = {
+      invoiceNo: $('payinv').value,
+      amount: amt,
+      incomeTax: incomeTax,
+      wht: wht,
+      date: $('paydate').value,
+      method: $('paymethod').value,
+      reference: $('payref').value,
+      remarks: $('payrem').value
+    };
     const r = await api('savePayment', p);
     if (!r.ok) return toast(r.error, true);
     closeModal();
-    toast('Payment recorded. Outstanding: '+money(r.outstanding));
+    toast('Payment recorded. Settlement: '+money(r.settlement != null ? r.settlement : (amt+incomeTax+wht))+' · Outstanding: '+money(r.outstanding));
     await loadAccounts();
   });
 }
