@@ -58,7 +58,7 @@ const HEADERS = {
   'Stock Movement':['Transaction ID','Date/Time','Type','Product ID','Model / Part No.','Quantity','Source / Destination','Reference Type','Reference No.','Created By'],
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
-  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By'],
+  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Revision Of'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status','Modules'],
@@ -1152,7 +1152,7 @@ function saveQuotation(p) {
     const qty = num_(x.qty), rate = num_(x.rate);
     if (qty <= 0) throw Error('Invalid quantity for ' + model);
     if (rate < 0) throw Error('Invalid rate for ' + model);
-    return [no,toDate_(p.date)||new Date(),p.customerId||'',customer,p.address||'',p.po||'',toDate_(p.poDate)||'',p.validity||'30 Days',p.stn||'',p.ntn||'',prod.data[0]||'',model,prod.data[2]||'',qty,x.unit||prod.data[5]||'Pcs',rate,round2_(qty*rate),p.user||'Staff'];
+    return [no,toDate_(p.date)||new Date(),p.customerId||'',customer,p.address||'',p.po||'',toDate_(p.poDate)||'',p.validity||'30 Days',p.stn||'',p.ntn||'',prod.data[0]||'',model,prod.data[2]||'',qty,x.unit||prod.data[5]||'Pcs',rate,round2_(qty*rate),p.user||'Staff',String(p.revisionOf||'').trim()];
   });
   appendRows_('Quotations', rows);
   return {ok:true,id:no,subtotal:round2_(rows.reduce((a,r)=>a+Number(r[16]||0),0))};
@@ -1163,7 +1163,7 @@ function getQuotationHistory_() {
   const map = {}, order = [];
   rows.forEach(r => {
     const no = String(r['Quotation No.'] || '').trim(); if (!no) return;
-    if (!map[no]) { map[no]={no:no,date:r['Date'],customerId:r['Customer ID']||'',customer:r['Customer Name']||'',address:r['Address']||'',po:r['PO #']||'',poDate:r['PO Date']||'',validity:r['Validity']||'30 Days',stn:r['STN']||'',ntn:r['NTN']||'',createdBy:r['Created By']||'',items:[],subtotal:0}; order.push(no); }
+    if (!map[no]) { map[no]={no:no,date:r['Date'],customerId:r['Customer ID']||'',customer:r['Customer Name']||'',address:r['Address']||'',po:r['PO #']||'',poDate:r['PO Date']||'',validity:r['Validity']||'30 Days',stn:r['STN']||'',ntn:r['NTN']||'',createdBy:r['Created By']||'',revisionOf:r['Revision Of']||'',items:[],subtotal:0}; order.push(no); }
     const qty=num_(r['Quantity']), rate=num_(r['Rate / Unit']);
     map[no].items.push({model:r['Model / Part No.']||'',desc:r['Description']||'',qty:qty,unit:r['Unit']||'Pcs',rate:rate});
     map[no].subtotal += num_(r['Amount']) || round2_(qty*rate);
