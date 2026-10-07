@@ -63,7 +63,7 @@ const HEADERS = {
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status','Modules'],
   'Categories':['Category ID','Category Name'],
-  'Payments':['Payment ID','Date','Customer ID','Customer Name','Invoice No.','Amount','Method','Reference','Remarks','Created By'],
+  'Payments':['Payment ID','Date','Customer ID','Customer Name','Invoice No.','Amount','Income Tax Deducted','WHT Deducted','Method','Reference','Remarks','Created By'],
   'Supplier Payments':['Payment ID','Date','Supplier ID','Supplier Name','Amount','Method','Reference','Remarks','Created By'],
   'Targets':['Year','Target Amount'],
   'Audit Log':['Time','User','Action','Details']
@@ -73,7 +73,7 @@ const WRITE_ACTIONS = [
   'saveProduct','product','updateProduct','setProductStatus',
   'saveCustomer','updateCustomer','setCustomerStatus',
   'saveSupplier','updateSupplier','setSupplierStatus',
-  'saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','saveQuotation','quotationHistory',
+  'saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','updateInvoice','saveQuotation','quotationHistory',
   'savePayment','saveSupplierPayment','saveTarget',
   'saveUser','updateUser','disableUser','changePassword',
   'refreshSource','sync'
@@ -241,6 +241,11 @@ function dispatch_(action, p, user) {
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
       p.user = user.username;
       return saveInvoice(p);
+
+    case 'updateInvoice':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      p.user = user.username;
+      return updateInvoice(p, user);
 
     case 'saveQuotation':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
@@ -417,6 +422,7 @@ function setupDatabase() {
   // Purani sheets mein default columns pehle (default values ke saath) lagao
   ensureReorderLevelColumn_();
   ensureInvoiceGstColumn_();
+  ensurePaymentTaxColumns_();
 
   Object.keys(HEADERS).forEach(name => { ensureSheet(name, HEADERS[name]); });
 
@@ -687,6 +693,33 @@ function ensureInvoiceGstColumn_() {
     for (let i = 0; i < lastRow - 1; i++) defaults.push([18]);
     sh.getRange(2, newCol, lastRow - 1, 1).setValues(defaults);
   }
+}
+
+function ensurePaymentTaxColumns_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Payments');
+  if (!sh) return;
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  const need = ['Income Tax Deducted', 'WHT Deducted'];
+  const missing = need.filter(h => headers.indexOf(h) === -1);
+  if (!missing.length) return;
+  const newCol = lastCol + 1;
+  sh.getRange(1, newCol, 1, missing.length).setValues([missing]);
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const zeros = [];
+    for (let i = 0; i < lastRow - 1; i++) zeros.push(missing.map(() => 0));
+    sh.getRange(2, newCol, lastRow - 1, missing.length).setValues(zeros);
+  }
+}
+
+function paymentCredit_(pmt) {
+  // Amount = cash received; Income Tax + WHT = client deductions — sab invoice settle karte hain
+  return round2_(
+    num_(pmt.Amount) +
+    num_(pmt['Income Tax Deducted']) +
+    num_(pmt['WHT Deducted'])
+  );
 }
 
 function ensureReorderLevelColumn_() {
@@ -1140,24 +1173,24 @@ function getQuotationHistory_() {
 
 function saveInvoice(p) {
   ensureInvoiceGstColumn_();
-  const dcNo = String(p.dc || '').trim();
+  const dcNos = String(p.dc || '').split(/[,\n]+/).map(x=>x.trim()).filter(Boolean);
+  const dcNo = dcNos.join(', ');
 
-  let dcDoc = null;
-  if (dcNo) {
-    dcDoc = buildDCDocuments_().find(d => d.no === dcNo);
-    if (!dcDoc) throw Error('Delivery Challan not found: ' + dcNo);
-  }
+  const allDCs=buildDCDocuments_();
+  const dcDocs=dcNos.map(no=>{const d=allDCs.find(x=>x.no===no);if(!d)throw Error('Delivery Challan not found: '+no);return d;});
+  const dcDoc=dcDocs.length===1?dcDocs[0]:null;
+  if(dcDocs.length>1){const ck=normName_(dcDocs[0].customer);dcDocs.forEach(d=>{if(normName_(d.customer)!==ck)throw Error('All Delivery Challans on one invoice must belong to the same customer.');});}
 
-  const cust = resolveCustomer_(p.customer, {allowInactive: !!dcNo});
+  const cust = resolveCustomer_(p.customer, {allowInactive: !!dcNos.length});
   const custName = cust ? cust['Customer Name'] : String(p.customer).trim();
   const custId = p.customerId || (cust ? cust['Customer ID'] : '');
 
   const id = String(p.no || '').trim() || nextSafeId_('INV-', 'Invoices', 1);
-  if (p.no && numberExistsInSheet_('Invoices', id)) throw Error('Invoice ' + id + ' already exists.');
+  if (p.no && numberExistsInSheet_('Invoices', id) && !p._editing) throw Error('Invoice ' + id + ' already exists.');
 
-  if (dcNo) {
-    const existingForDc = objectsFromSheet_('Invoices').some(r => String(r['DC No.'] || '').trim() === dcNo);
-    if (existingForDc) throw Error('An invoice already exists for DC ' + dcNo + '.');
+  if (dcNos.length) {
+    const invoices=objectsFromSheet_('Invoices');
+    dcNos.forEach(no=>{ if(invoices.some(r=>String(r['DC No.']||'').split(/[,\n]+/).map(x=>x.trim()).indexOf(no)!==-1 && String(r['Invoice No.']||'').trim()!==String(p.no||'').trim())) throw Error('An invoice already exists for DC '+no+'.'); });
     if (dcDoc.customer && normName_(dcDoc.customer) !== normName_(custName)) {
       throw Error('DC ' + dcNo + ' ' + dcDoc.customer + ' ke naam hai, ' + custName + ' ke nahi.');
     }
@@ -1171,16 +1204,16 @@ function saveInvoice(p) {
     const model = String(it.model || '').trim();
     const prod = pmap[model];
     if (!prod) throw Error('Product not found: ' + model);
-    if (!dcNo && String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
+    if (!dcNos.length && String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
     const qty = num_(it.qty), rate = num_(it.rate);
     if (!(qty > 0)) throw Error('Invalid quantity for ' + model);
     if (rate < 0) throw Error('Rate negative nahi ho sakta: ' + model);
     return {it:it, prod:prod, model:model, qty:qty, rate:rate};
   });
 
-  if (dcDoc && STRICT_INVOICE_VS_DC) {
+  if (dcDocs.length && STRICT_INVOICE_VS_DC) {
     const dcQty = {}, invQty = {};
-    dcDoc.items.forEach(x => { const m = String(x.model).trim(); dcQty[m] = (dcQty[m] || 0) + Number(x.qty || 0); });
+    dcDocs.forEach(dc=>dc.items.forEach(x => { const m = String(x.model).trim(); dcQty[m] = (dcQty[m] || 0) + Number(x.qty || 0); }));
     items.forEach(x => { invQty[x.model] = (invQty[x.model] || 0) + x.qty; });
     Object.keys(invQty).forEach(m => {
       if (dcQty[m] === undefined) throw Error(m + ' DC ' + dcNo + ' mein nahi hai.');
@@ -1195,7 +1228,7 @@ function saveInvoice(p) {
   }
 
   const date = toDate_(p.date) || new Date();
-  const dcDate = toDate_(p.dcDate) || (dcDoc ? toDate_(dcDoc.date) : '');
+  const dcDate = dcDocs.length===1 ? (toDate_(p.dcDate) || toDate_(dcDocs[0].date)) : '';
   const poDate = toDate_(p.poDate);
 
   let subtotal = 0;
@@ -1213,6 +1246,18 @@ function saveInvoice(p) {
 
   subtotal = round2_(subtotal);
   return {ok:true, id:id, subtotal:subtotal, gstPercent:gst, total:round2_(subtotal * (1 + gst / 100)), message:'Invoice saved successfully'};
+}
+
+
+function updateInvoice(p, authUser) {
+  if(String(authUser.role||'').toUpperCase()!=='ADMIN') throw Error('Only an Admin can edit a saved invoice.');
+  const id=String(p.no||'').trim(); if(!id) throw Error('Invoice number is required.');
+  const sh=SpreadsheetApp.getActive().getSheetByName('Invoices'); const vals=sh.getDataRange().getValues(),h=vals[0].map(String),nc=h.indexOf('Invoice No.');
+  const old=[]; for(let i=1;i<vals.length;i++) if(String(vals[i][nc]||'').trim()===id) old.push(i+1); if(!old.length) throw Error('Invoice not found: '+id);
+  const q=Object.assign({},p); q.no=id; const result=saveInvoice(Object.assign({},q,{_editing:true}));
+  old.sort((a,b)=>b-a).forEach(r=>sh.deleteRow(r));
+  // saveInvoice already appended the replacement rows; no stock is touched by invoice save/update.
+  return {ok:true,id:id,subtotal:result.subtotal,gstPercent:result.gstPercent,total:result.total,message:'Invoice updated successfully'};
 }
 
 /* ---------- LOGIN / USERS ---------- */
@@ -1559,27 +1604,45 @@ function invoiceTotal_(inv) {
 }
 
 function savePayment(p) {
+  ensurePaymentTaxColumns_();
   const invoiceNo = String(p.invoiceNo || '').trim();
-  const amount = num_(p.amount);
+  const amount = num_(p.amount);                 // cash received
+  const incomeTax = num_(p.incomeTax);           // e.g. 5.5% income tax
+  const wht = num_(p.wht);                       // withholding tax
   if (!invoiceNo) throw Error('Invoice number is required.');
-  if (amount <= 0) throw Error('Payment amount must be greater than zero.');
+  if (amount < 0 || incomeTax < 0 || wht < 0) throw Error('Amounts negative nahi ho sakte.');
+  if (amount <= 0 && incomeTax <= 0 && wht <= 0) throw Error('Kam az kam ek amount (cash ya tax) zero se zyada hona chahiye.');
 
   const inv = buildInvoiceDocuments_().find(d => d.no === invoiceNo);
   if (!inv) throw Error('Invoice not found: ' + invoiceNo);
 
   const total = invoiceTotal_(inv);
-  const alreadyPaid = getPaymentsForInvoice_(invoiceNo).reduce((a, x) => a + Number(x.Amount || 0), 0);
+  const alreadyPaid = objectsFromSheet_('Payments')
+    .filter(r => String(r['Invoice No.'] || '').trim() === invoiceNo)
+    .reduce((a, x) => a + paymentCredit_(x), 0);
   const outstandingBefore = total - alreadyPaid;
+  const settlement = round2_(amount + incomeTax + wht);
 
-  if (amount > outstandingBefore + 0.5) throw Error('Payment exceeds outstanding balance for ' + invoiceNo + '.');
+  if (settlement > outstandingBefore + 0.5) {
+    throw Error('Payment + taxes outstanding se zyada hain (' + settlement + ' > ' + outstandingBefore + ').');
+  }
 
   const id = nextSafeId_('PMT-', 'Payments', 1);
   appendRows_('Payments', [[
     id, toDate_(p.date) || new Date(), inv.customerId || '', inv.customer || '',
-    invoiceNo, amount, p.method || '', p.reference || '', p.remarks || '',
+    invoiceNo, amount, incomeTax, wht,
+    p.method || '', p.reference || '', p.remarks || '',
     p.user || 'Staff'
   ]]);
-  return {ok:true, id:id, outstanding:Math.max(0, round2_(outstandingBefore - amount))};
+  return {
+    ok: true,
+    id: id,
+    amount: amount,
+    incomeTax: incomeTax,
+    wht: wht,
+    settlement: settlement,
+    outstanding: Math.max(0, round2_(outstandingBefore - settlement))
+  };
 }
 
 function getOutstandingForFrontend_(p) {
@@ -1587,7 +1650,7 @@ function getOutstandingForFrontend_(p) {
   const paidByInvoice = {};
   objectsFromSheet_('Payments').forEach(pmt => {
     const no = String(pmt['Invoice No.'] || '').trim();
-    paidByInvoice[no] = (paidByInvoice[no] || 0) + Number(pmt.Amount || 0);
+    paidByInvoice[no] = (paidByInvoice[no] || 0) + paymentCredit_(pmt);
   });
 
   let rows = invoices.map(inv => {
