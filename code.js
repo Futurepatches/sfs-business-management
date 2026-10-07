@@ -43,7 +43,8 @@ const HEADERS = {
   'Stock Movement':['Transaction ID','Date/Time','Type','Product ID','Model / Part No.','Quantity','Source / Destination','Reference Type','Reference No.','Created By'],
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
-  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By'],
+  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Enquiry ID','Contact','GST %','Status','Loss Reason'],
+  'Enquiries':['Enquiry ID','Date','Customer Name','Contact Person','Phone','Requirement / Description','Status','Quotation No.','Loss Reason','Created By'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status'],
@@ -129,7 +130,7 @@ function doPost(e) {
     // requests (e.g. a fast double-click, or a slow network retry) can
     // never both pass a stock check before either one has actually
     // written its update.
-    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveInwardBatch','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','saveProductsBatch','savePayment','saveSupplierPayment'];
+    const STOCK_LOCKED_ACTIONS = ['saveInward','inward','saveInwardBatch','saveDC','dc','updateDC','saveInvoice','invoice','saveProduct','product','saveProductsBatch','savePayment','saveSupplierPayment','saveQuotation','saveEnquiry','updateQuotationStatus'];
     let lock = null;
     if (STOCK_LOCKED_ACTIONS.indexOf(action) !== -1) {
       lock = LockService.getScriptLock();
@@ -1156,6 +1157,15 @@ function updateDC(p) {
 /* ---------- INVOICE ---------- */
 
 
+function ensureQuotationColumns_(){ const sh=SpreadsheetApp.getActive().getSheetByName('Quotations'); if(!sh)return; const wanted=['Enquiry ID','Contact','GST %','Status','Loss Reason']; let h=sh.getRange(1,1,1,Math.max(sh.getLastColumn(),1)).getValues()[0].map(String); wanted.forEach(x=>{if(h.indexOf(x)===-1){sh.insertColumnAfter(sh.getLastColumn());sh.getRange(1,sh.getLastColumn()).setValue(x);h.push(x);}}); const si=h.indexOf('Status')+1; if(si>0&&sh.getLastRow()>1){const v=sh.getRange(2,si,sh.getLastRow()-1,1).getValues();v.forEach(r=>{if(!String(r[0]||'').trim())r[0]='Pending';});sh.getRange(2,si,v.length,1).setValues(v);} }
+function ensureEnquirySheet_(){ return ensureSheet('Enquiries',HEADERS.Enquiries); }
+function ensureUserModulesColumn_(){ const sh=SpreadsheetApp.getActive().getSheetByName('Users & Roles'); if(!sh)return; const h=sh.getRange(1,1,1,Math.max(sh.getLastColumn(),1)).getValues()[0].map(String); if(h.indexOf('Modules')===-1){sh.insertColumnAfter(sh.getLastColumn());sh.getRange(1,sh.getLastColumn()).setValue('Modules');} }
+function hasModule_(user,moduleName){ if(String(user&&user.role||'').toUpperCase()==='ADMIN')return true; const mods=Array.isArray(user&&user.modules)?user.modules:String(user&&user.modules||'').split(',').map(x=>x.trim()).filter(Boolean); return mods.indexOf(moduleName)!==-1; }
+function getUserModules_(sh,row){ const h=sh.getRange(1,1,1,Math.max(sh.getLastColumn(),1)).getValues()[0].map(String),i=h.indexOf('Modules'); if(i<0)return []; const raw=String(row[i]||'').trim(); if(!raw)return []; try{const x=JSON.parse(raw);return Array.isArray(x)?x:[];}catch(e){} return raw.split(',').map(x=>x.trim()).filter(Boolean); }
+function saveEnquiry(p){ const sh=ensureEnquirySheet_(),id=String(p.id||'').trim()||nextSafeId_('ENQ-','Enquiries',1),name=String(p.customerName||'').trim(); if(!name)throw Error('Customer Name is required.'); sh.appendRow([id,p.date||new Date(),name,String(p.contactPerson||'').trim(),String(p.phone||'').trim(),String(p.requirement||'').trim(),'New','','',p.user||'Staff']); return {ok:true,id:id}; }
+function getEnquiries_(){ return {ok:true,documents:objectsFromSheet_('Enquiries').reverse().map(r=>({id:r['Enquiry ID']||'',date:r['Date']||'',customerName:r['Customer Name']||'',contactPerson:r['Contact Person']||'',phone:r['Phone']||'',requirement:r['Requirement / Description']||'',status:r['Status']||'New',quotationNo:r['Quotation No.']||'',lossReason:r['Loss Reason']||'',createdBy:r['Created By']||''}))}; }
+function updateEnquiryForQuotation_(id,no,status,reason){const sh=ensureEnquirySheet_(),v=sh.getDataRange().getValues(),h=v[0].map(String),ii=h.indexOf('Enquiry ID'),si=h.indexOf('Status'),qi=h.indexOf('Quotation No.'),li=h.indexOf('Loss Reason');for(let i=1;i<v.length;i++)if(String(v[i][ii]||'').trim()===id){if(si>=0)v[i][si]=status;if(qi>=0&&no)v[i][qi]=no;if(li>=0)v[i][li]=reason||'';sh.getRange(i+1,1,1,h.length).setValues([v[i]]);return true;}return false;}
+function updateQuotationStatus_(p){const no=String(p.no||'').trim(),status=String(p.status||'').trim(),reason=String(p.lossReason||'').trim();if(!no||['Pending','Won','Lost'].indexOf(status)<0)return {ok:false,error:'Invalid quotation status.'};if(status==='Lost'&&!reason)return {ok:false,error:'Loss reason is required.'};const sh=ensureQuotationSheet_(),v=sh.getDataRange().getValues(),h=v[0].map(String),ni=h.indexOf('Quotation No.'),si=h.indexOf('Status'),li=h.indexOf('Loss Reason'),ei=h.indexOf('Enquiry ID');let found=false,enq='';for(let i=1;i<v.length;i++)if(String(v[i][ni]||'').trim()===no){v[i][si]=status;if(li>=0)v[i][li]=status==='Lost'?reason:'';if(ei>=0)enq=String(v[i][ei]||'').trim();sh.getRange(i+1,1,1,h.length).setValues([v[i]]);found=true;}if(!found)return {ok:false,error:'Quotation not found.'};if(enq)updateEnquiryForQuotation_(enq,no,status==='Won'?'Won':status==='Lost'?'Lost':'Quoted',status==='Lost'?reason:'');return {ok:true};}
 function ensureQuotationSheet_() {
   const ss = SpreadsheetApp.getActive();
   let sh = ss.getSheetByName('Quotations');
@@ -1163,66 +1173,8 @@ function ensureQuotationSheet_() {
   return sh;
 }
 
-function saveQuotation(p) {
-  const sh = ensureQuotationSheet_();
-  const no = String(p.no || '').trim() || nextSafeId_('QT-', 'Quotations', 1);
-  const rows = sh.getDataRange().getValues();
-  const duplicate = rows.slice(1).some(r => String(r[0] || '').trim() === no);
-  if (duplicate) throw Error('Quotation number already exists: ' + no);
-
-  const customer = String(p.customer || '').trim();
-  if (!customer) throw Error('Customer is required.');
-
-  const items = Array.isArray(p.items) ? p.items : [];
-  const validItems = items.filter(x => String(x.model || '').trim() && Number(x.qty) > 0);
-  if (!validItems.length) throw Error('At least one quotation item is required.');
-
-  const out = [];
-  validItems.forEach(x => {
-    const model = String(x.model || '').trim();
-    const prod = findProduct(model);
-    if (!prod) throw Error('Product not found: ' + model);
-    const qty = Number(x.qty);
-    const rate = Number(x.rate);
-    if (!isFinite(qty) || qty <= 0) throw Error('Invalid quantity for ' + model);
-    if (!isFinite(rate) || rate < 0) throw Error('Invalid rate for ' + model);
-
-    out.push([
-      no, p.date || new Date(), p.customerId || '', customer, p.address || '',
-      p.po || '', p.poDate || '', p.validity || '30 Days', p.stn || '', p.ntn || '',
-      prod.data[0] || '', model, prod.data[2] || '', qty, x.unit || prod.data[5] || 'Pcs',
-      rate, qty * rate, p.user || 'Staff'
-    ]);
-  });
-
-  sh.getRange(sh.getLastRow() + 1, 1, out.length, HEADERS.Quotations.length).setValues(out);
-  return {ok:true, id:no};
-}
-
-function getQuotationHistory_() {
-  const rows = objectsFromSheet_('Quotations');
-  const byNo = {};
-  const order = [];
-
-  rows.forEach(r => {
-    const no = String(r['Quotation No.'] || '').trim();
-    if (!no) return;
-    if (!byNo[no]) {
-      byNo[no] = {
-        no:no, date:r['Date'], customerId:r['Customer ID'] || '', customer:r['Customer Name'] || '',
-        address:r['Address'] || '', po:r['PO #'] || '', poDate:r['PO Date'] || '',
-        validity:r['Validity'] || '30 Days', stn:r['STN'] || '', ntn:r['NTN'] || '',
-        createdBy:r['Created By'] || '', items:[], subtotal:0
-      };
-      order.push(no);
-    }
-    const qty=Number(r['Quantity'] || 0), rate=Number(r['Rate / Unit'] || 0);
-    byNo[no].items.push({model:r['Model / Part No.'] || '',desc:r['Description'] || '',qty:qty,unit:r['Unit'] || '',rate:rate});
-    byNo[no].subtotal += Number(r['Amount'] || (qty*rate)) || 0;
-  });
-
-  return {ok:true, documents:order.map(no => byNo[no]).reverse()};
-}
+function saveQuotation(p){ if(!hasModule_(p.authUser,'enquiries'))throw Error('Unauthorized'); const sh=ensureQuotationSheet_(),no=String(p.no||'').trim()||nextSafeId_('QT-','Quotations',1),rows=sh.getDataRange().getValues(); if(rows.slice(1).some(r=>String(r[0]||'').trim()===no))throw Error('Quotation number already exists: '+no); const customer=String(p.customer||'').trim(); if(!customer)throw Error('Customer is required.'); const items=(Array.isArray(p.items)?p.items:[]).filter(x=>String(x.model||'').trim()&&Number(x.qty)>0); if(!items.length)throw Error('At least one quotation item is required.'); const eid=String(p.enquiryId||'').trim(),contact=String(p.contact||'').trim(),gst=isFinite(Number(p.gst))?Number(p.gst):0,out=[]; items.forEach(x=>{const model=String(x.model||'').trim(),prod=findProduct(model);if(!prod)throw Error('Product not found: '+model);const qty=Number(x.qty),rate=Number(x.rate);if(!isFinite(qty)||qty<=0)throw Error('Invalid quantity for '+model);if(!isFinite(rate)||rate<0)throw Error('Invalid rate for '+model);out.push([no,p.date||new Date(),p.customerId||'',customer,p.address||'',p.po||'',p.poDate||'',p.validity||'30 Days',p.stn||'',p.ntn||'',prod.data[0]||'',model,prod.data[2]||'',qty,x.unit||prod.data[5]||'Pcs',rate,qty*rate,p.user||'Staff',eid,contact,gst,'Pending','']);}); const h=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0].map(String);const map={'Quotation No.':0,'Date':1,'Customer ID':2,'Customer Name':3,'Address':4,'PO #':5,'PO Date':6,'Validity':7,'STN':8,'NTN':9,'Product ID':10,'Model / Part No.':11,'Description':12,'Quantity':13,'Unit':14,'Rate / Unit':15,'Amount':16,'Created By':17,'Enquiry ID':18,'Contact':19,'GST %':20,'Status':21,'Loss Reason':22};const aligned=out.map(row=>h.map(k=>map[k]===undefined?'':row[map[k]]));sh.getRange(sh.getLastRow()+1,1,aligned.length,h.length).setValues(aligned);if(eid)updateEnquiryForQuotation_(eid,no,'Quoted','');return {ok:true,id:no};}
+function getQuotationHistory_(){const rows=objectsFromSheet_('Quotations'),by={},order=[];rows.forEach(r=>{const no=String(r['Quotation No.']||'').trim();if(!no)return;if(!by[no]){by[no]={no:no,date:r['Date'],customerId:r['Customer ID']||'',customer:r['Customer Name']||'',address:r['Address']||'',po:r['PO #']||'',poDate:r['PO Date']||'',validity:r['Validity']||'30 Days',stn:r['STN']||'',ntn:r['NTN']||'',createdBy:r['Created By']||'',enquiryId:r['Enquiry ID']||'',contact:r['Contact']||'',gst:Number(r['GST %']||0),status:r['Status']||'Pending',lossReason:r['Loss Reason']||'',items:[],subtotal:0};order.push(no);}const qty=Number(r['Quantity']||0),rate=Number(r['Rate / Unit']||0);by[no].items.push({model:r['Model / Part No.']||'',desc:r['Description']||'',qty:qty,unit:r['Unit']||'',rate:rate});by[no].subtotal+=Number(r['Amount']||(qty*rate))||0;});return {ok:true,documents:order.map(no=>by[no]).reverse()};}
 
 function normalizeInvoiceDCs_(raw) {
   return String(raw || '').split(/[,\n]+/).map(x=>x.trim()).filter(Boolean);
@@ -1272,6 +1224,9 @@ function writeInvoiceRows_(sh, id, p, items, user) {
 
 function saveInvoice(p) {
   ensureInvoiceGstColumn_();
+  ensureQuotationColumns_();
+  ensureEnquirySheet_();
+  ensureUserModulesColumn_();
   const id=p.no || nextSafeId_('INV-','Invoices',1);
   if (p.no && numberExistsInSheet_('Invoices', p.no)) throw Error('Invoice '+p.no+' already exists. Check Invoice History.');
 
@@ -2159,6 +2114,7 @@ function saveUser_(p, authUser) {
   return {ok:true};
 }
 
+function updateUser_(p,authUser){if(String(authUser.role||'').toUpperCase()!=='ADMIN')return {ok:false,error:'Unauthorized'};const sh=SpreadsheetApp.getActive().getSheetByName('Users & Roles'),cols=getUserCols_(sh),v=sh.getDataRange().getValues(),u=String(p.username||'').trim();for(let i=1;i<v.length;i++)if(String(v[i][cols.username]||'').trim()===u){if(cols.name!==-1)v[i][cols.name]=String(p.name||'').trim();if(cols.role!==-1)v[i][cols.role]=String(p.role||'STAFF').toUpperCase();if(cols.modules!==-1)v[i][cols.modules]=JSON.stringify(Array.isArray(p.modules)?p.modules:[]);if(String(p.password||'')){if(p.password.length<6)return {ok:false,error:'Password must be at least 6 characters.'};if(cols.password!==-1)v[i][cols.password]=hashPassword_(String(p.password));}sh.getRange(i+1,1,1,cols.total).setValues([v[i]]);return {ok:true};}return {ok:false,error:'User not found'};}
 function disableUser_(p, authUser) {
   if (String(authUser.role || '').toUpperCase() !== 'ADMIN') {
     return {ok:false,error:'Unauthorized'};
