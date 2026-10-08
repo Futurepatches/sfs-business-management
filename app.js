@@ -2340,3 +2340,231 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     if (!patch()) document.addEventListener('DOMContentLoaded', patch);
   });
 })();
+
+/* ============================================================
+   SFS — UNSAVED CHANGES PROTECTION
+   ------------------------------------------------------------
+   Visual/UX safety feature:
+   - Detects unfinished form work before changing ERP pages.
+   - Gives: Save & Continue / Discard / Cancel.
+   - Uses the existing Save/Update button of the current module.
+   - Does not change backend, API, data model or existing save functions.
+   ============================================================ */
+(function(){
+  'use strict';
+
+  if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.__v) return;
+
+  var dirty = false;
+  var baseline = '';
+  var currentPage = '';
+  var pendingNav = null;
+  var bypass = false;
+  var observer = null;
+
+  function controls(){
+    var root = document.getElementById('content');
+    if (!root) return [];
+    return Array.prototype.slice.call(root.querySelectorAll('input,select,textarea'))
+      .filter(function(el){
+        if (el.disabled) return false;
+        if (el.closest('.toolbar')) return false;
+        if (el.closest('.table-wrap')) return false;
+        if (el.closest('.no-dirty-track')) return false;
+        if (el.type === 'button' || el.type === 'submit' || el.type === 'reset') return false;
+        if (el.type === 'search') return false;
+        return true;
+      });
+  }
+
+  function state(){
+    return controls().map(function(el){
+      var v;
+      if (el.type === 'checkbox' || el.type === 'radio') v = el.checked ? '1' : '0';
+      else v = el.value == null ? '' : String(el.value);
+      return el.name + '|' + el.id + '|' + el.type + '|' + v;
+    }).join('||');
+  }
+
+  function markClean(page){
+    baseline = state();
+    dirty = false;
+    currentPage = page || currentPage;
+  }
+
+  function checkDirty(){
+    if (!baseline) return false;
+    dirty = state() !== baseline;
+    return dirty;
+  }
+
+  function css(){
+    if (document.getElementById('sfsUnsavedStyles')) return;
+    var s = document.createElement('style');
+    s.id = 'sfsUnsavedStyles';
+    s.textContent = [
+      '#sfsUnsavedOverlay{position:fixed;inset:0;background:rgba(17,43,75,.38);backdrop-filter:blur(3px);',
+        'display:flex;align-items:center;justify-content:center;padding:20px;z-index:2147482500}',
+      '#sfsUnsavedBox{width:min(440px,100%);background:#fff;border:1px solid #DCE7F3;border-radius:14px;',
+        'box-shadow:0 22px 60px rgba(20,55,95,.22);padding:26px 28px;font-family:Inter,Arial,sans-serif}',
+      '#sfsUnsavedIcon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;',
+        'background:#FFF5DF;color:#E89B12;font-size:23px;font-weight:700;margin-bottom:14px}',
+      '#sfsUnsavedBox h3{margin:0 0 8px;color:#17345F;font-size:20px}',
+      '#sfsUnsavedBox p{margin:0 0 22px;color:#647B99;font-size:13.5px;line-height:1.6}',
+      '#sfsUnsavedActions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}',
+      '#sfsUnsavedActions button{border:1px solid #D2DEEC;background:#fff;color:#284A78;border-radius:7px;',
+        'padding:9px 14px;font:600 13px Inter,Arial,sans-serif;cursor:pointer}',
+      '#sfsUnsavedActions button:hover{background:#F5F8FD}',
+      '#sfsUnsavedSave{background:#2F80ED!important;border-color:#2F80ED!important;color:#fff!important}',
+      '#sfsUnsavedSave:hover{background:#1769D2!important;border-color:#1769D2!important}',
+      '#sfsUnsavedDiscard{color:#D44747!important;border-color:#F0C8C8!important}',
+      '@media(max-width:560px){#sfsUnsavedBox{padding:22px}.#sfsUnsavedActions{justify-content:stretch}#sfsUnsavedActions button{flex:1}}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  function closePrompt(){
+    var x = document.getElementById('sfsUnsavedOverlay');
+    if (x) x.remove();
+  }
+
+  function navigate(){
+    var n = pendingNav;
+    pendingNav = null;
+    dirty = false;
+    baseline = '';
+    if (!n) return;
+    bypass = true;
+    try {
+      originalShowPage.apply(window, n.args);
+    } finally {
+      bypass = false;
+      setTimeout(function(){ markClean(n.args[0] || ''); }, 0);
+    }
+  }
+
+  function findSaveButton(){
+    var root = document.getElementById('content');
+    if (!root) return null;
+    var buttons = Array.prototype.slice.call(root.querySelectorAll('button'));
+    var good = buttons.filter(function(b){
+      if (b.disabled || b.closest('.no-save-detect')) return false;
+      var t = (b.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
+      return /^(save|update|submit|create)\b/.test(t) ||
+             /\b(save|update)\b/.test(t);
+    });
+    return good[0] || null;
+  }
+
+  function saveAndNavigate(){
+    var save = findSaveButton();
+    if (!save){
+      closePrompt();
+      alert('Current page has unsaved work, but no Save/Update button was found.');
+      return;
+    }
+
+    closePrompt();
+    save.click();
+
+    /* Existing save functions call api(), which increments SFS_BUSY.
+       Wait for those existing requests to finish before moving away. */
+    var started = Date.now();
+    var timer = setInterval(function(){
+      var elapsed = Date.now() - started;
+      var busy = (typeof SFS_BUSY !== 'undefined') ? SFS_BUSY : 0;
+      if (busy === 0 && elapsed > 350 || elapsed > 15000){
+        clearInterval(timer);
+        dirty = false;
+        baseline = '';
+        navigate();
+      }
+    }, 150);
+  }
+
+  function prompt(args){
+    pendingNav = {args: args};
+    css();
+    closePrompt();
+
+    var o = document.createElement('div');
+    o.id = 'sfsUnsavedOverlay';
+    o.innerHTML =
+      '<div id="sfsUnsavedBox" role="dialog" aria-modal="true" aria-labelledby="sfsUnsavedTitle">' +
+        '<div id="sfsUnsavedIcon">!</div>' +
+        '<h3 id="sfsUnsavedTitle">Unsaved Changes</h3>' +
+        '<p>You have unfinished work on this page. Do you want to save it before leaving?</p>' +
+        '<div id="sfsUnsavedActions">' +
+          '<button type="button" id="sfsUnsavedCancel">Cancel</button>' +
+          '<button type="button" id="sfsUnsavedDiscard">Discard</button>' +
+          '<button type="button" id="sfsUnsavedSave">Save &amp; Continue</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(o);
+    document.getElementById('sfsUnsavedCancel').onclick = closePrompt;
+    document.getElementById('sfsUnsavedDiscard').onclick = function(){
+      closePrompt();
+      navigate();
+    };
+    document.getElementById('sfsUnsavedSave').onclick = saveAndNavigate;
+
+    o.addEventListener('click', function(e){
+      if (e.target === o) closePrompt();
+    });
+  }
+
+  /* The original router remains untouched; this wrapper only guards navigation. */
+  var originalShowPage = window.showPage;
+  if (typeof originalShowPage !== 'function') return;
+
+  window.showPage = function(){
+    var args = Array.prototype.slice.call(arguments);
+    if (!bypass && checkDirty()){
+      prompt(args);
+      return false;
+    }
+    var out = originalShowPage.apply(window, args);
+    setTimeout(function(){ markClean(args[0] || ''); }, 0);
+    return out;
+  };
+  window.showPage.__sfsUnsavedWrapped = true;
+
+  /* Any actual edit marks the current page dirty. */
+  document.addEventListener('input', function(e){
+    if (!e.target || !e.target.closest('#content')) return;
+    if (e.target.closest('.toolbar') || e.target.closest('.no-dirty-track')) return;
+    setTimeout(checkDirty, 0);
+  }, true);
+
+  document.addEventListener('change', function(e){
+    if (!e.target || !e.target.closest('#content')) return;
+    if (e.target.closest('.toolbar') || e.target.closest('.no-dirty-track')) return;
+    setTimeout(checkDirty, 0);
+  }, true);
+
+  /* Adding/removing invoice/DC/quotation lines is also considered work. */
+  document.addEventListener('click', function(e){
+    var el = e.target && e.target.closest ? e.target.closest('#content button') : null;
+    if (!el || el.closest('.no-dirty-track') || el.closest('.toolbar')) return;
+    var t = (el.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
+    if (/^(\+\s*)?(add|remove|delete|edit line|new line)\b/.test(t)){
+      setTimeout(checkDirty, 30);
+    }
+  }, true);
+
+  /* Mark the currently rendered page clean after initial/router renders. */
+  setTimeout(function(){
+    var active = document.querySelector('.navbtn.active');
+    var m = active && active.getAttribute('onclick') && active.getAttribute('onclick').match(/'([^']+)'/);
+    markClean(m ? m[1] : '');
+  }, 100);
+
+  window.SFSUnsavedChanges = {
+    __v:'1.0',
+    isDirty:function(){ return checkDirty(); },
+    markClean:markClean,
+    discard:function(){ dirty=false; baseline=''; navigate(); }
+  };
+})();
+
