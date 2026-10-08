@@ -655,3 +655,31 @@ html,body{
   }
 }
 
+/* Corporate document typography + fixed detail boxes */
+.doc-items{table-layout:fixed!important}
+.doc-items th,.doc-items td{overflow:hidden;word-break:break-word}
+.doc-items tbody tr{height:34px}
+.doc-items tbody tr.filler{height:34px}
+.doc-items tbody tr.filler td{height:34px!important}
+.doc-items th:nth-child(1){width:7%}
+.doc-items th:nth-child(2){width:38%}
+.doc-items th:nth-child(3){width:13%}
+.doc-items th:nth-child(4){width:10%}
+.doc-items th:nth-child(5){width:14%}
+.doc-items th:nth-child(6){width:18%}
+
+/* Dashboard KPI cards */
+.dash-kpi{cursor:pointer;position:relative;overflow:hidden}
+.dash-kpi small{display:block;margin-top:7px;font-size:10.5px;color:#6E86A4;font-weight:600}
+.dash-kpi::after{content:'›';position:absolute;right:16px;bottom:13px;font-size:22px;font-weight:700;opacity:.35}
+.dash-kpi-products{background:linear-gradient(135deg,#F0F7FF,#FFFFFF)!important;border-top:3px solid #2F80ED!important}
+.dash-kpi-stock{background:linear-gradient(135deg,#F0FBF8,#FFFFFF)!important;border-top:3px solid #20B878!important}
+.dash-kpi-customers{background:linear-gradient(135deg,#F7F2FF,#FFFFFF)!important;border-top:3px solid #7657E8!important}
+.dash-kpi-suppliers{background:linear-gradient(135deg,#FFF8EC,#FFFFFF)!important;border-top:3px solid #F39A27!important}
+.dash-kpi-low{background:linear-gradient(135deg,#FFF2F4,#FFFFFF)!important;border-top:3px solid #EF5B63!important}
+.dash-kpi:hover{box-shadow:0 8px 22px rgba(31,74,125,.12)!important}
+@media(max-width:700px){
+  .dash-kpi{padding:13px!important}
+  .dash-kpi strong{font-size:22px!important}
+}
+
