@@ -505,6 +505,21 @@ function renderSelectedSalesYear(year){
   const pct = r.target > 0 ? Math.round(r.totalSales / r.target * 100) : 0;
   const remaining = r.target > 0 ? Math.max(0, r.target - r.totalSales) : 0;
 
+  const monthly = Array.isArray(r.monthlySales) ? r.monthlySales : [];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const maxMonthly = Math.max(...monthly.map(x => Number(x.amount)||0), 1);
+  const monthlyBars = monthly.map((x,i) => {
+    const amount = Number(x.amount)||0;
+    const h = Math.max(2, Math.round(amount/maxMonthly*100));
+    return '<div style="flex:1;min-width:24px;height:150px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px" title="'+monthNames[i]+': Rs. '+money(amount)+'">' +
+      '<div style="width:100%;max-width:42px;height:'+h+'%;min-height:3px;background:linear-gradient(180deg,#2F80ED,#69A8F7);border-radius:6px 6px 2px 2px"></div>' +
+      '<span style="font-size:10px;color:var(--steel)">'+monthNames[i]+'</span></div>';
+  }).join('');
+
+  targetHost.innerHTML = '<div class="panel" style="margin:0 0 14px;padding:16px">' +
+    '<div class="panel-head" style="margin-bottom:10px"><div><h4 style="margin:0;color:#17345F">Monthly Net Sales — '+r.year+'</h4><div class="muted" style="font-size:11.5px">Excluding GST</div></div></div>' +
+    '<div style="display:flex;align-items:flex-end;gap:8px;height:175px;padding:5px 4px 0">'+monthlyBars+'</div></div>' +
+    '';
   targetHost.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
