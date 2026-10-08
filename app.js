@@ -484,8 +484,6 @@ function renderSelectedSalesYear(year){
   const summaries = window.SALES_YEAR_SUMMARIES || [];
   let r = summaries.find(x => Number(x.year) === Number(year));
   if (!r) {
-    /* Future years may not have been loaded yet. Fetch the selected year
-       directly; backend already supports saving targets for any year. */
     api('getSalesSummary', {year:Number(year)}).then(res => {
       if (!res || !res.ok) return toast(res && res.error || 'Could not load sales target.', true);
       const idx = summaries.findIndex(x => Number(x.year) === Number(year));
@@ -510,65 +508,66 @@ function renderSelectedSalesYear(year){
   const maxMonthly = Math.max(...monthly.map(x => Number(x.amount)||0), 1);
   const monthlyBars = monthly.map((x,i) => {
     const amount = Number(x.amount)||0;
-    const h = Math.max(2, Math.round(amount/maxMonthly*100));
-    return '<div style="flex:1;min-width:24px;height:150px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px" title="'+monthNames[i]+': Rs. '+money(amount)+'">' +
-      '<div style="width:100%;max-width:42px;height:'+h+'%;min-height:3px;background:linear-gradient(180deg,#2F80ED,#69A8F7);border-radius:6px 6px 2px 2px"></div>' +
+    const h = Math.max(3, Math.round(amount/maxMonthly*100));
+    return '<div title="'+monthNames[i]+': Rs. '+money(amount)+'" style="flex:1;min-width:28px;height:170px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px">' +
+      '<div style="font-size:9px;color:var(--steel);white-space:nowrap">'+(amount ? money(amount) : '')+'</div>' +
+      '<div style="width:100%;max-width:42px;height:'+h+'%;min-height:4px;background:linear-gradient(180deg,#2F80ED,#78B5FF);border-radius:7px 7px 2px 2px;box-shadow:0 3px 8px rgba(47,128,237,.14)"></div>' +
       '<span style="font-size:10px;color:var(--steel)">'+monthNames[i]+'</span></div>';
   }).join('');
 
-  targetHost.innerHTML = '<div class="panel" style="margin:0 0 14px;padding:16px">' +
-    '<div class="panel-head" style="margin-bottom:10px"><div><h4 style="margin:0;color:#17345F">Monthly Net Sales — '+r.year+'</h4><div class="muted" style="font-size:11.5px">Excluding GST</div></div></div>' +
-    '<div style="display:flex;align-items:flex-end;gap:8px;height:175px;padding:5px 4px 0">'+monthlyBars+'</div></div>' +
-    '';
-  targetHost.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div>
-        <div style="font-size:13px;color:var(--steel)">Sales Target — ${r.year}</div>
-        <div style="font-size:24px;font-weight:700;margin-top:3px">${money(r.target)}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:13px;color:var(--steel)">Actual Sale</div>
-        <div style="font-size:24px;font-weight:700;margin-top:3px">${money(r.totalSales)}</div>
-      </div>
-    </div>
+  targetHost.innerHTML =
+    '<div style="display:grid;grid-template-columns:minmax(250px,1fr) minmax(220px,360px);gap:16px;align-items:stretch">' +
+      '<div class="panel" style="margin:0;padding:18px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+          '<div><h4 style="margin:0;color:#17345F;font-size:15px">Monthly Sales Overview</h4><div class="muted" style="font-size:11px;margin-top:3px">Net sales · GST excluded · '+r.year+'</div></div>' +
+          '<div style="font-size:11px;color:var(--brand);font-weight:700">Rs. '+money(r.totalSales)+'</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:7px;height:205px;padding:5px 2px 0">'+monthlyBars+'</div>' +
+      '</div>' +
+      '<div class="panel" style="margin:0;padding:18px;display:flex;flex-direction:column;justify-content:center">' +
+        '<div style="font-size:12px;color:var(--steel);font-weight:600">ANNUAL SALES TARGET</div>' +
+        '<div style="display:flex;align-items:center;gap:18px;margin-top:12px">' +
+          '<div style="width:104px;height:104px;border-radius:50%;background:conic-gradient(#2F80ED '+Math.min(100,pct)+'%,#E7EEF7 0);display:grid;place-items:center;flex:0 0 auto">' +
+            '<div style="width:78px;height:78px;border-radius:50%;background:#fff;display:grid;place-items:center"><b style="font-size:19px;color:#17345F">'+pct+'%</b></div>' +
+          '</div>' +
+          '<div style="min-width:0"><div style="font-size:11px;color:var(--steel)">Target</div><b style="font-size:18px;color:#17345F">'+money(r.target)+'</b>' +
+          '<div style="font-size:11px;color:var(--steel);margin-top:7px">Actual · GST excl.</div><b style="font-size:16px;color:#2F80ED">'+money(r.totalSales)+'</b></div>' +
+        '</div>' +
+        '<div style="margin-top:14px;font-size:12px;color:var(--steel)">'+
+          (r.target > 0 ? (r.totalSales >= r.target ? '✓ Target reached' : money(remaining)+' remaining') : 'No target set for this year.')+
+        '</div>' +
+        (isAdmin() ? '<div style="margin-top:12px"><button class="btn small" onclick="setTargetForm('+r.year+','+r.target+')">'+(r.target > 0 ? 'Edit Target' : 'Set Target')+'</button></div>' : '') +
+      '</div>' +
+    '</div>';
 
-    ${r.target > 0 ? `
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px">
-        <span>Achievement</span><b>${pct}%</b>
-      </div>
-      <div style="background:#F0F2F5;border-radius:20px;height:14px;overflow:hidden">
-        <div style="width:${Math.min(100,pct)}%;height:100%;background:linear-gradient(90deg,#3B5BDB,#10B981);border-radius:20px"></div>
-      </div>
-      <div style="margin-top:7px;font-size:12.5px;color:var(--steel)">
-        ${r.totalSales >= r.target ? 'Target reached' : money(remaining) + ' remaining'}
-      </div>
-    ` : `
-      <div class="muted">No sales target set for ${r.year} yet.</div>
-    `}
+  title.textContent = 'Top 10 Customers by Sales (' + r.year + ')';
 
-    ${isAdmin() ? `<div style="margin-top:14px">
-      <button class="btn small" onclick="setTargetForm(${r.year},${r.target})">${r.target > 0 ? 'Edit Target' : 'Set Target'}</button>
-    </div>` : ''}`;
-
-  title.textContent = `Top Customers by Sales (${r.year})`;
-
-  const top = (r.customerSales || []).slice(0,8);
+  const top = (r.customerSales || []).slice(0,10);
+  const totalCustomerSales = (r.customerSales || []).reduce((sum,c) => sum + (Number(c.amount)||0), 0) || 1;
+  const topTotal = top.reduce((sum,c) => sum + (Number(c.amount)||0), 0);
   const maxAmt = Math.max(...top.map(c => Number(c.amount)||0), 1);
 
-  customerHost.innerHTML = top.length ? `
-    <div style="display:flex;flex-direction:column;gap:12px">
-      ${top.map(c => `
-        <div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
-            <span>${esc(c.customer)}</span><b>${money(c.amount)}</b>
-          </div>
-          <div style="background:#F0F2F5;border-radius:6px;height:9px;overflow:hidden">
-            <div style="width:${((Number(c.amount)||0)/maxAmt*100)}%;height:100%;background:var(--brand);border-radius:6px"></div>
-          </div>
-        </div>`).join('')}
-    </div>` : '<div class="muted">No invoice sales recorded for this year.</div>';
+  customerHost.innerHTML = top.length ? 
+    '<div class="panel" style="margin:0;padding:18px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+        '<div><h4 style="margin:0;color:#17345F;font-size:15px">Top 10 Customers</h4><div class="muted" style="font-size:11px;margin-top:3px">Share of total net sales · '+r.year+'</div></div>' +
+        '<div style="font-size:11px;color:var(--steel)">Top 10 = '+Math.round(topTotal/totalCustomerSales*100)+'%</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:11px">' +
+      top.map((c,i) => {
+        const amount = Number(c.amount)||0;
+        const share = amount/totalCustomerSales*100;
+        const bar = amount/maxAmt*100;
+        return '<div style="display:grid;grid-template-columns:24px minmax(110px,1.25fr) minmax(130px,2fr) 82px;gap:9px;align-items:center">' +
+          '<span style="width:24px;height:24px;border-radius:7px;background:#EEF5FF;color:#2F80ED;display:grid;place-items:center;font-size:11px;font-weight:700">'+(i+1)+'</span>' +
+          '<span style="font-size:12px;color:#284A78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(c.customer)+'">'+esc(c.customer)+'</span>' +
+          '<div style="background:#EEF3F9;border-radius:8px;height:10px;overflow:hidden"><div style="width:'+bar+'%;height:100%;background:linear-gradient(90deg,#2F80ED,#69A8F7);border-radius:8px"></div></div>' +
+          '<div style="text-align:right;white-space:nowrap"><b style="font-size:12px;color:#17345F">'+money(amount)+'</b><span style="display:block;font-size:10px;color:#7087A6">'+share.toFixed(1)+'%</span></div>' +
+        '</div>';
+      }).join('') +
+      '</div>' +
+    '</div>' : '<div class="panel"><div class="muted">No invoice sales recorded for this year.</div></div>';
 }
-
 
 function setTargetForm(year, current){
   modal('Set Sales Target — ' + year,
