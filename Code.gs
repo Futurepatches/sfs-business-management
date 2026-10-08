@@ -1776,6 +1776,7 @@ function getSalesSummaryForFrontend_(p) {
   const invoiceDocs = buildInvoiceDocuments_();
   const byCustomer = {};
   let totalSales = 0;
+  const monthlySales = Array.from({length:12}, (_,i) => ({month:i+1, amount:0}));
 
   invoiceDocs.forEach(inv => {
     const y = yearOf_(inv.date);
@@ -1787,7 +1788,14 @@ function getSalesSummaryForFrontend_(p) {
     const cust = String(inv.customer || '').trim();
     if (cust) byCustomer[cust] = (byCustomer[cust] || 0) + netSale;
     totalSales += netSale;
+
+    const d = new Date(inv.date);
+    if (!isNaN(d)) {
+      const m = d.getMonth();
+      if (m >= 0 && m < 12) monthlySales[m].amount += netSale;
+    }
   });
+  monthlySales.forEach(x => x.amount = round2_(x.amount));
 
   const customerSales = Object.keys(byCustomer)
     .map(c => ({customer:c, amount:byCustomer[c]}))
@@ -1797,7 +1805,7 @@ function getSalesSummaryForFrontend_(p) {
   return {
     ok:true, year:year, totalSales:totalSales, target:target,
     remaining:Math.max(0, target - totalSales),
-    customerSales:customerSales
+    customerSales:customerSales, monthlySales:monthlySales
   };
 }
 
