@@ -409,11 +409,11 @@ function renderDashboard(){
 
   $('dash').innerHTML = `
     <div class="cards">
-      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>\${S.products.length}</strong><small>View products →</small></div>
-      <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>\${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
-      <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>\${S.customers.length}</strong><small>View customers →</small></div>
-      <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>\${S.suppliers.length}</strong><small>View suppliers →</small></div>
-      <div class="card dash-kpi dash-kpi-low" role="button" tabindex="0" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong>\${lowStock.length}</strong><small>View low stock →</small></div>
+      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${S.products.length}</strong><small>View products →</small></div>
+      <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
+      <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong><small>View customers →</small></div>
+      <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>${S.suppliers.length}</strong><small>View suppliers →</small></div>
+      <div class="card dash-kpi dash-kpi-low" role="button" tabindex="0" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong>${lowStock.length}</strong><small>View low stock →</small></div>
     </div>
     ${lowStock.length ? `<div class="panel">
       <div class="panel-head">
