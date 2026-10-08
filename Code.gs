@@ -1780,10 +1780,13 @@ function getSalesSummaryForFrontend_(p) {
   invoiceDocs.forEach(inv => {
     const y = yearOf_(inv.date);
     if (y === null || String(y) !== year) return;
-    const grand = invoiceTotal_(inv);
+    /* Sales Target is measured on NET sales, before GST.
+       Invoice/payment/outstanding calculations continue using invoiceTotal_()
+       elsewhere in the ERP. Only this reporting summary is GST-exclusive. */
+    const netSale = round2_(Number(inv.subtotal || 0));
     const cust = String(inv.customer || '').trim();
-    if (cust) byCustomer[cust] = (byCustomer[cust] || 0) + grand;
-    totalSales += grand;
+    if (cust) byCustomer[cust] = (byCustomer[cust] || 0) + netSale;
+    totalSales += netSale;
   });
 
   const customerSales = Object.keys(byCustomer)
