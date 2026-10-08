@@ -1146,13 +1146,14 @@ function saveQuotation(p) {
   const pmap = getProductMap_();
   const rows = valid.map(x => {
     const model = String(x.model || '').trim();
-    const prod = pmap[model];
-    if (!prod) throw Error('Product not found: ' + model);
-    if (String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
+    const prod = model ? pmap[model] : null;
+    const customDesc = String(x.desc || '').trim();
     const qty = num_(x.qty), rate = num_(x.rate);
-    if (qty <= 0) throw Error('Invalid quantity for ' + model);
-    if (rate < 0) throw Error('Invalid rate for ' + model);
-    return [no,toDate_(p.date)||new Date(),p.customerId||'',customer,p.address||'',p.po||'',toDate_(p.poDate)||'',p.validity||'30 Days',p.stn||'',p.ntn||'',prod.data[0]||'',model,prod.data[2]||'',qty,x.unit||prod.data[5]||'Pcs',rate,round2_(qty*rate),p.user||'Staff',String(p.revisionOf||'').trim()];
+    if (!prod && !customDesc) throw Error('Enter a Part No. or Description for each quotation item.');
+    if (prod && String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
+    if (qty <= 0) throw Error('Invalid quantity for quotation item.');
+    if (rate < 0) throw Error('Invalid rate for quotation item.');
+    return [no,toDate_(p.date)||new Date(),p.customerId||'',customer,p.address||'',p.po||'',toDate_(p.poDate)||'',p.validity||'30 Days',p.stn||'',p.ntn||'',x.make||((prod&&prod.data[0])||''),model,customDesc||((prod&&prod.data[2])||''),qty,x.unit||((prod&&prod.data[5])||'Pcs'),rate,round2_(qty*rate),p.user||'Staff',String(p.revisionOf||'').trim()];
   });
   appendRows_('Quotations', rows);
   return {ok:true,id:no,subtotal:round2_(rows.reduce((a,r)=>a+Number(r[16]||0),0))};
