@@ -1774,39 +1774,48 @@ function getTargetForYear_(year) {
 
 function getSalesSummaryForFrontend_(p) {
   const year = String(p.year || new Date().getFullYear());
-  const invoiceDocs = buildInvoiceDocuments_();
+
+  /* IMPORTANT:
+     Dashboard Sales Target must use the exact same invoice Amount source
+     as Reports > Sales (excl. GST). This prevents Dashboard and Reports
+     from ever showing different sales figures. */
+  const report = getReportsForFrontend_({year:Number(year)});
+  const sales = report && report.ok ? (report.sales || []) : [];
+
   const byCustomer = {};
   let totalSales = 0;
   const monthlySales = Array.from({length:12}, (_,i) => ({month:i+1, amount:0}));
 
-  invoiceDocs.forEach(inv => {
-    const y = yearOf_(inv.date);
-    if (y === null || String(y) !== year) return;
-    /* Sales Target is measured on NET sales, before GST.
-       Invoice/payment/outstanding calculations continue using invoiceTotal_()
-       elsewhere in the ERP. Only this reporting summary is GST-exclusive. */
-    const netSale = round2_(Number(inv.subtotal || 0));
+  sales.forEach(inv => {
+    const netSale = round2_(Number(inv.total || 0));
     const cust = String(inv.customer || '').trim();
     if (cust) byCustomer[cust] = (byCustomer[cust] || 0) + netSale;
     totalSales += netSale;
 
-    const d = new Date(inv.date);
-    if (!isNaN(d)) {
+    const d = toDate_(inv.date);
+    if (d) {
       const m = d.getMonth();
       if (m >= 0 && m < 12) monthlySales[m].amount += netSale;
     }
   });
+
   monthlySales.forEach(x => x.amount = round2_(x.amount));
 
   const customerSales = Object.keys(byCustomer)
-    .map(c => ({customer:c, amount:byCustomer[c]}))
+    .map(c => ({customer:c, amount:round2_(byCustomer[c])}))
     .sort((a, b) => b.amount - a.amount);
 
+  totalSales = round2_(totalSales);
   const target = getTargetForYear_(year);
+
   return {
-    ok:true, year:year, totalSales:totalSales, target:target,
-    remaining:Math.max(0, target - totalSales),
-    customerSales:customerSales, monthlySales:monthlySales
+    ok:true,
+    year:year,
+    totalSales:totalSales,
+    target:target,
+    remaining:Math.max(0, round2_(target - totalSales)),
+    customerSales:customerSales,
+    monthlySales:monthlySales
   };
 }
 
