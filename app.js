@@ -1555,7 +1555,7 @@ async function ledger(type, nameEnc){
           <tbody>${rows || '<tr><td colspan="6" class="empty">No invoices or payments.</td></tr>'}</tbody>
           <tfoot><tr><td colspan="3"><b>Total</b></td><td class="right"><b>${money(dr)}</b></td><td class="right"><b>${money(cr)}</b></td><td class="right"><b>${money(dr - cr)}</b></td></tr></tfoot>
         </table></div>
-        <div class="muted small">Debit = invoices (GST ke saath), Credit = payments. Balance positive = customer ne dena hai.</div>`;
+        <div class="muted small">Debit = Invoices (including GST), Credit = Payments. Positive balance = Amount due from the customer.</div>`;
     } else {
       const row = (inv.rows||[])[0] || {purchased:0, paid:0, outstanding:0};
       const prow = (pay.payments||[]).map(x => `<tr><td>${fmtDate(x.Date)}</td><td class="right">${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('');
