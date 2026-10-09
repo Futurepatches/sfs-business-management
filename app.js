@@ -1412,34 +1412,40 @@ async function submitSupPayment(){
 }
 
 /* ---------- CUSTOMERS / SUPPLIERS ---------- */
-function renderCustomers(){
-  $('customers').innerHTML = S.customers.map(c => {
-    const status = c.Status||'Active';
-    return `<div class="kv">
-       <b>${esc(c['Customer Name'])}</b>${status==='Inactive'?' <span class="muted">(Inactive)</span>':''} — <span class="muted">${esc(c['Customer ID'])}</span><br>
-       ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
-       ${esc(c.Address)}<br>
-       <button class="btn small" onclick="ledger('Customer','${encA(c['Customer Name'])}')">Ledger</button>
-       <button class="btn small" onclick="editPartyForm('Customer','${encA(c['Customer Name'])}')">Edit</button>
-       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Customer','${encA(c['Customer Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
-     </div>`;
-  }).join('') || '<div class="muted">No customers yet.</div>';
+function partyCardHtml(type,c){
+  const isCustomer=type==='Customer'; const nameKey=isCustomer?'Customer Name':'Supplier Name'; const idKey=isCustomer?'Customer ID':'Supplier ID';
+  const name=String(c[nameKey]||'Unnamed'); const id=String(c[idKey]||''); const status=c.Status||'Active';
+  const initials=name.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?';
+  const contact=String(c['Contact Person']||'').trim(), phone=String(c.Phone||'').trim(), email=String(c.Email||'').trim();
+  const address=String(c.Address||'').trim(), ntn=String(c['NTN/Tax ID']||'').trim(), stn=stnOf(c);
+  return '<article class="party-card '+(isCustomer?'party-customer':'party-supplier')+' '+(status==='Inactive'?'is-inactive':'')+'">'+
+    '<div class="party-card-head"><div class="party-avatar">'+esc(initials)+'</div><div class="party-title"><h3>'+esc(name)+'</h3><div class="party-id">'+esc(id||(isCustomer?'Customer':'Supplier'))+'</div></div><span class="party-status '+(status==='Active'?'active':'inactive')+'">'+esc(status)+'</span></div>'+
+    '<div class="party-contact-grid">'+
+      '<div class="party-info"><span>Contact Person</span><b>'+esc(contact||'—')+'</b></div>'+
+      '<div class="party-info"><span>Phone</span><b>'+esc(phone||'—')+'</b></div>'+
+      '<div class="party-info"><span>Email</span><b class="party-email">'+esc(email||'—')+'</b></div>'+
+      '<div class="party-info"><span>NTN / Tax ID</span><b>'+esc(ntn||'—')+'</b></div>'+
+      '<div class="party-info"><span>STN</span><b>'+esc(stn||'—')+'</b></div>'+
+      '<div class="party-info party-address"><span>Address</span><b>'+esc(address||'—')+'</b></div>'+
+    '</div><div class="party-actions">'+
+      '<button class="btn small" onclick="ledger(\''+type+'\',\''+encA(name)+'\')">View Ledger</button>'+
+      '<button class="btn small" onclick="editPartyForm(\''+type+'\',\''+encA(name)+'\')">Edit</button>'+
+      (isAdmin()?'<button class="btn small '+(status==='Active'?'danger':'')+'" onclick="togglePartyStatus(\''+type+'\',\''+encA(name)+'\',\''+(status==='Active'?'Inactive':'Active')+'\')">'+(status==='Active'?'Deactivate':'Activate')+'</button>':'')+
+    '</div></article>';
 }
 
-function renderSuppliers(){
-  $('suppliers').innerHTML = S.suppliers.map(c => {
-    const status = c.Status||'Active';
-    return `<div class="kv">
-       <b>${esc(c['Supplier Name'])}</b>${status==='Inactive'?' <span class="muted">(Inactive)</span>':''} — <span class="muted">${esc(c['Supplier ID'])}</span><br>
-       ${esc(c['Contact Person'])} • ${esc(c.Phone)} • ${esc(c.Email)}<br>
-       ${esc(c.Address)}<br>
-       <button class="btn small" onclick="ledger('Supplier','${encA(c['Supplier Name'])}')">Ledger</button>
-       <button class="btn small" onclick="editPartyForm('Supplier','${encA(c['Supplier Name'])}')">Edit</button>
-       ${isAdmin()?`<button class="btn small danger" onclick="togglePartyStatus('Supplier','${encA(c['Supplier Name'])}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
-     </div>`;
-  }).join('') || '<div class="muted">No suppliers yet.</div>';
+function renderPartyDirectory(type){
+  const isCustomer=type==='Customer'; const list=isCustomer?S.customers:S.suppliers; const host=$(isCustomer?'customers':'suppliers');
+  const search=$(isCustomer?'customerSearch':'supplierSearch'); const q=norm(search?.value||''); const statusFilter=$(isCustomer?'customerStatus':'supplierStatus')?.value||'';
+  const key=isCustomer?'Customer Name':'Supplier Name';
+  const filtered=list.filter(c=>{const status=c.Status||'Active'; if(statusFilter&&status!==statusFilter)return false; if(!q)return true; return [c[key],c[isCustomer?'Customer ID':'Supplier ID'],c['Contact Person'],c.Phone,c.Email,c.Address,c['NTN/Tax ID'],c.Remarks].some(v=>norm(v).includes(q));});
+  const active=list.filter(x=>(x.Status||'Active')==='Active').length; const inactive=list.length-active;
+  const count=$(isCustomer?'customerCount':'supplierCount'); if(count) count.textContent='Showing '+filtered.length+' of '+list.length;
+  const stat=$(isCustomer?'customerStats':'supplierStats'); if(stat) stat.innerHTML='<span class="party-stat active"><b>'+active+'</b> Active</span><span class="party-stat"><b>'+inactive+'</b> Inactive</span>';
+  host.innerHTML=filtered.map(c=>partyCardHtml(type,c)).join('')||'<div class="party-empty"><div class="party-empty-icon">◎</div><h3>No '+(isCustomer?'customers':'suppliers')+' found</h3><p>Try another search or add a new '+(isCustomer?'customer':'supplier')+'.</p></div>';
 }
-
+function renderCustomers(){ renderPartyDirectory('Customer'); }
+function renderSuppliers(){ renderPartyDirectory('Supplier'); }
 function editPartyForm(type, nameEnc){
   const name = decodeURIComponent(nameEnc);
   const list = type==='Customer' ? S.customers : S.suppliers;
