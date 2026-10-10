@@ -1847,14 +1847,32 @@ function reviseQuotation(en){const no=decodeURIComponent(en),d=QT_CACHE.find(x=>
 function printLogoSrc(){ try { return new URL('logo.png', document.baseURI).href; } catch(e){ return 'logo.png'; } }
 
 function printQuotation(d){
-  const rows=(d.items||[]).map((x,i)=>{
-    const p=findProd(x.model)||{};
-    const amt=(+x.qty||0)*(+x.rate||0);
-    return `<tr><td class="c">${i+1}</td><td>${esc(x.desc||p.Description||'')}${x.model?'<br><span class="muted">Model: '+esc(x.model)+'</span>':''}</td><td class="c">${esc(x.make||p.Brand||'')}</td><td class="c">${x.qty}<br><span class="muted">${esc(x.unit||'nos')}</span></td><td class="c">${money(x.rate)}</td><td class="r">${money(amt)}</td><td class="c">${esc(x.deliveryStatus||'Pending')}</td></tr>`;
-  }).join('') + fillerRows((d.items||[]).length,6,7);
-  const total=(d.items||[]).reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0);
+  d = d || {};
+  const items = d.items || [];
+  const lineAmt = x => (+x.qty||0)*(+x.rate||0);
+  const gross = items.reduce((a,x)=>a+lineAmt(x),0);
+  const discPct = Number(d.discount||0);
+  const discAmt = discPct>0 ? gross*discPct/100 : 0;
+  const itemDisc = items.reduce((a,x)=>a+(Number(x.discount||0)>0 ? lineAmt(x)*Number(x.discount)/100 : 0),0);
+  const total = gross - discAmt - itemDisc;
+  const cust = findCust(d.customer) || {};
+  const rows = items.map((x,i)=>{
+    const p = findProd(x.model) || {};
+    const make = x.make || p.Brand || '';
+    const desc = x.desc || p.Description || '';
+    const lead = x.leadTime || x.deliveryStatus || '';
+    return `<tr><td class="c">${i+1}</td><td>${x.model?'<b>'+esc(x.model)+'</b>':''}${desc?'<div>'+esc(desc)+'</div>':''}${make?'<div style="margin-top:4px"><b>Make : '+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><br><i>${esc(x.unit||'nos')}</i></td><td class="c"><b>${money(x.rate)}</b><br><i>each</i></td><td class="r">${money(lineAmt(x))}</td><td class="c"><b>${esc(String(lead).toUpperCase())}</b></td></tr>`;
+  }).join('') + fillerRows(items.length,6,6);
   const ref = d.ref || d.po || '';
-  const body=`<div class="doc-head"><div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title">QUOTATION</div></div></div><div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">M/S:</span><span class="cust-name">${esc(d.customer)}</span></div><div class="meta-line"><span class="meta-tag">Address:</span><span>${esc(d.address||((findCust(d.customer)||{}).Address)||'')}</span></div><div class="meta-line" style="margin-top:10px"><span class="meta-tag">Ref #:</span><span>${esc(ref)}</span><span class="meta-tag" style="margin-left:14px">Date:</span><span>${fmtDate(d.poDate)}</span></div><div class="meta-line"><span class="meta-tag">Validity:</span><span>${esc(d.validity||'7 Days')}</span><span class="meta-tag" style="margin-left:14px">Payment Terms:</span><span>${esc(d.paymentTerms||'20 Days')}</span></div></div><div class="meta-right"><div class="meta-row"><span class="meta-label">Date:</span><span class="meta-value">${fmtDate(d.date)}</span></div><div class="meta-row"><span class="meta-label">Quotation#:</span><span class="meta-value"><b>${esc(d.no)}</b></span></div><div class="meta-row"><span class="meta-label">S.T.N#:</span><span class="meta-value">${esc(d.stn)}</span></div><div class="meta-row"><span class="meta-label">N.T.N#:</span><span class="meta-value">${esc(d.ntn)}</span></div></div></div><table class="doc-items"><thead><tr><th class="c">Item</th><th>Description</th><th class="c">Make</th><th class="c">Qty.</th><th class="c">Rate/Unit</th><th class="c">Amount</th><th class="c">Delivery Status</th></tr></thead><tbody>${rows}</tbody></table><table class="doc-totals"><tr><td class="words"><i>RUPEES: ${numberToWords(total)} Only /-</i></td><td class="tot-label">TOTAL</td><td class="r"><b>${money(total)}</b></td></tr></table><div class="doc-endblock doc-footer-note"><div><i>FOR STANDARD FLUID SYSTEMS</i></div><div style="margin-top:22px"><b>Authorised by M.Adeel Khan</b></div></div>`;
+  const custId = d.customerId || cust['Customer ID'] || '';
+  const contact = d.contact || '';
+  const firstLead = items.find(x=>x.leadTime||x.deliveryStatus) || {};
+  const delivery = d.delivery || firstLead.leadTime || '';
+  const prepared = d.createdBy || d.preparedBy || '';
+  const address = d.address || cust.Address || '';
+  const meta = (k,v,b)=>`<div class="meta-row"><span class="meta-label">${k}</span><span class="meta-value">${b?'<b>'+v+'</b>':v}</span></div>`;
+  const discountBlock = (discPct>0||itemDisc>0) ? `<div style="background:#ffff00;text-align:center;font-weight:bold;font-style:italic;text-decoration:underline;padding:8px;margin:6px 0">${discPct>0?'LESS '+discPct+'% DISCOUNT':'LESS ITEM DISCOUNT'}</div>` : '';
+  const body=`<div class="doc-head"><div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="color:#888;font-size:32px">Quotation</div></div></div><div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">To:</span></div>${contact?'<div class="meta-line"><b>'+esc(contact)+'</b></div>':''}<div class="meta-line" style="margin-top:6px"><span class="cust-name">${esc(d.customer)}</span></div>${address?'<div class="meta-line"><span>'+esc(address)+'</span></div>':''}<div class="meta-line" style="margin-top:10px"><span class="meta-tag">Ref # Your Requested:</span><span>${esc(ref)}</span></div></div><div class="meta-right">${meta('Date:',fmtDate(d.date))}${meta('Quotation #:',esc(d.no),true)}${custId?meta('Customer ID:',esc(custId),true):''}${meta('Payment:',esc(d.paymentTerms||'20 Days'),true)}${delivery?meta('Delivery:',esc(delivery),true):''}${meta('Quotation valid until:',esc(d.validity||'7 Days'),true)}${prepared?meta('Prepared by',esc(prepared)):''}${meta('STN:',esc(d.stn))}${meta('NTN:',esc(d.ntn))}</div></div><table class="doc-items"><thead><tr><th class="c" style="width:7%">Ser#</th><th>Description</th><th class="c" style="width:10%">Qty</th><th class="c" style="width:14%">Rate /Unit</th><th class="c" style="width:15%">Amount</th><th class="c" style="width:16%">Delivery/Remarks</th></tr></thead><tbody>${rows}</tbody></table>${discountBlock}<div style="text-align:center;font-style:italic;font-weight:bold;font-size:11px;margin:6px 0">All Above Quoted Prices are Exclusive of GST. Please add GST while making your Order</div><table class="doc-totals"><tr><td class="words"><i>RUPEES: ${numberToWords(total)} Only /-</i></td><td class="tot-label">TOTAL</td><td class="r"><b>${money(total)}</b></td></tr></table><div class="doc-endblock doc-footer-note"><div style="font-size:11px">If you have any questions concerning this quotation, please feel free to contact : <b>021-32464447</b></div><div style="text-align:center;margin-top:8px"><b>Thank you for Your Business!</b></div><div style="text-align:right;margin-top:22px"><i>Authorised by</i> <b>M. Adeel Khan</b></div><div style="text-align:center;margin-top:18px;font-size:10.5px;line-height:1.4"><b>STANDARD FLUID SYSTEMS</b><br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041.</div></div>`;
   printDoc(body);
 }
 function printDC(d){
@@ -2587,4 +2605,3 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     discard:function(){ dirty=false; baseline=''; navigate(); }
   };
 })();
-
