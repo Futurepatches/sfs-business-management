@@ -1852,28 +1852,74 @@ function printQuotation(d){
   const lineAmt = x => (+x.qty||0)*(+x.rate||0);
   const gross = items.reduce((a,x)=>a+lineAmt(x),0);
   const discPct = Number(d.discount||0);
-  const discAmt = discPct>0 ? gross*discPct/100 : 0;
   const itemDisc = items.reduce((a,x)=>a+(Number(x.discount||0)>0 ? lineAmt(x)*Number(x.discount)/100 : 0),0);
-  const total = gross - discAmt - itemDisc;
+  const total = gross - (discPct>0 ? gross*discPct/100 : 0) - itemDisc;
   const cust = findCust(d.customer) || {};
-  const rows = items.map((x,i)=>{
-    const p = findProd(x.model) || {};
-    const make = x.make || p.Brand || '';
-    const desc = x.desc || p.Description || '';
-    const lead = x.leadTime || x.deliveryStatus || '';
-    return `<tr><td class="c">${i+1}</td><td>${x.model?'<b>'+esc(x.model)+'</b>':''}${desc?'<div>'+esc(desc)+'</div>':''}${make?'<div style="margin-top:4px"><b>Make : '+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><br><i>${esc(x.unit||'nos')}</i></td><td class="c"><b>${money(x.rate)}</b><br><i>each</i></td><td class="r">${money(lineAmt(x))}</td><td class="c"><b>${esc(String(lead).toUpperCase())}</b></td></tr>`;
-  }).join('') + fillerRows(items.length,6,6);
-  const ref = d.ref || d.po || '';
   const custId = d.customerId || cust['Customer ID'] || '';
-  const contact = d.contact || '';
+  const ref = d.ref || d.po || '';
   const firstLead = items.find(x=>x.leadTime||x.deliveryStatus) || {};
   const delivery = d.delivery || firstLead.leadTime || '';
   const prepared = d.createdBy || d.preparedBy || '';
-  const address = d.address || cust.Address || '';
-  const meta = (k,v,b)=>`<div class="meta-row"><span class="meta-label">${k}</span><span class="meta-value">${b?'<b>'+v+'</b>':v}</span></div>`;
-  const discountBlock = (discPct>0||itemDisc>0) ? `<div style="background:#ffff00;text-align:center;font-weight:bold;font-style:italic;text-decoration:underline;padding:8px;margin:6px 0">${discPct>0?'LESS '+discPct+'% DISCOUNT':'LESS ITEM DISCOUNT'}</div>` : '';
-  const body=`<div class="doc-head"><div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="color:#888;font-size:32px">Quotation</div></div></div><div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">To:</span></div>${contact?'<div class="meta-line"><b>'+esc(contact)+'</b></div>':''}<div class="meta-line" style="margin-top:6px"><span class="cust-name">${esc(d.customer)}</span></div>${address?'<div class="meta-line"><span>'+esc(address)+'</span></div>':''}<div class="meta-line" style="margin-top:10px"><span class="meta-tag">Ref # Your Requested:</span><span>${esc(ref)}</span></div></div><div class="meta-right">${meta('Date:',fmtDate(d.date))}${meta('Quotation #:',esc(d.no),true)}${custId?meta('Customer ID:',esc(custId),true):''}${meta('Payment:',esc(d.paymentTerms||'20 Days'),true)}${delivery?meta('Delivery:',esc(delivery),true):''}${meta('Quotation valid until:',esc(d.validity||'7 Days'),true)}${prepared?meta('Prepared by',esc(prepared)):''}${meta('STN:',esc(d.stn))}${meta('NTN:',esc(d.ntn))}</div></div><table class="doc-items"><thead><tr><th class="c" style="width:7%">Ser#</th><th>Description</th><th class="c" style="width:10%">Qty</th><th class="c" style="width:14%">Rate /Unit</th><th class="c" style="width:15%">Amount</th><th class="c" style="width:16%">Delivery/Remarks</th></tr></thead><tbody>${rows}</tbody></table>${discountBlock}<div style="text-align:center;font-style:italic;font-weight:bold;font-size:11px;margin:6px 0">All Above Quoted Prices are Exclusive of GST. Please add GST while making your Order</div><table class="doc-totals"><tr><td class="words"><i>RUPEES: ${numberToWords(total)} Only /-</i></td><td class="tot-label">TOTAL</td><td class="r"><b>${money(total)}</b></td></tr></table><div class="doc-endblock doc-footer-note"><div style="font-size:11px">If you have any questions concerning this quotation, please feel free to contact : <b>021-32464447</b></div><div style="text-align:center;margin-top:8px"><b>Thank you for Your Business!</b></div><div style="text-align:right;margin-top:22px"><i>Authorised by</i> <b>M. Adeel Khan</b></div><div style="text-align:center;margin-top:18px;font-size:10.5px;line-height:1.4"><b>STANDARD FLUID SYSTEMS</b><br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041.</div></div>`;
-  printDoc(body);
+  const rows = items.map((x,i)=>{
+    const p = findProd(x.model) || {};
+    const make = x.make || p.Brand || '';
+    const desc = x.desc || '';
+    const lead = x.leadTime || x.deliveryStatus || '';
+    return `<tr class="qt-item"><td class="c">${i+1}</td><td>${esc(x.model||'')}${desc?'<div>'+esc(desc)+'</div>':''}${make?'<div class="qt-make"><b>Make : <span>'+esc(make)+'</span></b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><br><i class="qt-sm">${esc(x.unit||'nos')}</i></td><td class="c"><b>${money(x.rate)}</b><br><i class="qt-sm">each</i></td><td class="c qt-lead">${esc(String(lead).toUpperCase())}</td></tr>`;
+  }).join('');
+  const spacerH = Math.max(34, 70 - items.length*10);
+  const discountBar = (discPct>0||itemDisc>0) ? `<div class="qt-disc">${discPct>0?'LESS '+discPct+'% DISCOUNT':'LESS ITEM DISCOUNT'}</div>` : '';
+  const mrow = (k,v,cls)=>`<tr><td class="k">${k}</td><td class="v ${cls||''}">${v}</td></tr>`;
+  const css = `<style>
+    .qt-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+    .qt-logo{height:60px}
+    .qt-tag{text-align:right;font-size:9px;font-weight:bold;color:#666;line-height:1.35}
+    .qt-meta{display:flex;justify-content:space-between;align-items:stretch;margin-bottom:12px;min-height:150px}
+    .qt-left{width:38%;display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px;font-weight:bold}
+    .qt-title{width:28%;text-align:center;font-size:34px;font-weight:bold;color:#8c8c8c;line-height:1}
+    .qt-right{width:34%}
+    .qt-right table{border-collapse:collapse;margin-left:auto;font-size:11.5px}
+    .qt-right td{padding:2px 0 2px 8px;white-space:nowrap}
+    .qt-right .k{text-align:right;font-weight:bold}
+    .qt-right .v{text-align:right;font-weight:bold;padding-left:12px}
+    .qt-right .v.n{font-weight:normal}
+    .qt-green{color:#1a7f1a;font-style:italic}
+    .qt-red{color:#e00000}
+    .qt-items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;border:1px solid #000}
+    .qt-items th{background:#f2f2f2;border:1px solid #000;padding:3px 6px;font-size:11px;text-align:left}
+    .qt-items th.c,.qt-items td.c{text-align:center}
+    .qt-items td{border-left:1px solid #000;border-right:1px solid #000;padding:5px 6px;vertical-align:top;line-height:1.35}
+    .qt-make{margin-top:4px}.qt-make span{color:#0095da}
+    .qt-sm{font-size:10px}
+    .qt-lead{font-weight:bold;font-style:italic;color:#1a7f1a}
+    .qt-fill td{padding:0;vertical-align:bottom;border-left:1px solid #000;border-right:1px solid #000}
+    .qt-disc{background:#ffff00;text-align:center;font-weight:bold;font-style:italic;text-decoration:underline;font-size:15px;padding:9px 4px;margin-bottom:22px}
+    .qt-note{text-align:center;font-weight:bold;font-style:italic;font-size:9px;padding:0 4px 8px}
+    .qt-total{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+    .qt-total td{padding:3px 6px;font-weight:bold}
+    .qt-total .lb{text-align:right;border:none}
+    .qt-total .vl{text-align:right;border:1px solid #000;border-top:none}
+    .qt-q{font-size:9px;margin:8px 0 0 2%}
+    .qt-thanks{text-align:center;font-weight:bold;font-size:11px;margin-top:16px}
+    .qt-sign{width:38%;margin-left:auto;margin-top:34px;text-align:right;font-size:10px}
+    .qt-sign .ln{border-top:1px solid #000;margin-bottom:46px}
+    .qt-sign .nm{display:inline-block;border-bottom:1px solid #000;min-width:55%;text-align:center;font-weight:normal}
+    .qt-foot{font-size:9.5px;line-height:1.4}
+    .qt-brands{display:flex;justify-content:space-between;margin-top:8px;font-weight:bold;font-size:11px;padding:0 4px}
+    .print-company{border-top:none!important}
+  </style>`;
+  const body = css
+    + `<div class="qt-top"><img src="${printLogoSrc()}" class="qt-logo"><div class="qt-tag">PNEUMATIC SOLUTION PROVIDER<br>SOLE AGENT <i>UNIVER</i> ITALY</div></div>`
+    + `<div class="qt-meta"><div class="qt-left"><div><div>To:</div>${d.contact?'<div>'+esc(d.contact)+'</div>':''}</div><div style="font-size:14px">${esc(d.customer)}</div><div>Ref # Your Requested${ref?' : <span style="font-weight:normal">'+esc(ref)+'</span>':''}</div></div>`
+    + `<div class="qt-title">Quotation</div>`
+    + `<div class="qt-right"><table>${mrow('DATE:',fmtDate(d.date),'n')}${mrow('Quotation #:',esc(d.no))}${mrow('Customer ID:',esc(custId))}${mrow('Payment:',esc(d.paymentTerms||'20 Days'))}${mrow('Delivery:',esc(delivery),'qt-green')}${mrow('Quotation valid until:',esc(d.validity||'7 Days'),'qt-red')}${mrow('Prepared by',esc(prepared),'n')}${mrow('STN:',esc(d.stn))}${mrow('NTN:',esc(d.ntn))}</table></div></div>`
+    + `<table class="qt-items"><colgroup><col style="width:5%"><col style="width:57%"><col style="width:8%"><col style="width:14%"><col style="width:16%"></colgroup><thead><tr><th class="c">Ser#</th><th>Description</th><th class="c">Qty</th><th class="c">Rate /Unit</th><th class="c">Delivery/Remarks</th></tr></thead><tbody>${rows}<tr class="qt-fill" style="height:${spacerH}mm"><td></td><td>${discountBar}<div class="qt-note">All Above Quoted Prices are Exclusive of GST. Please add GST while making your Order</div></td><td></td><td></td><td></td></tr></tbody></table>`
+    + `<table class="qt-total"><colgroup><col style="width:5%"><col style="width:57%"><col style="width:8%"><col style="width:14%"><col style="width:16%"></colgroup><tr><td colspan="3" style="border:none"></td><td class="lb">TOTAL</td><td class="vl">${total>0?money(total):'-'}</td></tr></table>`
+    + `<div class="qt-q">If you have any questions concerning this quotation, please feel free to contact : <b>021-32464447</b></div>`
+    + `<div class="qt-thanks">Thank you for Your Business!</div>`
+    + `<div class="qt-sign"><div class="ln"></div><i>Authorised by</i> <span class="nm">M. Adeel Khan</span></div>`;
+  const footer = `<div class="qt-foot"><b style="font-size:11px">STANDARD FLUID SYSTEMS</b><br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041.</div><div class="qt-brands"><span style="color:#2e7d32">CKD</span><span style="color:#1565c0">SMC</span><span style="color:#0b5cab">FESTO</span><span style="color:#4a6fa5">UNIVER</span><span style="color:#d32f2f">Rexroth</span><span style="color:#222">PNEUMAX</span></div>`;
+  printDoc(body, footer);
 }
 function printDC(d){
   const rows = d.items.map((x,i) => {
@@ -1991,7 +2037,7 @@ function printInvoice(d){
   printDoc(body);
 }
 
-function printDoc(body){
+function printDoc(body, footerHtml){
   $('printArea').innerHTML = `<style>
     #printArea{display:block}
     .print-doc{font-family:Arial,Helvetica,sans-serif;color:#111;width:100%;max-width:100%;margin:0 auto;font-size:12.5px;box-sizing:border-box;padding:6mm 10mm 10mm;display:flex;flex-direction:column;min-height:277mm}
@@ -2039,12 +2085,12 @@ function printDoc(body){
   </style>
   <div class="print-doc">
     <div class="doc-body">${body}</div>
-    <div class="print-company">
+    <div class="print-company">${footerHtml||`
       <b>STANDARD FLUID SYSTEMS</b>
       <div>General Industrial Machinery &amp; Equipment</div>
       <div>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041</div>
       <div>e-mail: sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com</div>
-    </div>
+    `}</div>
   </div>`;
   setTimeout(() => window.print(), 100);
 }
