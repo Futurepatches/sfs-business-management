@@ -1859,7 +1859,7 @@ function printQuotation(d){
   const ref = d.ref || d.po || '';
   const firstLead = items.find(x=>x.leadTime||x.deliveryStatus) || {};
   const delivery = d.delivery || firstLead.leadTime || firstLead.deliveryStatus || '';
-  const prepared = d.createdBy || d.preparedBy || '';
+  const prepared = d.preparedBy || d.createdBy || '';
   const rows = items.map((x,i)=>{
     const p = findProd(x.model) || {};
     const make = x.make || p.Brand || '';
