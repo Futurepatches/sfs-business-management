@@ -1888,32 +1888,33 @@ function printQuotation(d){
     const make = x.make || p.Brand || '';
     const desc = x.desc || '';
     const lead = x.leadTime || x.deliveryStatus || '';
-    return `<tr class="qt-item"><td class="c">${i+1}</td><td>${(x.model&&x.model!=='-')?'<div class="qt-model">'+esc(x.model)+'</div>':''}${desc?'<div class="qt-desc">'+esc(desc)+'</div>':''}${make?'<div class="qt-make">Make : <b>'+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><div class="qt-sm">${esc(x.unit||'nos')}</div></td><td class="c"><b>${money(x.rate)}</b><div class="qt-sm">each</div></td><td class="c qt-lead">${esc(String(lead).toUpperCase())}</td></tr>`;
+    return `<tr class="qt-item"><td class="c">${i+1}</td><td>${(x.model&&x.model!=='-')?'<div class="qt-model">'+esc(x.model)+'</div>':''}${desc?'<div class="qt-desc">'+esc(desc)+'</div>':''}${make?'<div class="qt-make">Make : <b>'+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><div class="qt-sm">${esc(x.unit||'nos')}</div></td><td class="c"><b>${money(x.rate)}</b><div class="qt-sm">each</div></td><td class="c"><b>${money(lineAmt(x))}</b></td><td class="c qt-lead">${esc(String(lead).toUpperCase())}</td></tr>`;
   }).join('');
   const spacerH = Math.max(20, 62 - items.length*11);
   const row = (k,v,cls)=>`<tr><td class="k">${k}</td><td class="v ${cls||''}">${v||'&nbsp;'}</td></tr>`;
   const css = `<style>
     .qt{--navy:#1f3b63;--red:#c8102e;--ink:#1d2433;--mut:#5b6573;--line:#d5dbe3;--soft:#f4f6f9;color:var(--ink)}
-    .qt-top{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px}
-    .qt-logo{height:60px}
-    .qt-word{font-size:30px;font-weight:bold;letter-spacing:6px;color:var(--navy);text-align:right;line-height:1}
+    .qt-top{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:6px}
+    .qt-logo{height:52px}
+    .qt-word{font-size:26px;font-weight:bold;letter-spacing:6px;color:var(--navy);text-align:right;line-height:1}
     .qt-tag{font-size:8.5px;letter-spacing:.6px;color:var(--mut);text-align:right;margin-top:6px;font-weight:bold}
-    .qt-rule{height:3px;background:linear-gradient(90deg,var(--red) 0,var(--red) 70px,var(--navy) 70px);margin-bottom:14px}
-    .qt-info{display:flex;gap:14px;align-items:stretch;margin-bottom:14px}
+    .qt-rule{height:3px;background:linear-gradient(90deg,var(--red) 0,var(--red) 70px,var(--navy) 70px);margin-bottom:10px}
+    .qt-info{display:flex;gap:10px;align-items:stretch;margin-bottom:10px}
     .qt-card{border:1px solid var(--line);border-radius:4px;overflow:hidden}
-    .qt-to{width:46%;display:flex;flex-direction:column}
-    .qt-det{width:54%}
-    .qt-cap{background:var(--soft);color:var(--mut);font-size:8.5px;letter-spacing:1.2px;font-weight:bold;padding:5px 10px;border-bottom:1px solid var(--line)}
-    .qt-tobody{padding:10px 12px;flex:1;display:flex;flex-direction:column;justify-content:space-between}
-    .qt-attn{font-size:11.5px;font-weight:bold}
-    .qt-cust{font-size:15px;font-weight:bold;color:var(--navy);margin-top:4px;line-height:1.25}
-    .qt-ref{font-size:10.5px;margin-top:14px;padding-top:8px;border-top:1px dashed var(--line)}
-    .qt-ref span{color:var(--mut);font-weight:bold}
-    .qt-det table{width:100%;border-collapse:collapse;font-size:11px}
-    .qt-det td{padding:3.5px 10px;border-bottom:1px solid #eef1f5}
+    .qt-to{width:42%;display:flex;flex-direction:column}
+    .qt-det{width:58%}
+    .qt-cap{background:var(--soft);color:var(--mut);font-size:8px;letter-spacing:1.2px;font-weight:bold;padding:3px 10px;border-bottom:1px solid var(--line)}
+    .qt-tobody{padding:6px 10px;flex:1;display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .qt-attn{font-size:10.5px;font-weight:bold;color:var(--ink)}
+    .qt-cust{font-size:13.5px;font-weight:bold;color:var(--navy);line-height:1.2}
+    .qt-mini{font-size:9.5px;color:var(--mut);line-height:1.5}
+    .qt-mini b{color:var(--ink)}
+    .qt-det table{width:100%;border-collapse:collapse;font-size:10.5px}
+    .qt-det td{padding:3px 8px;border-bottom:1px solid #eef1f5;vertical-align:middle}
     .qt-det tr:last-child td{border-bottom:none}
-    .qt-det .k{color:var(--mut);font-weight:bold;white-space:nowrap;width:46%}
-    .qt-det .v{text-align:right;font-weight:bold}
+    .qt-det .k{color:var(--mut);font-weight:bold;white-space:nowrap;width:19%}
+    .qt-det .v{font-weight:bold;width:31%;text-align:right;border-right:1px solid #eef1f5}
+    .qt-det .v.last{border-right:none}
     .qt-green{color:#1a7f1a;font-style:italic}
     .qt-red{color:#d11a1a}
     .qt-items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11.5px;border:1px solid var(--line)}
@@ -1947,9 +1948,9 @@ function printQuotation(d){
   const totals = `<table class="qt-tot">${discPct>0?`<tr><td class="l">SUB TOTAL</td><td class="r">${money(gross)}</td></tr><tr class="dis"><td class="l" style="background:#fff8e1;color:#a15c00">LESS ${discPct}% DISCOUNT</td><td class="r">- ${money(discAmt)}</td></tr>`:''}<tr class="gt"><td>TOTAL</td><td class="r">${total>0?money(total):'-'}</td></tr></table>`;
   const body = css + `<div class="qt">`
     + `<div class="qt-top"><img src="${printLogoSrc()}" class="qt-logo"><div><div class="qt-word">QUOTATION</div><div class="qt-tag">PNEUMATIC SOLUTION PROVIDER &nbsp;•&nbsp; SOLE AGENT UNIVER ITALY</div></div></div><div class="qt-rule"></div>`
-    + `<div class="qt-info"><div class="qt-card qt-to"><div class="qt-cap">TO</div><div class="qt-tobody"><div>${d.contact?'<div class="qt-attn">'+esc(d.contact)+'</div>':''}<div class="qt-cust">${esc(d.customer)}</div></div><div class="qt-ref"><span>Ref # Your Requested:</span> ${esc(ref)}</div></div></div>`
-    + `<div class="qt-card qt-det"><div class="qt-cap">QUOTATION DETAILS</div><table>${row('Date',fmtDate(d.date))}${row('Quotation #',esc(d.no))}${row('Customer ID',esc(custId))}${row('Payment',esc(d.paymentTerms||'20 Days'))}${row('Delivery',esc(delivery),'qt-green')}${row('Quotation valid until',esc(d.validity||'7 Days'),'qt-red')}${row('Prepared by',esc(prepared))}${row('STN',esc(d.stn))}${row('NTN',esc(d.ntn))}</table></div></div>`
-    + `<table class="qt-items"><colgroup><col style="width:6%"><col style="width:56%"><col style="width:8%"><col style="width:14%"><col style="width:16%"></colgroup><thead><tr><th class="c">Ser#</th><th>Description</th><th class="c">Qty</th><th class="c">Rate / Unit</th><th class="c">Delivery / Remarks</th></tr></thead><tbody>${rows}<tr class="qt-fill" style="height:${spacerH}mm"><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>`
+    + `<div class="qt-info"><div class="qt-card qt-to"><div class="qt-cap">TO</div><div class="qt-tobody">${d.contact?'<div class="qt-attn">'+esc(d.contact)+'</div>':''}<div class="qt-cust">${esc(d.customer)}</div><div class="qt-mini">${custId?'Customer ID: <b>'+esc(custId)+'</b>':''}${d.stn?' &nbsp;|&nbsp; STN: <b>'+esc(d.stn)+'</b>':''}${d.ntn?' &nbsp;|&nbsp; NTN: <b>'+esc(d.ntn)+'</b>':''}</div><div class="qt-mini">Ref # Your Requested: <b>${esc(ref)}</b></div></div></div>`
+    + `<div class="qt-card qt-det"><div class="qt-cap">QUOTATION DETAILS</div><table><tr><td class="k">Date</td><td class="v">${fmtDate(d.date)}</td><td class="k">Quotation #</td><td class="v last">${esc(d.no)}</td></tr><tr><td class="k">Payment</td><td class="v">${esc(d.paymentTerms||'20 Days')}</td><td class="k">Delivery</td><td class="v last qt-green">${esc(delivery)}</td></tr><tr><td class="k">Valid until</td><td class="v qt-red">${esc(d.validity||'7 Days')}</td><td class="k">Prepared by</td><td class="v last">${esc(prepared)}</td></tr></table></div></div>`
+    + `<table class="qt-items"><colgroup><col style="width:5%"><col style="width:42%"><col style="width:7%"><col style="width:14%"><col style="width:15%"><col style="width:17%"></colgroup><thead><tr><th class="c">Ser#</th><th>Description</th><th class="c">Qty</th><th class="c">Rate / Unit</th><th class="c">Amount</th><th class="c">Delivery / Remarks</th></tr></thead><tbody>${rows}<tr class="qt-fill" style="height:${spacerH}mm"><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>`
     + `<div class="qt-bottom"><div class="qt-notes"><div class="qt-cap">NOTES</div><div class="b"><b>All Above Quoted Prices are Exclusive of GST. Please add GST while making your Order.</b></div></div>${totals}</div>`
     + `<div class="qt-q">If you have any questions concerning this quotation, please feel free to contact : <b>021-32464447</b></div>`
     + `<div class="qt-thanks">Thank you for Your Business!</div>`
