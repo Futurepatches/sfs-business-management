@@ -276,7 +276,7 @@ async function logout(){
   const tok = S.session;
   S.session = '';
   if (tok && S.api) {
-    /* Pehle server par session khatam karo (reload ke saath request cancel na ho) */
+    /* End the session on the server first (so the request is not cancelled by the reload) */
     try {
       await Promise.race([
         fetch(S.api, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'logout', session:tok}), keepalive:true}),
@@ -909,7 +909,7 @@ function checkCustomer(name){
     if (!confirm('"' + name + '" is not in the Customers list. Add the customer first to keep the Ledger / Outstanding accurate.\n\nSave anyway?')) return {error:'cancel', silent:true};
     return {name:name, cust:null};
   }
-  if (String(c.Status || 'Active').toLowerCase() === 'inactive') return {error:'Customer inactive hai: ' + c['Customer Name']};
+  if (String(c.Status || 'Active').toLowerCase() === 'inactive') return {error:'Customer is inactive: ' + c['Customer Name']};
   return {name:c['Customer Name'], cust:c};
 }
 
@@ -1303,7 +1303,7 @@ const ACC_PAY_DEFAULT_LIMIT = 100;   // when search is blank, show the latest pa
 function accHay(parts){ return parts.map(v => String(v == null ? '' : v)).join(' | ').toLowerCase(); }
 function accMatch(hay, q){
   const toks = String(q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
-  return toks.every(tk => hay.includes(tk));      // saare words milne chahiyen (e.g. "INV-000012 cash")
+  return toks.every(tk => hay.includes(tk));      // all words must match (e.g. "INV-000012 cash")
 }
 function accDateParts(v){
   const d = new Date(v);
@@ -1350,7 +1350,7 @@ function filterCustPay(){
   if (info) {
     const tot = hits.reduce((a, x) => a + (Number(x.Amount) || 0), 0);
     info.textContent = ACC.payErr ? '' : (q
-      ? `${hits.length} payment(s) mili • Total ${money(tot)}`
+      ? `${hits.length} payment(s) found • Total ${money(tot)}`
       : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • search for older payments` : `${all.length} payment(s) • Total ${money(tot)}`));
   }
 }
@@ -1371,7 +1371,7 @@ function openCustPayModal(invEnc, custEnc, outstanding){
     <label>Reference / Cheque #<input id="payref"></label>
     <label class="wide">Remarks<input id="payrem" placeholder="e.g. 5.5% income tax deducted by client"></label>
   </div>
-  <p class="muted small" style="margin:8px 0 0">Cash + Income Tax + WHT = invoice settlement (outstanding is se kam hoga).</p>
+  <p class="muted small" style="margin:8px 0 0">Cash + Income Tax + WHT = invoice settlement (must not exceed the outstanding amount).</p>
   <div class="actions"><button class="btn primary" onclick="submitCustPayment()">Save Payment</button></div>`);
 }
 function updatePaySettlement(){
@@ -1386,8 +1386,8 @@ async function submitCustPayment(){
     const amt = Number($('payamt').value)||0;
     const incomeTax = Number($('payinctax').value)||0;
     const wht = Number($('paywht').value)||0;
-    if (amt < 0 || incomeTax < 0 || wht < 0) return toast('Amounts negative nahi ho sakte.', true);
-    if (amt <= 0 && incomeTax <= 0 && wht <= 0) return toast('Kam az kam cash ya tax amount enter karein.', true);
+    if (amt < 0 || incomeTax < 0 || wht < 0) return toast('Amounts cannot be negative.', true);
+    if (amt <= 0 && incomeTax <= 0 && wht <= 0) return toast('Enter at least a cash or tax amount.', true);
     const p = {
       invoiceNo: $('payinv').value,
       amount: amt,
@@ -1723,7 +1723,7 @@ function psCsv(){
 /* ---------- SETTINGS ---------- */
 function renderSettings(){}
 async function refreshSource(){
-  if (!confirm('Source snapshot refresh karne se Products list source sheet se dobara banti hai.\n\nWarning: jo products sirf is app se add kiye gaye hain (source sheet mein nahi) wo list se hat sakte hain.\n\nKya aap ne backup le liya hai? Continue?')) return;
+  if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
   toast(r.ok ? 'Source snapshot refreshed.' : r.error, !r.ok);
   await refresh();
@@ -1795,7 +1795,7 @@ function userForm(editUsername, editName, editRole, editModules){
      <div class="modules-block">
        <div class="modules-title">Module Access</div>
        ${ALL_MODULES.map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" ${mods.indexOf(m.id)!==-1?'checked':''}> ${m.label}</label>`).join('')}
-       <div class="muted small">Note: ADMIN role ko hamesha full access milta hai — modules ki zaroorat nahi.</div>
+       <div class="muted small">Note: the ADMIN role always has full access — modules are not required.</div>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -2063,7 +2063,7 @@ function printQuotation(d){
     + `<div class="qt-thanks">Thank you for Your Business!</div>`
     + `<div class="qt-sign"><div class="ln"><i>Authorised by</i> &nbsp;<b>M. Adeel Khan</b></div></div></div>`;
   const footer = `<div class="qt-foot"><b>STANDARD FLUID SYSTEMS</b><br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041.</div><div class="qt-brands"><span style="color:#2e7d32">CKD</span><span style="color:#1565c0">SMC</span><span style="color:#0b5cab">FESTO</span><span style="color:#4a6fa5">UNIVER</span><span style="color:#d32f2f">Rexroth</span><span style="color:#222">PNEUMAX</span></div>`;
-  printDoc(body, footer);
+  printDoc(body, footer, docFileName(d.no, d.customer, 'Quotation'));
 }
 function printDC(d){
   const rows = d.items.map((x,i) => {
@@ -2112,7 +2112,7 @@ function printDC(d){
       <div class="doc-sign">Receiver's Name &amp; Sign</div>
     </div>`;
 
-  printDoc(body);
+  printDoc(body, null, docFileName(d.no, d.customer, 'Delivery Challan'));
 }
 
 function printInvoice(d){
@@ -2178,10 +2178,18 @@ function printInvoice(d){
       <div class="doc-sign-block"><i>FOR STANDARD FLUID SYSTEMS</i></div>
     </div>`;
 
-  printDoc(body);
+  printDoc(body, null, docFileName(d.no, d.customer, 'Invoice'));
 }
 
-function printDoc(body, footerHtml){
+/* PDF file name = "<number> - <customer>" (customer part is shortened if very long) */
+function docFileName(no, customer, fallback){
+  const n = String(no || '').trim() || fallback;
+  const c = String(customer || '').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
+  return c ? n + ' - ' + c : n;
+}
+
+/* fileName = name suggested by the browser when the user chooses "Save as PDF" (it is taken from the page title) */
+function printDoc(body, footerHtml, fileName){
   $('printArea').innerHTML = `<style>
     #printArea{display:block}
     .print-doc{font-family:Arial,Helvetica,sans-serif;color:#111;width:100%;max-width:100%;margin:0 auto;font-size:12.5px;box-sizing:border-box;padding:6mm 10mm 10mm;display:flex;flex-direction:column;min-height:277mm}
@@ -2236,6 +2244,12 @@ function printDoc(body, footerHtml){
       <div>e-mail: sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com</div>
     `}</div>
   </div>`;
+  if (fileName) {
+    const prevTitle = document.title;
+    document.title = String(fileName).replace(/[\\/:*?"<>|]+/g, '-').trim() || prevTitle;
+    const restoreTitle = () => { document.title = prevTitle; window.removeEventListener('afterprint', restoreTitle); };
+    window.addEventListener('afterprint', restoreTitle);
+  }
   setTimeout(() => window.print(), 100);
 }
 
@@ -2262,7 +2276,7 @@ function init(){
         syncDatalists();
         enter();
       } else {
-        if (r.error === 'Unauthorized') sessionStorage.clear();   // network error par session mat mitao
+        if (r.error === 'Unauthorized') sessionStorage.clear();   // do not clear the session on a network error
         showLogin();
         if (r.error && r.error !== 'Unauthorized' && $('loginError')) $('loginError').textContent = r.error;
       }
@@ -2347,11 +2361,11 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
    SFS BUSINESS MANAGEMENT — TOP LOADING BAR  (v1.0)
    ------------------------------------------------------------
    This block was added at the END of app.js (it does not change any
-   purana function / data / variable is se change nahi hota).
-   Kaam:
+   existing function, data or variable).
+   Purpose:
      - Top loading bar on every button / link / navigation click
      - Loading bar on page changes through showPage()
-     - Backend API (fetch / XHR) ke doran bar
+     - Bar while backend API calls (fetch / XHR) are running
      - Loading bar on initial load, reload, and back/forward navigation
    Manual: SFSLoader.start() | SFSLoader.finish() | SFSLoader.pulse()
    To disable it: add class="no-loader" to a button.
@@ -2362,7 +2376,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
 
   var MIN_SHOW = 420, TRICKLE_MS = 250, MAX_TRICKLE = 92;
 
-  /* ---------- CSS (agar index.html mein pehle se hai to inject nahi karega) ---------- */
+  /* ---------- CSS (not injected if index.html already contains it) ---------- */
   if (!document.getElementById('sfsProgressStyles')) {
     var CSS = [
       '#sfsProgress{position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483000;',
@@ -2384,7 +2398,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     (document.head || document.documentElement).appendChild(styleEl);
   }
 
-  /* ---------- Bar element (agar index.html mein pehle se hai to dobara nahi banayega) ---------- */
+  /* ---------- Bar element (not created again if index.html already contains it) ---------- */
   function mount() {
     var el = document.getElementById('sfsProgress');
     if (!el) {
@@ -2477,11 +2491,11 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
   window.SFSLoader = { __v: '1.0', start: start, finish: finish, done: finish, pulse: pulse };
 
   /* ============================================================
-     HOOKS  (sab try/catch mein — app par koi asar nahi)
+     HOOKS  (all inside try/catch — no effect on the app)
      ============================================================ */
-  var safe = function (fn) { try { fn(); } catch (e) { /* app kabhi na toote */ } };
+  var safe = function (fn) { try { fn(); } catch (e) { /* the app must never break */ } };
 
-  /* 1) Pehli page load */
+  /* 1) First page load */
   safe(function () {
     start();
     var end = function () { finish(); };
@@ -2511,7 +2525,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     }, true);
   });
 
-  /* 4) fetch() — backend data aane tak bar chalti rahegi */
+  /* 4) fetch() — the bar keeps running until the backend data arrives */
   safe(function () {
     if (typeof window.fetch !== 'function' || window.fetch.__sfsWrapped) return;
     var orig = window.fetch;
@@ -2531,7 +2545,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     window.fetch = wrapped;
   });
 
-  /* 5) XMLHttpRequest (agar kahin use ho) */
+  /* 5) XMLHttpRequest (if used anywhere) */
   safe(function () {
     var XP = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
     if (!XP || XP.__sfsPatched) return;
@@ -2549,7 +2563,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     XP.__sfsPatched = true;
   });
 
-  /* 6) SPA router — showPage() wrap (app.js ke baad chalne ki wajah se ye available hai) */
+  /* 6) SPA router — showPage() wrap (available because this block runs after app.js) */
   safe(function () {
     var patch = function () {
       if (typeof window.showPage !== 'function' || window.showPage.__sfsWrapped) return false;
