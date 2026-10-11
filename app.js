@@ -1604,13 +1604,108 @@ async function renderReports(){
        <div class="card"><span>Invoice Lines</span><strong>${(r.sales||[]).length}</strong></div>
        <div class="card"><span>Sales (excl. GST)</span><strong>${money((r.sales||[]).reduce((a,x)=>a+(+x.total||0),0))}</strong></div>
      </div>
-     <div class="panel"><h3>Units Delivered by Category</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${esc(c)}</span><b>${((r.categorySales||{})[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
+     <div id="psales"></div>
+     <div class="panel"><h3>Sales by Category (excl. GST)</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${esc(c)}</span><b>${((r.categorySales||{})[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
      <div class="panel table-wrap"><h3>Recent Stock Movement (latest 200)</h3>
        <table>
          <thead><tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr></thead>
          <tbody>${mv.map(x => `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No movements.</td></tr>'}</tbody>
        </table>
      </div>`;
+  renderProductSales(true);
+}
+
+
+/* ---------- PRODUCT-WISE SALES (Reports page) ---------- */
+let PS_DOCS = null, PS_LAST = null;
+const PS_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PS = {mode:'month', month:new Date().getMonth(), group:'cat', metric:'amt', cat:'', q:''};
+function psSet(k, v){ PS[k] = (k === 'month') ? Number(v) : v; renderProductSales(false); }
+function psLines(){
+  const out = [];
+  (PS_DOCS || []).forEach(d => {
+    if (/cancel|void/i.test(String(d.status || ''))) return;
+    const dt = new Date(d.date); if (isNaN(dt)) return;
+    (d.items || []).forEach(i => {
+      const qty = +i.qty || 0, rate = +i.rate || 0; if (!qty) return;
+      const p = findProd(i.model) || {};
+      out.push({y:dt.getFullYear(), m:dt.getMonth(), inv:d.no, model:String(i.model || '').trim(), desc:p.Description || i.desc || '',
+        cat:p.Category || 'Others', brand:p.Brand || '-', qty:qty, amt:qty * rate});
+    });
+  });
+  return out;
+}
+async function renderProductSales(force){
+  const host = $('psales'); if (!host) return;
+  if (!$('psout')) {
+    const opt = (v, t, cur) => '<option value="' + v + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + t + '</option>';
+    host.innerHTML = '<div class="panel"><h3>Product-wise Sales</h3>'
+      + '<div class="toolbar" style="flex-wrap:wrap;gap:8px">'
+      + '<select id="psmode" onchange="psSet(\'mode\',this.value)">' + opt('month','Monthly',PS.mode) + opt('year','Yearly (month by month)',PS.mode) + '</select>'
+      + '<select id="psmonth" onchange="psSet(\'month\',this.value)">' + PS_MONTHS.map((m,i) => opt(i, m, PS.month)).join('') + '</select>'
+      + '<select id="psgroup" onchange="psSet(\'group\',this.value)">' + opt('cat','By Category',PS.group) + opt('brand','By Brand',PS.group) + opt('model','By Product / Model',PS.group) + '</select>'
+      + '<select id="pscat" onchange="psSet(\'cat\',this.value)">' + opt('','All Categories',PS.cat) + CATS.concat(['Others']).map(c => opt(c, c, PS.cat)).join('') + '</select>'
+      + '<input id="psq" placeholder="Search model / description" value="' + esc(PS.q) + '" oninput="psSet(\'q\',this.value)">'
+      + '<select id="psmetric" onchange="psSet(\'metric\',this.value)">' + opt('amt','Sales Amount',PS.metric) + opt('qty','Quantity',PS.metric) + '</select>'
+      + '<button class="btn" onclick="psCsv()">Download CSV</button></div>'
+      + '<div id="psout"><div class="muted">Loading…</div></div></div>';
+  }
+  const out = $('psout');
+  try {
+    if (force || !PS_DOCS) { out.innerHTML = '<div class="muted">Loading…</div>'; const r = await api('getReports', {mode:'docs', type:'INVOICE'}); if (!r.ok) throw new Error(r.error || 'Could not load invoices.'); PS_DOCS = r.documents || []; }
+  } catch (e) { out.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; return; }
+  if ($('psmonth')) $('psmonth').style.display = PS.mode === 'month' ? '' : 'none';
+  if ($('psmetric')) $('psmetric').style.display = PS.mode === 'year' ? '' : 'none';
+  const year = Number(($('ry') || {}).value) || new Date().getFullYear();
+  const q = String(PS.q || '').trim().toLowerCase();
+  const lines = psLines().filter(l => l.y === year
+    && (PS.mode === 'year' || l.m === PS.month)
+    && (!PS.cat || l.cat === PS.cat)
+    && (!q || (l.model + ' ' + l.desc).toLowerCase().indexOf(q) >= 0));
+  const map = {};
+  lines.forEach(l => {
+    const key = PS.group === 'cat' ? l.cat : PS.group === 'brand' ? l.brand : (l.model || '(no model)');
+    const g = map[key] || (map[key] = {name:key, sub:PS.group === 'model' ? (l.desc ? l.desc + ' | ' : '') + l.cat : '', qty:0, amt:0, inv:{}, mq:new Array(12).fill(0), ma:new Array(12).fill(0)});
+    g.qty += l.qty; g.amt += l.amt; g.inv[l.inv] = 1; g.mq[l.m] += l.qty; g.ma[l.m] += l.amt;
+  });
+  const groups = Object.values(map).sort((a,b) => b.amt - a.amt);
+  const totAmt = groups.reduce((a,g) => a + g.amt, 0), totQty = groups.reduce((a,g) => a + g.qty, 0);
+  const invCount = Object.keys(lines.reduce((a,l) => (a[l.inv] = 1, a), {})).length;
+  const label = PS.mode === 'month' ? PS_MONTHS[PS.month] + ' ' + year : 'Year ' + year;
+  const cards = '<div class="cards"><div class="card"><span>Sales (excl. GST) - ' + label + '</span><strong>' + money(totAmt) + '</strong></div>'
+    + '<div class="card"><span>Quantity Sold</span><strong>' + totQty.toLocaleString() + '</strong></div>'
+    + '<div class="card"><span>Invoices</span><strong>' + invCount + '</strong></div>'
+    + '<div class="card"><span>Top ' + (PS.group === 'cat' ? 'Category' : PS.group === 'brand' ? 'Brand' : 'Product') + '</span><strong style="font-size:15px">' + (groups[0] ? esc(groups[0].name) : '-') + '</strong></div></div>';
+  if (!groups.length) { PS_LAST = {head:[], rows:[], name:''}; out.innerHTML = cards + '<div class="empty">No sales found for this selection.</div>'; return; }
+  let table, head, rows;
+  const nameCol = PS.group === 'cat' ? 'Category' : PS.group === 'brand' ? 'Brand' : 'Product / Model';
+  const nameCell = g => '<b>' + esc(g.name) + '</b>' + (g.sub ? '<div class="muted" style="font-size:11px">' + esc(g.sub) + '</div>' : '');
+  if (PS.mode === 'month') {
+    head = [nameCol, 'Qty Sold', 'Sales (excl. GST)', 'Share %', 'Invoices'];
+    rows = groups.map(g => [g.name, g.qty, Math.round(g.amt * 100) / 100, totAmt ? Math.round(g.amt / totAmt * 1000) / 10 : 0, Object.keys(g.inv).length]);
+    table = '<div class="table-wrap"><table><thead><tr><th>#</th><th>' + nameCol + '</th><th>Qty Sold</th><th>Sales (excl. GST)</th><th style="min-width:160px">Share</th><th>Invoices</th></tr></thead><tbody>'
+      + groups.map((g,i) => { const pc = totAmt ? g.amt / totAmt * 100 : 0; return '<tr><td>' + (i+1) + '</td><td>' + nameCell(g) + '</td><td>' + g.qty.toLocaleString() + '</td><td><b>' + money(g.amt) + '</b></td><td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:#eef1f5;border-radius:3px;height:8px"><div style="width:' + pc.toFixed(1) + '%;background:#1f3b63;height:8px;border-radius:3px"></div></div><span style="min-width:42px;text-align:right">' + pc.toFixed(1) + '%</span></div></td><td>' + Object.keys(g.inv).length + '</td></tr>'; }).join('')
+      + '<tr><td></td><td><b>TOTAL</b></td><td><b>' + totQty.toLocaleString() + '</b></td><td><b>' + money(totAmt) + '</b></td><td></td><td>' + invCount + '</td></tr></tbody></table></div>';
+  } else {
+    const useQty = PS.metric === 'qty', f = v => v ? (useQty ? v.toLocaleString() : money(v)) : '-';
+    const arr = g => useQty ? g.mq : g.ma;
+    head = [nameCol].concat(PS_MONTHS, ['Total']);
+    rows = groups.map(g => [g.name].concat(arr(g).map(v => Math.round(v * 100) / 100), [useQty ? g.qty : Math.round(g.amt * 100) / 100]));
+    const colTot = new Array(12).fill(0); groups.forEach(g => arr(g).forEach((v,i) => colTot[i] += v));
+    table = '<div class="table-wrap"><table><thead><tr><th>' + nameCol + '</th>' + PS_MONTHS.map(m => '<th>' + m + '</th>').join('') + '<th>Total</th></tr></thead><tbody>'
+      + groups.map(g => '<tr><td>' + nameCell(g) + '</td>' + arr(g).map(v => '<td>' + f(v) + '</td>').join('') + '<td><b>' + (useQty ? g.qty.toLocaleString() : money(g.amt)) + '</b></td></tr>').join('')
+      + '<tr><td><b>TOTAL</b></td>' + colTot.map(v => '<td><b>' + f(v) + '</b></td>').join('') + '<td><b>' + (useQty ? totQty.toLocaleString() : money(totAmt)) + '</b></td></tr></tbody></table></div>';
+  }
+  PS_LAST = {head:head, rows:rows, name:'product-sales-' + year + (PS.mode === 'month' ? '-' + PS_MONTHS[PS.month] : '')};
+  out.innerHTML = cards + table;
+}
+function psCsv(){
+  if (!PS_LAST || !PS_LAST.rows.length) return toast('Nothing to download.', true);
+  const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = [PS_LAST.head].concat(PS_LAST.rows).map(r => r.map(cell).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'}));
+  a.download = PS_LAST.name + '.csv'; document.body.appendChild(a); a.click(); a.remove();
 }
 
 /* ---------- SETTINGS ---------- */
@@ -2198,6 +2293,9 @@ window.savePartyEdit = savePartyEdit;
 window.togglePartyStatus = togglePartyStatus;
 window.ledger = ledger;
 window.renderReports = renderReports;
+window.renderProductSales = renderProductSales;
+window.psSet = psSet;
+window.psCsv = psCsv;
 window.renderSettings = renderSettings;
 window.refreshSource = refreshSource;
 window.changePasswordForm = changePasswordForm;
