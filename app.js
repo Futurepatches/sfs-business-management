@@ -161,6 +161,7 @@ function sessionExpired(){
   SFS_EXPIRED = true;
   sessionStorage.clear();
   alert('Your session has expired. Please sign in again.');
+  window.SFS_ALLOW_UNLOAD = true;
   location.reload();
 }
 
@@ -286,8 +287,19 @@ async function logout(){
   sessionStorage.clear();
   localStorage.removeItem('sfsSession');
   localStorage.removeItem('sfsUser');
+  window.SFS_ALLOW_UNLOAD = true;
   location.reload();
 }
+
+/* Refresh / close protection: while signed in, the browser asks before the ERP page is reloaded or closed.
+   (Browsers show their own fixed message; logout and session-expiry reloads are allowed without a popup.) */
+window.SFS_ALLOW_UNLOAD = false;
+window.addEventListener('beforeunload', function (e) {
+  if (window.SFS_ALLOW_UNLOAD || !S.session) return;
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+});
 
 async function refresh(){
   const r = await api('bootstrap');
