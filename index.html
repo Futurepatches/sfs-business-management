@@ -43,7 +43,7 @@
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
     </label>
 
-    <!-- Captcha hata diya gaya hai. Ye chhupa hua field sirf purane app.js ke saath compatibility ke liye hai (user ko nazar nahi aata). -->
+    <!-- The captcha has been removed. This hidden field only exists for compatibility with the older app.js (the user never sees it). -->
     <input id="captchaAnswer" type="hidden">
 
     <div id="loginError" class="muted"></div>
@@ -60,7 +60,6 @@
     <div class="brand">
       <img src="logo.png" alt="SFS">
       <div>
-        <b>Standard Fluid</b>
         <small>Business Management</small>
       </div>
       <button class="collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
@@ -83,7 +82,6 @@
   <main>
     <header>
       <div>
-        <div class="eyebrow">Standard Fluid Systems</div>
         <h1 id="pageTitle">Dashboard</h1>
         <p>Inventory • Purchases • Sales • Documents</p>
       </div>
@@ -134,8 +132,8 @@ function toggleSidebar(){
 })();
 
 /* ---------- Captcha compatibility ----------
-   Agar app.js mein purana captcha check abhi maujood ho to ye sahi jawab chupke se bhar deta hai,
-   taake login sirf username + password se ho. app.js se captcha hatane ke baad ye khud beasar ho jata hai. */
+   If the older captcha check still exists in app.js, this quietly fills in the correct answer,
+   so that login works with just a username + password. Once the captcha is removed from app.js, this does nothing. */
 (function(){
   var original = window.login;
   if (typeof original !== 'function') return;
