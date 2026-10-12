@@ -345,6 +345,7 @@ function showPage(p, btn){
   if (p === 'invoices')   renderInvoice();
   if (p === 'quotations') renderQuotation();
   if (p === 'qthistory')  loadQTHistory();
+  if (p === 'enquiries')  renderEnquiries();
   if (p === 'ivhistory')  renderIVHistory();
   if (p === 'accounts')   renderAccounts();
   if (p === 'customers')  renderCustomers();
@@ -357,24 +358,24 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button><button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button><button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
-  dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
+  dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>Delivery Challan #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC(s)</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
-  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
+  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
-  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap"><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry, customer, contact, phone, requirement..." oninput="filterEnquiries()" style="flex:1;min-width:280px"></div><div class="panel table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Contact</th><th>Phone</th><th>Requirement</th><th>Status</th><th>Quotation</th><th>Action</th></tr></thead><tbody id="enqRows"><tr><td colspan="10">Loading...</td></tr></tbody></table></div></div>`,
+  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option>Pending</option><option>Won</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap"><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry, customer, contact, phone, requirement..." oninput="filterEnquiries()" style="flex:1;min-width:280px"></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqStatus" onchange="filterEnquiries()"><option value="">All statuses</option><option>New</option><option>Quoted</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Contact</th><th>Phone</th><th>Requirement</th><th>Status</th><th>Quotation</th><th>Action</th></tr></thead><tbody id="enqRows"><tr><td colspan="9">Loading...</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
-<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><label class="muted small" style="white-space:nowrap"><input id="custOutShowPaid" type="checkbox" onchange="filterCustOut()"> Show paid</label><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Tax</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><h3>Recent Supplier Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="toolbar" style="flex-wrap:wrap"><select id="custOutCust" onchange="filterCustOut()"><option value="">All Customers</option></select><select id="custOutSt" onchange="filterCustOut()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select>${periodSelectHtml('custOutPer','filterCustOut()')}<button class="btn ghost small" onclick="clearFilters(['custOutSearch','custOutCust','custOutSt','custOutPer'],filterCustOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('custPayPer','filterCustPay()')}<select id="custPayCust" onchange="filterCustPay()"><option value="">All Customers</option></select><select id="custPayMeth" onchange="filterCustPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['custPaySearch','custPayPer','custPayCust','custPayMeth'],filterCustPay)">Clear all filters</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap"><input id="supOutSearch" type="search" placeholder="Search supplier…" oninput="filterSupOut()" style="flex:1;min-width:200px"><select id="supOutSt" onchange="filterSupOut()"><option value="">All suppliers</option><option value="due">Outstanding only</option></select><button class="btn ghost small" onclick="clearFilters(['supOutSearch','supOutSt'],filterSupOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><h3>Recent Supplier Payments</h3><div class="toolbar" style="flex-wrap:wrap"><input id="supPaySearch" type="search" placeholder="Search supplier / reference…" oninput="filterSupPay()" style="flex:1;min-width:200px">${periodSelectHtml('supPayPer','filterSupPay()')}<select id="supPayMeth" onchange="filterSupPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['supPaySearch','supPayPer','supPayMeth'],filterSupPay)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 </div>`,
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
-  reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
+  reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
   settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
@@ -409,6 +410,38 @@ function filterLowStock(){
  const low=S.products.filter(p=>Number(p.currentStock)<=reorderOf(p)&&(p.Status||'Active')==='Active').filter(p=>!cat||p.Category===cat).filter(p=>!q||[p['Model / Part No.'],p.Description,p.Category,p.Location].some(v=>norm(v).includes(q))).sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
  $('lowStockRows').innerHTML=lowStockRowsHtml(low);
 }
+/* ---------- COMMON FILTER TOOLKIT (same look and behaviour on every page) ---------- */
+const PERIOD_OPTS = [['','All time'],['today','Today'],['week','This week'],['month','This month'],['lastmonth','Last month'],['quarter','This quarter'],['year','This year'],['custom','Custom range…']];
+function periodSelectHtml(id, fn){
+  return '<select id="' + id + '" onchange="periodChanged(\'' + id + '\');' + fn + '" title="Date period">' + PERIOD_OPTS.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('') + '</select>'
+    + '<span id="' + id + 'Rng" style="display:none;gap:6px;align-items:center"><input type="date" id="' + id + 'From" onchange="' + fn + '" title="From"><span class="muted">to</span><input type="date" id="' + id + 'To" onchange="' + fn + '" title="To"></span>';
+}
+function periodChanged(id){ const k = ($(id) || {}).value, r = $(id + 'Rng'); if (r) r.style.display = k === 'custom' ? 'inline-flex' : 'none'; }
+function periodRangeOf(k, fromV, toV){
+  if (!k) return null;
+  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), d = t.getDate();
+  if (k === 'today') return {from:new Date(y, m, d), to:new Date(y, m, d)};
+  if (k === 'week') { const dow = (new Date(y, m, d).getDay() + 6) % 7; return {from:new Date(y, m, d - dow), to:new Date(y, m, d - dow + 6)}; }
+  if (k === 'month') return {from:new Date(y, m, 1), to:new Date(y, m + 1, 0)};
+  if (k === 'lastmonth') return {from:new Date(y, m - 1, 1), to:new Date(y, m, 0)};
+  if (k === 'quarter') { const q = Math.floor(m / 3) * 3; return {from:new Date(y, q, 1), to:new Date(y, q + 3, 0)}; }
+  if (k === 'year') return {from:new Date(y, 0, 1), to:new Date(y, 11, 31)};
+  if (k === 'custom') { const f = payDay(fromV), to = payDay(toV); return (f || to) ? {from:f, to:to} : null; }
+  return null;
+}
+function periodRange(id){ return periodRangeOf(($(id) || {}).value, ($(id + 'From') || {}).value, ($(id + 'To') || {}).value); }
+function inPeriod(v, rng){ if (!rng) return true; const d = payDay(v); if (!d) return false; if (rng.from && d < rng.from) return false; if (rng.to && d > rng.to) return false; return true; }
+function fillSelect(id, values, allLabel){
+  const el = $(id); if (!el) return;
+  const cur = el.value, vs = Array.from(new Set(values.map(v => String(v == null ? '' : v).trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  el.innerHTML = '<option value="">' + esc(allLabel) + '</option>' + vs.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+  if (cur && vs.indexOf(cur) !== -1) el.value = cur;
+}
+function clearFilters(ids, fn){
+  ids.forEach(id => { const el = $(id); if (el) el.value = ''; ['From', 'To'].forEach(x => { const e2 = $(id + x); if (e2) e2.value = ''; }); periodChanged(id); });
+  if (fn) fn();
+}
+
 /* ---------- CLIENT PAYMENT TERMS + DUE / OVERDUE ----------
    A client's payment terms (in days) are stored in the customer's Remarks as a line "Payment Terms: 30"
    (the same way the STN is stored), so no backend change is needed. Due date = invoice date + terms. */
@@ -443,16 +476,31 @@ function dueBadge(daysOver){
   return '<span style="' + sty('#e8f6ee', '#1a7f3c') + '">Due in ' + (-daysOver) + ' days</span>';
 }
 
+const PDF = {st:'', q:''};
 async function loadPaymentDue(){
   const host = $('paymentDueSection'); if (!host) return;
   if (!hasMod('accounts')) { host.innerHTML = ''; return; }
   const r = await api('getOutstanding', {});
   const host2 = $('paymentDueSection'); if (!host2) return;
   if (!r.ok) { host2.innerHTML = ''; return; }
-  const invs = (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
+  window.PAYDUE_INVS = (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
     const t = paymentTermsOf(x.customer), di = dueInfo(x.date, t.days);
     return Object.assign({}, x, {terms:t.days, termsDefault:t.isDefault, due:di ? di.due : null, daysOver:di ? di.daysOver : null});
   });
+  host2.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 class="section-title" style="margin-bottom:3px">Payments Due &amp; Overdue</h3><div class="muted">Based on each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
+    + '<div class="toolbar" style="flex-wrap:wrap"><input id="pdQ" type="search" placeholder="Search client…" oninput="pdFilter()" style="flex:1;min-width:200px"><select id="pdSt" onchange="pdFilter()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select><button class="btn ghost small" onclick="clearFilters([\'pdQ\',\'pdSt\'],pdFilter)">Clear</button></div>'
+    + '<div id="pdBody"></div></div>';
+  if ($('pdQ')) $('pdQ').value = PDF.q; if ($('pdSt')) $('pdSt').value = PDF.st;
+  drawPaymentDue();
+}
+function pdFilter(){ PDF.q = ($('pdQ') || {}).value || ''; PDF.st = ($('pdSt') || {}).value || ''; drawPaymentDue(); }
+function drawPaymentDue(){
+  const body = $('pdBody'); if (!body) return;
+  const q = norm(PDF.q);
+  const invs = (window.PAYDUE_INVS || []).filter(x => (!q || norm(x.customer).includes(q)) && (!PDF.st
+    || (PDF.st === 'over' && x.daysOver > 0)
+    || (PDF.st === 'soon' && x.daysOver !== null && x.daysOver <= 0 && x.daysOver >= -7)
+    || (PDF.st === 'later' && x.daysOver !== null && x.daysOver < -7)));
   const by = {};
   invs.forEach(x => {
     const g = by[x.customer] || (by[x.customer] = {customer:x.customer, terms:x.terms, termsDefault:x.termsDefault, out:0, overdue:0, overdueN:0, maxOver:0, nextIn:null, invs:[]});
@@ -468,8 +516,7 @@ async function loadPaymentDue(){
   const age = (lo, hi) => sum(x => x.daysOver !== null && x.daysOver >= lo && x.daysOver <= hi);
   const kpi = (label, val, sub, color) => '<div class="card"><span>' + label + '</span><strong style="' + (color ? 'color:' + color : '') + '">' + money(val) + '</strong><small>' + sub + '</small></div>';
   const canEdit = hasMod('parties');
-  host2.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 class="section-title" style="margin-bottom:3px">Payments Due &amp; Overdue</h3><div class="muted">Based on each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
-    + '<div class="cards">' + kpi('Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
+  body.innerHTML = '<div class="cards">' + kpi('Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
     + kpi('Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? '#c0392b' : '')
     + kpi('Due in next 7 days', soon, 'Collect soon', soon > 0 ? '#b86e00' : '')
     + kpi('Not yet due', later, 'Beyond 7 days') + '</div>'
@@ -478,9 +525,8 @@ async function loadPaymentDue(){
       + groups.slice(0, 15).map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td><b>' + money(g.out) + '</b></td><td>' + (g.overdue > 0 ? '<span style="color:#c0392b"><b>' + money(g.overdue) + '</b></span>' : '—') + '</td><td>'
         + (g.maxOver > 0 ? dueBadge(g.maxOver) + (g.overdueN > 1 ? ' <span class="muted small">oldest of ' + g.overdueN + ' invoices</span>' : '') : (g.nextIn !== null ? dueBadge(-g.nextIn) : '<span class="muted">—</span>'))
         + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
-      + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Full list is in Accounts.</div>' : '')
-      : '<div class="empty">No outstanding invoices — all settled!</div>')
-    + '</div>';
+      + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Use the filters above or open Accounts for the full list.</div>' : '')
+      : '<div class="empty">' + ((PDF.q || PDF.st) ? 'No clients match this filter.' : 'No outstanding invoices — all settled!') + '</div>');
 }
 
 function paymentDueDetails(nameEnc){
@@ -516,25 +562,30 @@ async function savePaymentTerms(nameEnc){
   closeModal(); await refresh(); toast('Payment terms updated.');
 }
 
-function renderDashboard(){
-  const lowStock = S.products.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
+const DF = {cat:'', brand:''};
+function dashProducts(){ return S.products.filter(p => (!DF.cat || p.Category === DF.cat) && (!DF.brand || String(p.Brand || '').trim() === DF.brand)); }
+function dashFilter(){ DF.cat = ($('dfCat') || {}).value || ''; DF.brand = ($('dfBrand') || {}).value || ''; renderDashInventory(); }
+function renderDashInventory(){
+  const P = dashProducts();
+  const lowStock = P.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
   const catData = CATS.map((c,i) => ({
     label:c,
-    value:S.products.filter(p=>p.Category===c).reduce((a,p)=>a+(+p.currentStock||0),0),
-    count:S.products.filter(p=>p.Category===c).length,
+    value:P.filter(p=>p.Category===c).reduce((a,p)=>a+(+p.currentStock||0),0),
+    count:P.filter(p=>p.Category===c).length,
     color:CHART_PALETTE[i%CHART_PALETTE.length]
   })).filter(d => d.count > 0);
   const catTotal = catData.reduce((a,d)=>a+d.value,0) || 1;
-
-  $('dash').innerHTML = `
+  const put = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+  put('dashCards', `
     <div class="cards">
-      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${S.products.length}</strong><small>View products →</small></div>
-      <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
+      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${P.length}</strong><small>View products →</small></div>
+      <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${P.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
       <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong><small>View customers →</small></div>
       <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>${S.suppliers.length}</strong><small>View suppliers →</small></div>
       <div class="card dash-kpi dash-kpi-low" role="button" tabindex="0" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong>${lowStock.length}</strong><small>View low stock →</small></div>
     </div>
-    <div id="paymentDueSection"></div>
+`);
+  put('dashLow', `
     ${lowStock.length ? `<div class="panel">
       <div class="panel-head">
         <div><h3 class="section-title" style="color:#c0392b;margin-bottom:3px">⚠ Low Stock Items</h3><div class="muted">${lowStock.length} item${lowStock.length===1?'':'s'} need attention</div></div>
@@ -544,6 +595,8 @@ function renderDashboard(){
       <tbody>${lowStock.slice(0,8).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${reorderOf(p)}</td></tr>`).join('')}</tbody></table></div>
       ${lowStock.length>8 ? `<div style="text-align:center;margin-top:12px"><button class="btn ghost small" onclick="openLowStock()">View all ${lowStock.length} low stock items</button></div>` : ''}
     </div>` : ''}
+`);
+  put('dashCat', `
     <div class="panel"><h3>Stock by Category</h3>
       <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:center">
         <div>${donutChart(catData)}</div>
@@ -552,7 +605,18 @@ function renderDashboard(){
         </div>
       </div>
     </div>
+`);
+}
+function renderDashboard(){
+  $('dash').innerHTML = `<div class="toolbar" style="flex-wrap:wrap"><b class="muted">Filter inventory cards:</b><select id="dfCat" onchange="dashFilter()"></select><select id="dfBrand" onchange="dashFilter()"></select><button class="btn ghost small" onclick="clearFilters(['dfCat','dfBrand'],dashFilter)">Clear</button></div>
+    <div id="dashCards"></div>
+    <div id="paymentDueSection"></div>
+    <div id="dashLow"></div>
+    <div id="dashCat"></div>
     <div id="salesSummarySection"><div class="panel"><div class="muted">Loading sales summary…</div></div></div><div id="quotationPipelineSection"><div class="panel"><div class="muted">Loading quotation pipeline…</div></div></div>`;
+  fillSelect('dfCat', S.products.map(p => p.Category), 'All Categories'); if ($('dfCat')) $('dfCat').value = DF.cat;
+  fillSelect('dfBrand', S.products.map(p => p.Brand), 'All Brands'); if ($('dfBrand')) $('dfBrand').value = DF.brand;
+  renderDashInventory();
   loadPaymentDue();
   loadSalesSummary();
   loadQuotationPipeline();
@@ -713,7 +777,19 @@ async function saveTargetSubmit(){
 /* ---------- PRODUCTS ---------- */
 function renderProducts(){
   let q = ($('ps')?.value||'').toLowerCase(), c = $('pc')?.value||'';
-  let a = S.products.filter(p => [p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q) && (!c || p.Category === c));
+  fillSelect('pb', S.products.map(p => p.Brand), 'All Brands');
+  const pbv = ($('pb')||{}).value || '', pstv = ($('pst')||{}).value || '', pactv = ($('pact')||{}).value || '';
+  let a = S.products.filter(p => {
+    if (!([p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q) && (!c || p.Category === c))) return false;
+    if (pbv && String(p.Brand || '').trim() !== pbv) return false;
+    if (pactv && (p.Status || 'Active') !== pactv) return false;
+    const stock = Number(p.currentStock) || 0;
+    if (pstv === 'in' && !(stock > 0)) return false;
+    if (pstv === 'out' && !(stock <= 0)) return false;
+    if (pstv === 'low' && !(stock <= reorderOf(p))) return false;
+    return true;
+  });
+  const pc2 = $('pcount'); if (pc2) pc2.textContent = 'Showing ' + Math.min(a.length, 1000) + ' of ' + S.products.length + ' product(s)' + (a.length > 1000 ? ' (first 1000 shown — narrow the filters)' : '');
   $('prows').innerHTML = a.slice(0,1000).map(p => {
     const low = Number(p.currentStock) <= reorderOf(p);
     return `<tr ${low?'style="background:#fbeae8"':''}>
@@ -1119,7 +1195,10 @@ function filterDCHistory(){
   const tbody = $('dchRows');
   if (!tbody) return;
   const q = norm($('dchSearch')?.value||'');
-  const rows = DCH_CACHE.filter(d => !q || d.searchText.includes(q));
+  fillSelect('dchCust', DCH_CACHE.map(d => d.customer), 'All Customers');
+  const rng = periodRange('dchPer'), cust = ($('dchCust') || {}).value || '', inv = ($('dchInv') || {}).value || '';
+  const rows = DCH_CACHE.filter(d => (!q || d.searchText.includes(q)) && inPeriod(d.date, rng) && (!cust || d.customer === cust) && (!inv || (inv === 'yes') === !!d.invoiced));
+  const dInfo = $('dchInfo'); if (dInfo) dInfo.textContent = 'Showing ' + rows.length + ' of ' + DCH_CACHE.length + ' challan(s) • Total qty ' + rows.reduce((a, d) => a + (+d.totalQty || 0), 0).toLocaleString();
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No Delivery Challans found.</td></tr>';
     return;
@@ -1313,7 +1392,10 @@ function filterIVHistory(){
   const tbody = $('ivhRows');
   if (!tbody) return;
   const q = norm($('ivhSearch')?.value||'');
-  const rows = IVH_CACHE.filter(d => !q || d.searchText.includes(q));
+  fillSelect('ivhCust', IVH_CACHE.map(d => d.customer), 'All Customers');
+  const rng = periodRange('ivhPer'), cust = ($('ivhCust') || {}).value || '';
+  const rows = IVH_CACHE.filter(d => (!q || d.searchText.includes(q)) && inPeriod(d.date, rng) && (!cust || d.customer === cust));
+  const iInfo = $('ivhInfo'); if (iInfo) iInfo.textContent = 'Showing ' + rows.length + ' of ' + IVH_CACHE.length + ' invoice(s) • Total (incl. GST) ' + money(rows.reduce((a, d) => a + (+d.grandTotal || 0), 0));
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No Invoices found.</td></tr>';
     return;
@@ -1382,7 +1464,7 @@ function viewInvoice(noEnc, print){
 /* ---------- ACCOUNTS (placeholder) ---------- */
 async function loadAccounts(){
   const [custOut, custPay, supOut, supPay] = await Promise.all([
-    api('getOutstanding', {includeSettled:true}),
+    api('getOutstanding', {}),
     api('getPaymentHistory', {}),
     api('getSupplierOutstanding', {}),
     api('getSupplierPaymentHistory', {})
@@ -1390,18 +1472,15 @@ async function loadAccounts(){
 
   ACC.outErr = custOut.ok ? '' : (custOut.error || 'Could not load outstanding');
   ACC.payErr = custPay.ok ? '' : (custPay.error || 'Could not load payments');
-  ACC.out = (custOut.ok ? (custOut.rows||[]) : []).map(r => Object.assign({}, r, {_hay: accHay([r.no, r.customer, ...accDateParts(r.date), ...accAmountParts(r.total), ...accAmountParts(r.paid), ...accAmountParts(r.cash), ...accAmountParts(r.tax), ...accAmountParts(r.outstanding)])}));
+  ACC.out = (custOut.ok ? (custOut.rows||[]) : []).map(r => Object.assign({}, r, {_hay: accHay([r.no, r.customer, ...accDateParts(r.date), ...accAmountParts(r.total), ...accAmountParts(r.paid), ...accAmountParts(r.outstanding)])}));
   ACC.pays = (custPay.ok ? (custPay.payments||[]) : []).map(x => Object.assign({}, x, {_hay: accHay([x['Invoice No.'], x['Customer Name'], x.Reference, x.Method, x.Remarks, ...accDateParts(x.Date), ...accAmountParts(x.Amount)])}));
   filterCustOut();
   filterCustPay();
 
-  const supRows = supOut.ok ? (supOut.rows||[]) : [];
-  const supOutHost = $('supOutRows');
-  if (supOutHost) supOutHost.innerHTML = supRows.map(r=>`<tr><td>${esc(r.supplier)}</td><td>${money(r.purchased)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openSupPayModal('${encA(r.supplier)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">No outstanding supplier balances — all settled!</td></tr>';
-
-  const supPays = supPay.ok ? (supPay.payments||[]) : [];
-  const supPayHost = $('supPayRows');
-  if (supPayHost) supPayHost.innerHTML = supPays.slice(0,30).map(x=>`<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>';
+  ACC.sup = supOut.ok ? (supOut.rows||[]) : [];
+  ACC.supPays = supPay.ok ? (supPay.payments||[]) : [];
+  filterSupOut();
+  filterSupPay();
 }
 function renderAccounts(){ loadAccounts(); }
 
@@ -1423,31 +1502,38 @@ function accDateParts(v){
 function accAmountParts(n){ const a = Number(n) || 0; return [String(a), money(a), money(a).replace(/,/g,'')]; }
 
 function custOutRowHtml(r){
-  const paid = Number(r.outstanding) <= 0.5;
   const di = dueInfo(r.date, paymentTermsOf(r.customer).days);
-  const paidBadge = '<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:800;background:#e8f6ee;color:#1a7f3c;letter-spacing:.5px">PAID</span>';
-  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.cash != null ? r.cash : r.paid)}</td><td>${money(r.tax || 0)}</td><td><b>${paid ? money(0) : money(r.outstanding)}</b></td><td>${di?fmtDate(di.due):'—'}</td><td>${paid ? paidBadge : (di?dueBadge(di.daysOver):'—')}</td><td>${paid ? '' : `<button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button>`}</td></tr>`;
+  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td>${di?fmtDate(di.due):'—'}</td><td>${di&&Number(r.outstanding)>0.5?dueBadge(di.daysOver):'—'}</td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`;
 }
 function filterCustOut(){
   const host = $('custOutRows');
   if (!host) return;
+  fillSelect('custOutCust', ACC.out.map(r => r.customer), 'All Customers');
   const q = (($('custOutSearch') || {}).value || '').trim();
-  const showPaid = !!(($('custOutShowPaid') || {}).checked);
-  const isOpen = r => Number(r.outstanding) > 0.5;
-  const openRows = ACC.out.filter(isOpen);
-  // Paid invoices show only when searching, or when "Show paid" is ticked
-  const pool = (q || showPaid) ? ACC.out : openRows;
-  const hits = q ? pool.filter(r => accMatch(r._hay, q)) : pool;
+  const cust = ($('custOutCust') || {}).value || '', st = ($('custOutSt') || {}).value || '', rng = periodRange('custOutPer');
+  const hits = ACC.out.filter(r => {
+    if (q && !accMatch(r._hay, q)) return false;
+    if (cust && r.customer !== cust) return false;
+    if (!inPeriod(r.date, rng)) return false;
+    if (st) {
+      const di = dueInfo(r.date, paymentTermsOf(r.customer).days); if (!di) return false;
+      const o = di.daysOver;
+      if (st === 'over' && !(o > 0)) return false;
+      if (st === 'soon' && !(o <= 0 && o >= -7)) return false;
+      if (st === 'later' && !(o < -7)) return false;
+    }
+    return true;
+  });
+  const filtered = !!(q || cust || st || rng);
   host.innerHTML = ACC.outErr
-    ? `<tr><td colspan="10" class="empty">${esc(ACC.outErr)}</td></tr>`
-    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="10" class="empty">${q ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
+    ? `<tr><td colspan="9" class="empty">${esc(ACC.outErr)}</td></tr>`
+    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="9" class="empty">${filtered ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
   const info = $('custOutInfo');
   if (info) {
-    const tot = hits.reduce((a, r) => a + (isOpen(r) ? (Number(r.outstanding) || 0) : 0), 0);
-    info.textContent = ACC.outErr ? '' : `${hits.length} of ${ACC.out.length} invoice(s) • Outstanding ${money(tot)}`;
+    const tot = hits.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
+    info.textContent = ACC.outErr ? '' : (filtered ? `${hits.length} of ${ACC.out.length} invoice(s) • Outstanding ${money(tot)}` : `${ACC.out.length} invoice(s) • Outstanding ${money(tot)}`);
   }
 }
-
 function custPayRowHtml(x){
   const tax = (Number(x['Income Tax Deducted'])||0) + (Number(x['WHT Deducted'])||0);
   const taxNote = tax > 0 ? ` <span class="muted small">(tax ${money(tax)})</span>` : '';
@@ -1456,20 +1542,39 @@ function custPayRowHtml(x){
 function filterCustPay(){
   const host = $('custPayRows');
   if (!host) return;
+  fillSelect('custPayCust', ACC.pays.map(x => x['Customer Name']), 'All Customers');
+  fillSelect('custPayMeth', ACC.pays.map(x => x.Method), 'All methods');
   const q = (($('custPaySearch') || {}).value || '').trim();
+  const cust = ($('custPayCust') || {}).value || '', meth = ($('custPayMeth') || {}).value || '', rng = periodRange('custPayPer');
   const all = ACC.pays;
-  const hits = q ? all.filter(x => accMatch(x._hay, q)) : all;
-  const shown = q ? hits : hits.slice(0, ACC_PAY_DEFAULT_LIMIT);
+  const hits = all.filter(x => (!q || accMatch(x._hay, q)) && (!cust || String(x['Customer Name'] || '').trim() === cust) && (!meth || String(x.Method || '').trim() === meth) && inPeriod(x.Date, rng));
+  const filtered = !!(q || cust || meth || rng);
+  const shown = filtered ? hits : hits.slice(0, ACC_PAY_DEFAULT_LIMIT);
   host.innerHTML = ACC.payErr
     ? `<tr><td colspan="7" class="empty">${esc(ACC.payErr)}</td></tr>`
-    : (shown.map(custPayRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'No payment found.' : 'No payments recorded yet.'}</td></tr>`);
+    : (shown.map(custPayRowHtml).join('') || `<tr><td colspan="7" class="empty">${filtered ? 'No payment found.' : 'No payments recorded yet.'}</td></tr>`);
   const info = $('custPayInfo');
   if (info) {
     const tot = hits.reduce((a, x) => a + (Number(x.Amount) || 0), 0);
-    info.textContent = ACC.payErr ? '' : (q
+    info.textContent = ACC.payErr ? '' : (filtered
       ? `${hits.length} payment(s) found • Total ${money(tot)}`
-      : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • search for older payments` : `${all.length} payment(s) • Total ${money(tot)}`));
+      : (all.length > shown.length ? `Latest ${shown.length} of ${all.length} • use filters to see older payments` : `${all.length} payment(s) • Total ${money(tot)}`));
   }
+}
+function filterSupOut(){
+  const host = $('supOutRows'); if (!host) return;
+  const q = norm(($('supOutSearch') || {}).value || ''), st = ($('supOutSt') || {}).value || '';
+  const rows = (ACC.sup || []).filter(r => (!q || norm(r.supplier).includes(q)) && (!st || Number(r.outstanding) > 0.5));
+  host.innerHTML = rows.map(r => `<tr><td>${esc(r.supplier)}</td><td>${money(r.purchased)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openSupPayModal('${encA(r.supplier)}',${r.outstanding})">Record Payment</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">No supplier found.</td></tr>';
+}
+function filterSupPay(){
+  const host = $('supPayRows'); if (!host) return;
+  const all = ACC.supPays || [];
+  fillSelect('supPayMeth', all.map(x => x.Method), 'All methods');
+  const q = norm(($('supPaySearch') || {}).value || ''), meth = ($('supPayMeth') || {}).value || '', rng = periodRange('supPayPer');
+  const hits = all.filter(x => (!q || [x['Supplier Name'], x.Reference, x.Method, x.Remarks].some(v => norm(v).includes(q))) && (!meth || String(x.Method || '').trim() === meth) && inPeriod(x.Date, rng));
+  const filtered = !!(q || meth || rng), shown = filtered ? hits : hits.slice(0, 30);
+  host.innerHTML = shown.map(x => `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x['Supplier Name'])}</td><td>${money(x.Amount)}</td><td>${esc(x.Method)}</td><td>${esc(x.Reference)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No payments found.</td></tr>';
 }
 function clearPaySearch(){ const el = $('custPaySearch'); if (el) { el.value = ''; filterCustPay(); el.focus(); } }
 
@@ -1726,26 +1831,44 @@ async function renderReports(){
     for (let y = cy; y >= cy - 5; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
   }
   const year = sel ? sel.value : new Date().getFullYear();
+  const rmv = ($('rm') || {}).value || '';
   const host = $('reports');
   if (host) host.innerHTML = '<div class="muted">Loading…</div>';
   const r = await api('getReports', {year});
   if (!r.ok) { if (host) host.innerHTML = ''; return toast(r.error, true); }
-  const mv = (r.movements || []).slice().sort((a,b) => new Date(b.Date) - new Date(a.Date)).slice(0, 200);
+  const inMonth = v => { if (rmv === '') return true; const d = new Date(v); return !isNaN(d) && d.getMonth() === Number(rmv); };
+  const sales = (r.sales || []).filter(x => inMonth(x.date));
+  window.RPT_MV = (r.movements || []).slice().sort((a,b) => new Date(b.Date) - new Date(a.Date));
   if (!$('reports')) return;
+  const period = rmv === '' ? 'Year ' + year : PS_MONTHS[Number(rmv)] + ' ' + year;
   $('reports').innerHTML =
     `<div class="cards">
-       <div class="card"><span>Invoice Lines</span><strong>${(r.sales||[]).length}</strong></div>
-       <div class="card"><span>Sales (excl. GST)</span><strong>${money((r.sales||[]).reduce((a,x)=>a+(+x.total||0),0))}</strong></div>
+       <div class="card"><span>Invoice Lines — ${esc(period)}</span><strong>${sales.length}</strong></div>
+       <div class="card"><span>Sales (excl. GST) — ${esc(period)}</span><strong>${money(sales.reduce((a,x)=>a+(+x.total||0),0))}</strong></div>
      </div>
      <div id="psales"></div>
-     <div class="panel"><h3>Sales by Category (excl. GST)</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${esc(c)}</span><b>${((r.categorySales||{})[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
-     <div class="panel table-wrap"><h3>Recent Stock Movement (latest 200)</h3>
+     <div class="panel"><h3>Units Delivered by Category (whole year ${esc(year)})</h3><div class="catgrid">${CATS.map(c=>`<div class="cat"><span>${esc(c)}</span><b>${((r.categorySales||{})[c]||0).toLocaleString()}</b></div>`).join('')}</div></div>
+     <div class="panel table-wrap"><h3>Stock Movement</h3>
+       <div class="toolbar" style="flex-wrap:wrap"><input id="mvq" type="search" placeholder="Search model / party / reference…" oninput="filterMovements()" style="flex:1;min-width:220px"><select id="mvt" onchange="filterMovements()"><option value="">IN &amp; OUT</option><option value="IN">IN only</option><option value="OUT">OUT only</option></select><button class="btn ghost small" onclick="clearFilters(['mvq','mvt'],filterMovements)">Clear</button><span id="mvInfo" class="muted small"></span></div>
        <table>
          <thead><tr><th>Date</th><th>Type</th><th>Model</th><th>IN</th><th>OUT</th><th>Party</th><th>Reference</th><th>By</th></tr></thead>
-         <tbody>${mv.map(x => `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No movements.</td></tr>'}</tbody>
+         <tbody id="mvRows"></tbody>
        </table>
      </div>`;
+  filterMovements();
+  if (rmv !== '') { PS.mode = 'month'; PS.month = Number(rmv); }
   renderProductSales(true);
+}
+function filterMovements(){
+  const h = $('mvRows'); if (!h) return;
+  const rmv = ($('rm') || {}).value || '', q = norm(($('mvq') || {}).value || ''), t = ($('mvt') || {}).value || '';
+  const rows = (window.RPT_MV || []).filter(x => {
+    if (rmv !== '') { const d = new Date(x.Date); if (isNaN(d) || d.getMonth() !== Number(rmv)) return false; }
+    if (t && String(x.Type || '').toUpperCase() !== t) return false;
+    return !q || [x.Type, x['Model / Part No.'], x.Party, x.Reference, x['Created By']].some(v => norm(v).includes(q));
+  });
+  h.innerHTML = rows.slice(0, 200).map(x => `<tr><td>${fmtDate(x.Date)}</td><td>${esc(x.Type)}</td><td>${esc(x['Model / Part No.'])}</td><td>${x['Qty IN']}</td><td>${x['Qty OUT']}</td><td>${esc(x.Party)}</td><td>${esc(x.Reference)}</td><td>${esc(x['Created By'])}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No movements.</td></tr>';
+  const info = $('mvInfo'); if (info) info.textContent = 'Showing ' + Math.min(rows.length, 200) + ' of ' + rows.length + ' movement(s)' + (rows.length > 200 ? ' (latest 200)' : '');
 }
 
 
@@ -1962,12 +2085,33 @@ let ENQ_CACHE=[];
 async function renderEnquiries(){const r=await api('getEnquiries');if(!r.ok)return toast(r.error,true);ENQ_CACHE=r.documents||[];filterEnquiries();}
 function enquiryForm(){modal('New Enquiry','<div class="form-grid"><label>Date<input id="enqDate" type="date" value="'+todayStr()+'"></label><label>Customer Name<input id="enqCustomer"></label><label>Contact Person<input id="enqContact"></label><label>Phone<input id="enqPhone"></label><label class="wide">Requirement / Description<textarea id="enqRequirement" rows="4"></textarea></label></div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveEnquiry()">Save Enquiry</button></div>');}
 async function saveEnquiry(){const customerName=$('enqCustomer').value.trim();if(!customerName)return toast('Customer Name is required.',true);const r=await api('saveEnquiry',{date:$('enqDate').value,customerName:customerName,contactPerson:$('enqContact').value,phone:$('enqPhone').value,requirement:$('enqRequirement').value});if(!r.ok)return toast(r.error,true);closeModal();toast('Enquiry saved.');renderEnquiries();}
-function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rows=ENQ_CACHE.filter(d=>!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo].some(v=>norm(v).includes(q)));h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customerName)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+esc(d.requirement)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+'</td></tr>').join('')||'<tr><td colspan="10">No enquiries found.</td></tr>';}
+function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rng=periodRange('enqPer'),est=($('enqStatus')||{}).value||'';const rows=ENQ_CACHE.filter(d=>(!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo].some(v=>norm(v).includes(q)))&&inPeriod(d.date,rng)&&(!est||d.status===est));const eInfo=$('enqInfo');if(eInfo)eInfo.textContent='Showing '+rows.length+' of '+ENQ_CACHE.length+' enquiries';h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customerName)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+esc(d.requirement)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
 function makeQuotationFromEnquiry(en){const d=ENQ_CACHE.find(x=>x.id===decodeURIComponent(en));if(d)startQuotationFromEnquiry(d);}
 function viewEnquiryQuotation(q){const no=decodeURIComponent(q);showPage('qthistory');setTimeout(()=>loadQTHistory().then(()=>{const d=QT_CACHE.find(x=>x.no===no);if(d)printQuotation(d);}),0);}
 function quotationStatusForm(no,status,reason){const n=decodeURIComponent(no),s=decodeURIComponent(status),r=decodeURIComponent(reason||'');modal('Update Quotation Status','<div class="form-grid"><label>Status<select id="qstatus"><option '+(s==='Pending'?'selected':'')+'>Pending</option><option '+(s==='Won'?'selected':'')+'>Won</option><option '+(s==='Lost'?'selected':'')+'>Lost</option></select></label><label class="wide">Loss Reason<input id="qlossReason" value="'+esc(r)+'" placeholder="Required when status is Lost"></label></div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveQuotationStatus(\''+encA(n)+'\')">Save Status</button></div>');}
 async function saveQuotationStatus(no){const status=$('qstatus').value,lossReason=$('qlossReason').value.trim();if(status==='Lost'&&!lossReason)return toast('Loss reason is required.',true);const r=await api('updateQuotationStatus',{no:decodeURIComponent(no),status:status,lossReason:lossReason});if(!r.ok)return toast(r.error,true);closeModal();toast('Quotation status updated.');loadQTHistory();}
-async function loadQuotationPipeline(){const q=await api('quotationHistory'),e=await api('getEnquiries'),host=$('quotationPipelineSection');if(!host||!q.ok||!e.ok){if(host)host.innerHTML='';return;}const docs=q.documents||[],enqs=e.documents||[],m=enqs.filter(x=>{const d=new Date(x.date);return d.getFullYear()===new Date().getFullYear()&&d.getMonth()===new Date().getMonth();}).length,won=docs.filter(x=>x.status==='Won').length,lost=docs.filter(x=>x.status==='Lost').length,pending=docs.filter(x=>(x.status||'Pending')==='Pending').length;const data=[{label:'Won',value:won,color:CHART_PALETTE[1]},{label:'Pending',value:pending,color:CHART_PALETTE[2]},{label:'Lost',value:lost,color:CHART_PALETTE[6]}].filter(x=>x.value>0),lr=docs.filter(x=>x.status==='Lost').slice(0,8);host.innerHTML='<div class="panel"><div class="panel-head"><h3>Enquiry & Quotation Pipeline</h3><span class="muted">Current month enquiries: <b>'+m+'</b></span></div><div class="cards" style="margin:0 0 16px"><div class="card"><span>Total Enquiries</span><strong>'+enqs.length+'</strong></div><div class="card"><span>Total Quotations</span><strong>'+docs.length+'</strong></div><div class="card"><span>Won</span><strong>'+won+'</strong></div><div class="card"><span>Pending</span><strong>'+pending+'</strong></div><div class="card"><span>Lost</span><strong>'+lost+'</strong></div></div><div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap"><div>'+donutChart(data,180)+'</div><div style="flex:1;min-width:260px">'+(lr.length?'<h4>Lost Quotations</h4><div class="table-wrap"><table><thead><tr><th>Quotation</th><th>Customer</th><th>Loss Reason</th></tr></thead><tbody>'+lr.map(x=>'<tr><td>'+esc(x.no)+'</td><td>'+esc(x.customer)+'</td><td>'+esc(x.lossReason||'')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="muted">No lost quotations.</div>')+'</div></div></div>';}
+const QPF = {per:'', from:'', to:''};
+let QP_DATA = null;
+async function loadQuotationPipeline(){
+  const q = await api('quotationHistory'), e = await api('getEnquiries'), host = $('quotationPipelineSection');
+  if (!host || !q.ok || !e.ok) { if (host) host.innerHTML = ''; return; }
+  QP_DATA = {docs:q.documents || [], enqs:e.documents || []};
+  drawPipeline();
+}
+function pipelineFilterChanged(){ QPF.per = ($('qpPer') || {}).value || ''; QPF.from = ($('qpPerFrom') || {}).value || ''; QPF.to = ($('qpPerTo') || {}).value || ''; drawPipeline(); }
+function drawPipeline(){
+  const host = $('quotationPipelineSection'); if (!host || !QP_DATA) return;
+  const rng = periodRangeOf(QPF.per, QPF.from, QPF.to);
+  const docs = QP_DATA.docs.filter(x => inPeriod(x.date, rng)), enqs = QP_DATA.enqs.filter(x => inPeriod(x.date, rng));
+  const won = docs.filter(x => x.status === 'Won').length, lost = docs.filter(x => x.status === 'Lost').length, pending = docs.filter(x => (x.status || 'Pending') === 'Pending').length;
+  const data = [{label:'Won', value:won, color:CHART_PALETTE[1]}, {label:'Pending', value:pending, color:CHART_PALETTE[2]}, {label:'Lost', value:lost, color:CHART_PALETTE[6]}].filter(x => x.value > 0);
+  const lr = docs.filter(x => x.status === 'Lost').slice(0, 8);
+  host.innerHTML = '<div class="panel"><div class="panel-head"><h3>Enquiry & Quotation Pipeline</h3><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + periodSelectHtml('qpPer', 'pipelineFilterChanged()') + '</span></div>'
+    + '<div class="cards" style="margin:0 0 16px"><div class="card"><span>Total Enquiries</span><strong>' + enqs.length + '</strong></div><div class="card"><span>Total Quotations</span><strong>' + docs.length + '</strong></div><div class="card"><span>Won</span><strong>' + won + '</strong></div><div class="card"><span>Pending</span><strong>' + pending + '</strong></div><div class="card"><span>Lost</span><strong>' + lost + '</strong></div></div>'
+    + '<div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap"><div>' + donutChart(data, 180) + '</div><div style="flex:1;min-width:260px">'
+    + (lr.length ? '<h4>Lost Quotations</h4><div class="table-wrap"><table><thead><tr><th>Quotation</th><th>Customer</th><th>Loss Reason</th></tr></thead><tbody>' + lr.map(x => '<tr><td>' + esc(x.no) + '</td><td>' + esc(x.customer) + '</td><td>' + esc(x.lossReason || '') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="muted">No lost quotations.</div>') + '</div></div></div>';
+  if ($('qpPer')) { $('qpPer').value = QPF.per; if ($('qpPerFrom')) $('qpPerFrom').value = QPF.from; if ($('qpPerTo')) $('qpPerTo').value = QPF.to; periodChanged('qpPer'); }
+}
 /* ---------- HELPERS ---------- */
 function money(n){ return (Number(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
@@ -2089,7 +2233,7 @@ async function saveQuotation(){
 function printQuotationFromForm(){ const customer=$('qtcustomer').value.trim(); const items=QTL.filter(x=>(String(x.model||'').trim()||String(x.desc||'').trim())&&Number(x.qty)>0).map(x=>({...x,model:String(x.model||'').trim(),desc:String(x.desc||'').trim()})); if(!customer||!items.length)return toast('Enter customer and at least one item first.',true); printQuotation({no:$('qtno').value||'DRAFT',date:$('qtdate').value,customer:customer,address:$('qtaddress').value,ref:$('qtref')?.value||'',po:$('qtref')?.value||'',poDate:$('qtrefDate')?.value||'',validity:$('qtvalidity').value||'7 Days',paymentTerms:$('qtpaymentTerms')?.value||'20 Days',stn:$('qtstn').value,ntn:$('qtnTN').value,items:items,gst:Number($('qtgst')?.value||0),discount:Number($('qtdiscount')?.value||0),contact:$('qtcontact')?.value||'',customerId:$('qtcustomerId')?.value||'',createdBy:(typeof S!=='undefined'&&S.user&&(S.user.name||S.user.username))||''}); }
 async function loadQTHistory(){ const r=await api('quotationHistory'); if(!r.ok){if($('qtrows'))$('qtrows').innerHTML='<tr><td colspan="7">'+esc(r.error)+'</td></tr>';return;} QT_CACHE=r.documents||[]; filterQTHistory(); }
 function statusBadge(s){ return '<span class="badge" style="font-size:11px">'+esc(s||'Pending')+'</span>'; }
-function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); const rows=QT_CACHE.filter(d=>!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q)); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="reviseQuotation(\''+encA(d.no)+'\')">Revise</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
+function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); fillSelect('qtCust',QT_CACHE.map(d=>d.customer),'All Customers'); const rng=periodRange('qtPer'),cust=($('qtCust')||{}).value||'',st=($('qtSt')||{}).value||''; const rows=QT_CACHE.filter(d=>(!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q))&&inPeriod(d.date,rng)&&(!cust||d.customer===cust)&&(!st||(d.status||'Pending')===st)); const qInfo=$('qtInfo'); if(qInfo)qInfo.textContent='Showing '+rows.length+' of '+QT_CACHE.length+' quotation(s) • Total '+money(rows.reduce((a,d)=>a+(+d.subtotal||0),0)); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="reviseQuotation(\''+encA(d.no)+'\')">Revise</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
 function viewQuotation(en){ const no=decodeURIComponent(en); const d=QT_CACHE.find(x=>x.no===no); if(d)printQuotation(d); }
 
 let REVISION_QUOTATION=null;
