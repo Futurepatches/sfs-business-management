@@ -367,7 +367,7 @@ const pages = {
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
   qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap"><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry, customer, contact, phone, requirement..." oninput="filterEnquiries()" style="flex:1;min-width:280px"></div><div class="panel table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Contact</th><th>Phone</th><th>Requirement</th><th>Status</th><th>Quotation</th><th>Action</th></tr></thead><tbody id="enqRows"><tr><td colspan="9">Loading...</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
-<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><h3>Recent Supplier Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
@@ -409,6 +409,113 @@ function filterLowStock(){
  const low=S.products.filter(p=>Number(p.currentStock)<=reorderOf(p)&&(p.Status||'Active')==='Active').filter(p=>!cat||p.Category===cat).filter(p=>!q||[p['Model / Part No.'],p.Description,p.Category,p.Location].some(v=>norm(v).includes(q))).sort((a,b)=>Number(a.currentStock||0)-Number(b.currentStock||0));
  $('lowStockRows').innerHTML=lowStockRowsHtml(low);
 }
+/* ---------- CLIENT PAYMENT TERMS + DUE / OVERDUE ----------
+   A client's payment terms (in days) are stored in the customer's Remarks as a line "Payment Terms: 30"
+   (the same way the STN is stored), so no backend change is needed. Due date = invoice date + terms. */
+const DEFAULT_PAYMENT_TERMS_DAYS = 30;     // used for clients whose terms are not set yet
+function paymentTermsOf(customerName){
+  const c = (S.customers || []).find(x => norm(x['Customer Name']) === norm(customerName));
+  const m = String((c && c.Remarks) || '').match(/payment\s*terms?\s*[:#\-]\s*(\d+)/i);
+  return m ? {days:Number(m[1]), isDefault:false, known:!!c} : {days:DEFAULT_PAYMENT_TERMS_DAYS, isDefault:true, known:!!c};
+}
+function stripPaymentTerms(remarks){
+  return String(remarks || '').split('\n').filter(l => !/^\s*payment\s*terms?\s*[:#\-]/i.test(l)).join('\n').trim();
+}
+function remarksWithTerms(remarks, days){
+  const clean = stripPaymentTerms(remarks);
+  const d = String(days === undefined || days === null ? '' : days).trim();
+  const line = d !== '' && !isNaN(Number(d)) && Number(d) >= 0 ? 'Payment Terms: ' + Math.round(Number(d)) : '';
+  return [line, clean].filter(Boolean).join('\n');
+}
+function payDay(v){ const d = new Date(v); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dueInfo(invDate, termsDays){
+  const base = payDay(invDate); if (!base) return null;
+  const due = new Date(base.getFullYear(), base.getMonth(), base.getDate() + Number(termsDays || 0));
+  const t = new Date(); const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  const daysOver = Math.round((today - due) / 86400000);       // > 0 = overdue by N days, <= 0 = due in -N days
+  return {due:due, daysOver:daysOver};
+}
+function dueBadge(daysOver){
+  const sty = (bg, fg) => 'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:' + bg + ';color:' + fg;
+  if (daysOver > 0) return '<span style="' + sty('#fdecea', '#c0392b') + '">Overdue ' + daysOver + ' day' + (daysOver === 1 ? '' : 's') + '</span>';
+  if (daysOver === 0) return '<span style="' + sty('#fff4e0', '#b86e00') + '">Due today</span>';
+  if (daysOver >= -7) return '<span style="' + sty('#fff4e0', '#b86e00') + '">Due in ' + (-daysOver) + ' day' + (daysOver === -1 ? '' : 's') + '</span>';
+  return '<span style="' + sty('#e8f6ee', '#1a7f3c') + '">Due in ' + (-daysOver) + ' days</span>';
+}
+
+async function loadPaymentDue(){
+  const host = $('paymentDueSection'); if (!host) return;
+  if (!hasMod('accounts')) { host.innerHTML = ''; return; }
+  const r = await api('getOutstanding', {});
+  const host2 = $('paymentDueSection'); if (!host2) return;
+  if (!r.ok) { host2.innerHTML = ''; return; }
+  const invs = (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
+    const t = paymentTermsOf(x.customer), di = dueInfo(x.date, t.days);
+    return Object.assign({}, x, {terms:t.days, termsDefault:t.isDefault, due:di ? di.due : null, daysOver:di ? di.daysOver : null});
+  });
+  const by = {};
+  invs.forEach(x => {
+    const g = by[x.customer] || (by[x.customer] = {customer:x.customer, terms:x.terms, termsDefault:x.termsDefault, out:0, overdue:0, overdueN:0, maxOver:0, nextIn:null, invs:[]});
+    g.out += Number(x.outstanding) || 0; g.invs.push(x);
+    if (x.daysOver === null) return;
+    if (x.daysOver > 0) { g.overdue += Number(x.outstanding) || 0; g.overdueN++; g.maxOver = Math.max(g.maxOver, x.daysOver); }
+    else { const left = -x.daysOver; g.nextIn = g.nextIn === null ? left : Math.min(g.nextIn, left); }
+  });
+  const groups = Object.values(by).sort((a, b) => (b.maxOver - a.maxOver) || ((a.nextIn === null ? 9999 : a.nextIn) - (b.nextIn === null ? 9999 : b.nextIn)) || (b.out - a.out));
+  window.PAYDUE_GROUPS = groups;
+  const sum = f => invs.filter(f).reduce((a, x) => a + (Number(x.outstanding) || 0), 0);
+  const total = sum(() => true), over = sum(x => x.daysOver > 0), soon = sum(x => x.daysOver !== null && x.daysOver <= 0 && x.daysOver >= -7), later = total - over - soon;
+  const age = (lo, hi) => sum(x => x.daysOver !== null && x.daysOver >= lo && x.daysOver <= hi);
+  const kpi = (label, val, sub, color) => '<div class="card"><span>' + label + '</span><strong style="' + (color ? 'color:' + color : '') + '">' + money(val) + '</strong><small>' + sub + '</small></div>';
+  const canEdit = hasMod('parties');
+  host2.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 class="section-title" style="margin-bottom:3px">Payments Due &amp; Overdue</h3><div class="muted">Based on each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
+    + '<div class="cards">' + kpi('Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
+    + kpi('Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? '#c0392b' : '')
+    + kpi('Due in next 7 days', soon, 'Collect soon', soon > 0 ? '#b86e00' : '')
+    + kpi('Not yet due', later, 'Beyond 7 days') + '</div>'
+    + (over > 0 ? '<div class="muted" style="margin:6px 0 10px">Overdue age: <b>1–30 days</b> ' + money(age(1, 30)) + ' &nbsp;•&nbsp; <b>31–60</b> ' + money(age(31, 60)) + ' &nbsp;•&nbsp; <b>61–90</b> ' + money(age(61, 90)) + ' &nbsp;•&nbsp; <b>90+</b> ' + money(age(91, 99999)) + '</div>' : '')
+    + (groups.length ? '<div class="table-wrap"><table><thead><tr><th>Client</th><th>Terms</th><th>Outstanding</th><th>Overdue</th><th>Status</th><th></th></tr></thead><tbody>'
+      + groups.slice(0, 15).map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td><b>' + money(g.out) + '</b></td><td>' + (g.overdue > 0 ? '<span style="color:#c0392b"><b>' + money(g.overdue) + '</b></span>' : '—') + '</td><td>'
+        + (g.maxOver > 0 ? dueBadge(g.maxOver) + (g.overdueN > 1 ? ' <span class="muted small">oldest of ' + g.overdueN + ' invoices</span>' : '') : (g.nextIn !== null ? dueBadge(-g.nextIn) : '<span class="muted">—</span>'))
+        + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Full list is in Accounts.</div>' : '')
+      : '<div class="empty">No outstanding invoices — all settled!</div>')
+    + '</div>';
+}
+
+function paymentDueDetails(nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  const g = (window.PAYDUE_GROUPS || []).find(x => x.customer === name); if (!g) return;
+  const rows = g.invs.slice().sort((a, b) => (b.daysOver === null ? -99999 : b.daysOver) - (a.daysOver === null ? -99999 : a.daysOver));
+  modal('Payment Due — ' + name,
+    '<div class="muted" style="margin-bottom:10px">Payment terms: <b>' + g.terms + ' days</b>' + (g.termsDefault ? ' (default — not set for this client)' : '') + ' • Outstanding: <b>' + money(g.out) + '</b></div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Invoice Date</th><th>Due Date</th><th>Outstanding</th><th>Status</th></tr></thead><tbody>'
+    + rows.map(x => '<tr><td>' + esc(x.no) + '</td><td>' + fmtDate(x.date) + '</td><td>' + (x.due ? fmtDate(x.due) : '—') + '</td><td><b>' + money(x.outstanding) + '</b></td><td>' + (x.daysOver === null ? '—' : dueBadge(x.daysOver)) + '</td></tr>').join('')
+    + '</tbody></table></div><div class="actions"><button class="btn" onclick="closeModal()">Close</button>' + (hasMod('parties') ? '<button class="btn primary" onclick="editPaymentTerms(\'' + encA(name) + '\')">Set Payment Terms</button>' : '') + '</div>');
+}
+
+function editPaymentTerms(nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  const c = (S.customers || []).find(x => norm(x['Customer Name']) === norm(name));
+  if (!c) return toast('This client is not in the Customers list.', true);
+  const t = paymentTermsOf(name);
+  modal('Payment Terms — ' + name,
+    '<div class="form-grid"><label class="wide">Payment terms (days after invoice date)<input id="ptdays" type="number" min="0" max="365" step="1" value="' + (t.isDefault ? '' : t.days) + '" placeholder="' + DEFAULT_PAYMENT_TERMS_DAYS + ' (default)"></label></div>'
+    + '<div class="muted small" style="margin-top:6px">Leave blank to use the default of ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days. Due date = invoice date + terms.</div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="savePaymentTerms(\'' + encA(name) + '\')">Save</button></div>');
+  setTimeout(() => { const i = $('ptdays'); if (i) i.focus(); }, 50);
+}
+
+async function savePaymentTerms(nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  const c = (S.customers || []).find(x => norm(x['Customer Name']) === norm(name)); if (!c) return;
+  const raw = ($('ptdays') || {}).value;
+  if (String(raw || '').trim() !== '' && (isNaN(Number(raw)) || Number(raw) < 0 || Number(raw) > 365)) return toast('Enter a number of days between 0 and 365.', true);
+  const r = await api('updateCustomer', {name:name, contact:c['Contact Person'] || '', phone:c.Phone || '', email:c.Email || '', ntn:c['NTN/Tax ID'] || '', address:c.Address || '', remarks:remarksWithTerms(c.Remarks, raw)});
+  if (!r.ok) return toast(r.error, true);
+  closeModal(); await refresh(); toast('Payment terms updated.');
+}
+
 function renderDashboard(){
   const lowStock = S.products.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
   const catData = CATS.map((c,i) => ({
@@ -427,6 +534,7 @@ function renderDashboard(){
       <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>${S.suppliers.length}</strong><small>View suppliers →</small></div>
       <div class="card dash-kpi dash-kpi-low" role="button" tabindex="0" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong>${lowStock.length}</strong><small>View low stock →</small></div>
     </div>
+    <div id="paymentDueSection"></div>
     ${lowStock.length ? `<div class="panel">
       <div class="panel-head">
         <div><h3 class="section-title" style="color:#c0392b;margin-bottom:3px">⚠ Low Stock Items</h3><div class="muted">${lowStock.length} item${lowStock.length===1?'':'s'} need attention</div></div>
@@ -445,6 +553,7 @@ function renderDashboard(){
       </div>
     </div>
     <div id="salesSummarySection"><div class="panel"><div class="muted">Loading sales summary…</div></div></div><div id="quotationPipelineSection"><div class="panel"><div class="muted">Loading quotation pipeline…</div></div></div>`;
+  loadPaymentDue();
   loadSalesSummary();
   loadQuotationPipeline();
 }
@@ -1314,7 +1423,8 @@ function accDateParts(v){
 function accAmountParts(n){ const a = Number(n) || 0; return [String(a), money(a), money(a).replace(/,/g,'')]; }
 
 function custOutRowHtml(r){
-  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`;
+  const di = dueInfo(r.date, paymentTermsOf(r.customer).days);
+  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td>${di?fmtDate(di.due):'—'}</td><td>${di&&Number(r.outstanding)>0.5?dueBadge(di.daysOver):'—'}</td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`;
 }
 function filterCustOut(){
   const host = $('custOutRows');
@@ -1322,8 +1432,8 @@ function filterCustOut(){
   const q = (($('custOutSearch') || {}).value || '').trim();
   const hits = q ? ACC.out.filter(r => accMatch(r._hay, q)) : ACC.out;
   host.innerHTML = ACC.outErr
-    ? `<tr><td colspan="7" class="empty">${esc(ACC.outErr)}</td></tr>`
-    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="7" class="empty">${q ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
+    ? `<tr><td colspan="9" class="empty">${esc(ACC.outErr)}</td></tr>`
+    : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="9" class="empty">${q ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
   const info = $('custOutInfo');
   if (info) {
     const tot = hits.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
@@ -1438,6 +1548,7 @@ function partyCardHtml(type,c){
       '<div class="party-info"><span>Email</span><b class="party-email">'+esc(email||'—')+'</b></div>'+
       '<div class="party-info"><span>NTN / Tax ID</span><b>'+esc(ntn||'—')+'</b></div>'+
       '<div class="party-info"><span>STN</span><b>'+esc(stn||'—')+'</b></div>'+
+      (isCustomer?'<div class="party-info"><span>Payment Terms</span><b>'+(paymentTermsOf(name).isDefault?'<span class="muted">Not set</span>':paymentTermsOf(name).days+' days')+'</b></div>':'')+
       '<div class="party-info party-address"><span>Address</span><b>'+esc(address||'—')+'</b></div>'+
     '</div><div class="party-actions">'+
       '<button class="btn small" onclick="ledger(\''+type+'\',\''+encA(name)+'\')">View Ledger</button>'+
@@ -1473,7 +1584,8 @@ function editPartyForm(type, nameEnc){
        <label>Email<input id="epemail" value="${esc(c.Email||'')}"></label>
        <label>NTN/Tax ID<input id="epntn" value="${esc(c['NTN/Tax ID']||'')}"></label>
        <label class="wide">Address<textarea id="epaddr">${esc(c.Address||'')}</textarea></label>
-       <label class="wide">Remarks (Enter STN as: STN: 1234)<textarea id="eprem2">${esc(c.Remarks||'')}</textarea></label>
+       ${type==='Customer'?`<label>Payment Terms (days)<input id="epterms" type="number" min="0" max="365" step="1" value="${esc(paymentTermsOf(name).isDefault?'':paymentTermsOf(name).days)}" placeholder="${DEFAULT_PAYMENT_TERMS_DAYS} (default)"></label>`:''}
+       <label class="wide">Remarks (Enter STN as: STN: 1234)<textarea id="eprem2">${esc(type==='Customer'?stripPaymentTerms(c.Remarks||''):(c.Remarks||''))}</textarea></label>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1485,7 +1597,7 @@ async function savePartyEdit(type, nameEnc){
   const name = decodeURIComponent(nameEnc);
   const r = await api(type==='Customer'?'updateCustomer':'updateSupplier', {
     name, contact:$('epcontact').value, phone:$('epphone').value, email:$('epemail').value,
-    ntn:$('epntn').value, address:$('epaddr').value, remarks:$('eprem2').value
+    ntn:$('epntn').value, address:$('epaddr').value, remarks:type==='Customer' ? remarksWithTerms($('eprem2').value, ($('epterms')||{}).value) : $('eprem2').value
   });
   if (!r.ok) return toast(r.error, true);
   closeModal(); await refresh(); toast(type + ' updated.');
@@ -1510,6 +1622,7 @@ function partyForm(type){
        <label>City<input id="pcity"></label>
        <label>NTN<input id="pntn"></label>
        <label>STN<input id="pstn"></label>
+       ${type==='Customer'?`<label>Payment Terms (days)<input id="pterms" type="number" min="0" max="365" step="1" placeholder="${DEFAULT_PAYMENT_TERMS_DAYS} (default)"></label>`:''}
        <label class="wide">Address<textarea id="paddr"></textarea></label>
        <label class="wide">Remarks<textarea id="pr"></textarea></label>
      </div>
@@ -1528,7 +1641,8 @@ async function saveParty(type){
   /* Backend does not have separate City / STN columns, so City is saved in Address and STN is saved in Remarks */
   const city = $('pcity').value.trim(), stn = $('pstn').value.trim();
   const address = [$('paddr').value.trim(), city].filter(Boolean).join(', ');
-  const remarks = [stn ? 'STN: ' + stn : '', $('pr').value.trim()].filter(Boolean).join('\n');
+  let remarks = [stn ? 'STN: ' + stn : '', $('pr').value.trim()].filter(Boolean).join('\n');
+  if (type === 'Customer') remarks = remarksWithTerms(remarks, ($('pterms')||{}).value);
   await guardedSave(async () => {
     const r = await api(type === 'Customer' ? 'saveCustomer' : 'saveSupplier', {
       name, contact:$('pcontact').value, phone:$('pphone').value,
