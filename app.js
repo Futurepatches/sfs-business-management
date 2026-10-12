@@ -51,6 +51,69 @@ function findCust(name){ const t = norm(name); return t ? S.customers.find(c => 
 function stnOf(party){ const m = String((party && party.Remarks) || '').match(/STN\s*[:#\-]\s*([^\n;|]+)/i); return m ? m[1].trim() : ''; }
 function round2(n){ return Math.round((Number(n)||0)*100)/100; }
 
+/* ---------- GLOBAL FILTERS ---------- */
+const GF = {year:'', month:'', category:'', brand:'', model:'', customer:'', status:''};
+function gfOptions(list, key){
+  const seen={};
+  (list||[]).forEach(x=>{const v=String(x&&x[key]||'').trim(); if(v) seen[v]=1;});
+  return Object.keys(seen).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}));
+}
+function gfDate(v){
+  if(!v)return null; const d=v instanceof Date?v:new Date(v); return isNaN(d)?null:d;
+}
+function gfDateMatch(v){
+  const d=gfDate(v); if(!d)return true;
+  if(GF.year && d.getFullYear()!==Number(GF.year))return false;
+  if(GF.month!=='' && d.getMonth()!==Number(GF.month))return false;
+  return true;
+}
+function gfProductMatch(p){
+  if(!p)return false;
+  if(GF.category && String(p.Category||'')!==GF.category)return false;
+  if(GF.brand && String(p.Brand||'')!==GF.brand)return false;
+  if(GF.model && norm(p['Model / Part No.'])!==norm(GF.model))return false;
+  if(GF.status && String(p.Status||'Active')!==GF.status)return false;
+  return true;
+}
+function gfPartyMatch(p, key){
+  if(!p)return false;
+  if(GF.customer && key==='Customer Name' && norm(p[key])!==norm(GF.customer))return false;
+  if(GF.status && String(p.Status||'Active')!==GF.status)return false;
+  return true;
+}
+function gfItemMatch(item){
+  const p=findProd(item&&item.model);
+  if(GF.model && norm(item&&item.model)!==norm(GF.model))return false;
+  if(GF.category && String((p&&p.Category)||'Others')!==GF.category)return false;
+  if(GF.brand && String((p&&p.Brand)||'')!==GF.brand)return false;
+  return true;
+}
+function globalFilterActive(){ return Object.values(GF).some(v=>String(v)!==''); }
+function globalFilterLabel(){
+  const a=[]; if(GF.year)a.push('Year '+GF.year); if(GF.month!=='')a.push(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(GF.month)]);
+  if(GF.category)a.push(GF.category); if(GF.brand)a.push('Brand: '+GF.brand); if(GF.model)a.push('Model: '+GF.model); if(GF.customer)a.push('Customer: '+GF.customer); if(GF.status)a.push(GF.status);
+  return a.join(' • ');
+}
+function globalFilterHtml(){
+  const cy=new Date().getFullYear();
+  const years=[]; for(let y=cy+1;y>=cy-5;y--)years.push(y);
+  const brands=gfOptions(S.products,'Brand'), models=gfOptions(S.products,'Model / Part No.'), customers=gfOptions(S.customers,'Customer Name');
+  const opt=(v,t,cur)=>'<option value="'+esc(v)+'"'+(String(cur)===String(v)?' selected':'')+'>'+esc(t)+'</option>';
+  return '<style>.global-filter{margin-bottom:14px;padding:12px 14px;border:1px solid var(--line,#dfe6ef);border-radius:12px;background:var(--panel,#fff);box-shadow:0 2px 8px rgba(20,40,70,.04)}.global-filter-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.global-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}.global-filter-grid label{font-size:11px;color:var(--steel,#60758f);font-weight:700}.global-filter-grid select{width:100%;margin-top:4px}.global-filter-active{margin-top:9px;font-size:11px;color:var(--brand,#17345f);padding-top:8px;border-top:1px solid var(--line,#e5eaf0)}@media(max-width:700px){.global-filter-grid{grid-template-columns:1fr 1fr}.global-filter-head{align-items:flex-start}}.global-filter .muted{font-weight:400;margin-left:5px}</style><div class="global-filter wrap"><div class="global-filter-head"><div><b>Filters</b><span class="muted"> Apply filters to the current page and its cards/tables</span></div><button class="btn small ghost" onclick="clearGlobalFilters()">Clear All</button></div><div class="global-filter-grid">'+
+    '<label>Year<select id="gfYear" onchange="setGlobalFilter(\'year\',this.value)"><option value="">All Years</option>'+years.map(y=>opt(y,y,GF.year)).join('')+'</select></label>'+
+    '<label>Month<select id="gfMonth" onchange="setGlobalFilter(\'month\',this.value)"><option value="">All Months</option>'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>opt(i,m,GF.month)).join('')+'</select></label>'+
+    '<label>Category<select id="gfCategory" onchange="setGlobalFilter(\'category\',this.value)"><option value="">All Categories</option>'+CATS.map(c=>opt(c,c,GF.category)).join('')+'</select></label>'+
+    '<label>Brand<select id="gfBrand" onchange="setGlobalFilter(\'brand\',this.value)"><option value="">All Brands</option>'+brands.map(v=>opt(v,v,GF.brand)).join('')+'</select></label>'+
+    '<label>Product / Model<select id="gfModel" onchange="setGlobalFilter(\'model\',this.value)"><option value="">All Products / Models</option>'+models.map(v=>opt(v,v,GF.model)).join('')+'</select></label>'+
+    '<label>Customer<select id="gfCustomer" onchange="setGlobalFilter(\'customer\',this.value)"><option value="">All Customers</option>'+customers.map(v=>opt(v,v,GF.customer)).join('')+'</select></label>'+
+    '<label>Status<select id="gfStatus" onchange="setGlobalFilter(\'status\',this.value)"><option value="">All Status</option>'+['Active','Inactive'].map(v=>opt(v,v,GF.status)).join('')+'</select></label>'+
+    '</div>'+(globalFilterActive()?'<div class="global-filter-active">Active: <b>'+esc(globalFilterLabel())+'</b></div>':'')+'</div>';
+}
+function setGlobalFilter(k,v){ GF[k]=v==null?'':String(v); if(k==='month'&&v==='')GF.month=''; renderCurrent(); }
+function clearGlobalFilters(){ Object.keys(GF).forEach(k=>GF[k]=''); renderCurrent(); }
+function filteredProducts(){ return S.products.filter(gfProductMatch); }
+
+
 /* ---------- MODULE HELPERS ---------- */
 function isAdmin(){ return S.user && String(S.user.role||'').toUpperCase() === 'ADMIN'; }
 function userModules(){ return Array.isArray(S.user?.modules) ? S.user.modules : []; }
@@ -335,7 +398,7 @@ function showPage(p, btn){
   $('pageTitle').textContent = label;
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
-  $('content').innerHTML = pages[p]();
+  $('content').innerHTML = globalFilterHtml() + pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
   if (p === 'products')   renderProducts();
@@ -517,7 +580,10 @@ async function savePaymentTerms(nameEnc){
 }
 
 function renderDashboard(){
-  const lowStock = S.products.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
+  const FP = filteredProducts();
+  const FC = S.customers.filter(c => gfPartyMatch(c,'Customer Name'));
+  const FS = S.suppliers.filter(x => !GF.status || String(x.Status||'Active')===GF.status);
+  const lowStock = FP.filter(p => Number(p.currentStock) <= reorderOf(p) && (p.Status||'Active')==='Active');
   const catData = CATS.map((c,i) => ({
     label:c,
     value:S.products.filter(p=>p.Category===c).reduce((a,p)=>a+(+p.currentStock||0),0),
@@ -528,10 +594,10 @@ function renderDashboard(){
 
   $('dash').innerHTML = `
     <div class="cards">
-      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${S.products.length}</strong><small>View products →</small></div>
+      <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${FP.length}</strong><small>View products →</small></div>
       <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${S.products.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
-      <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong><small>View customers →</small></div>
-      <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>${S.suppliers.length}</strong><small>View suppliers →</small></div>
+      <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${FC.length}</strong><small>View customers →</small></div>
+      <div class="card dash-kpi dash-kpi-suppliers" role="button" tabindex="0" onclick="showPage('suppliers')" title="Open Suppliers"><span>Suppliers</span><strong>${FS.length}</strong><small>View suppliers →</small></div>
       <div class="card dash-kpi dash-kpi-low" role="button" tabindex="0" onclick="openLowStock()" title="Open Low Stock"><span>⚠ Low Stock</span><strong>${lowStock.length}</strong><small>View low stock →</small></div>
     </div>
     <div id="paymentDueSection"></div>
@@ -713,7 +779,7 @@ async function saveTargetSubmit(){
 /* ---------- PRODUCTS ---------- */
 function renderProducts(){
   let q = ($('ps')?.value||'').toLowerCase(), c = $('pc')?.value||'';
-  let a = S.products.filter(p => [p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q) && (!c || p.Category === c));
+  let a = S.products.filter(p => gfProductMatch(p) && [p['Model / Part No.'],p.Description,p.Location].join(' ').toLowerCase().includes(q) && (!c || p.Category === c));
   $('prows').innerHTML = a.slice(0,1000).map(p => {
     const low = Number(p.currentStock) <= reorderOf(p);
     return `<tr ${low?'style="background:#fbeae8"':''}>
@@ -1119,7 +1185,7 @@ function filterDCHistory(){
   const tbody = $('dchRows');
   if (!tbody) return;
   const q = norm($('dchSearch')?.value||'');
-  const rows = DCH_CACHE.filter(d => !q || d.searchText.includes(q));
+  const rows = DCH_CACHE.filter(d => gfDateMatch(d.date) && (!GF.customer || norm(d.customer)===norm(GF.customer)) && (!GF.model || (d.items||[]).some(x=>norm(x.model)===norm(GF.model))) && (!GF.category || (d.items||[]).some(x=>gfItemMatch(x))) && (!GF.brand || (d.items||[]).some(x=>gfItemMatch(x))) && (!q || d.searchText.includes(q)));
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No Delivery Challans found.</td></tr>';
     return;
@@ -1313,7 +1379,7 @@ function filterIVHistory(){
   const tbody = $('ivhRows');
   if (!tbody) return;
   const q = norm($('ivhSearch')?.value||'');
-  const rows = IVH_CACHE.filter(d => !q || d.searchText.includes(q));
+  const rows = IVH_CACHE.filter(d => gfDateMatch(d.date) && (!GF.customer || norm(d.customer)===norm(GF.customer)) && (!GF.model || (d.items||[]).some(x=>norm(x.model)===norm(GF.model))) && (!GF.category || (d.items||[]).some(x=>gfItemMatch(x))) && (!GF.brand || (d.items||[]).some(x=>gfItemMatch(x))) && (!q || d.searchText.includes(q)));
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No Invoices found.</td></tr>';
     return;
@@ -1561,7 +1627,7 @@ function renderPartyDirectory(type){
   const isCustomer=type==='Customer'; const list=isCustomer?S.customers:S.suppliers; const host=$(isCustomer?'customers':'suppliers');
   const search=$(isCustomer?'customerSearch':'supplierSearch'); const q=norm(search?.value||''); const statusFilter=$(isCustomer?'customerStatus':'supplierStatus')?.value||'';
   const key=isCustomer?'Customer Name':'Supplier Name';
-  const filtered=list.filter(c=>{const status=c.Status||'Active'; if(statusFilter&&status!==statusFilter)return false; if(!q)return true; return [c[key],c[isCustomer?'Customer ID':'Supplier ID'],c['Contact Person'],c.Phone,c.Email,c.Address,c['NTN/Tax ID'],c.Remarks].some(v=>norm(v).includes(q));});
+  const filtered=list.filter(c=>{const status=c.Status||'Active'; if(statusFilter&&status!==statusFilter)return false; if(!gfPartyMatch(c,key))return false; if(!q)return true; return [c[key],c[isCustomer?'Customer ID':'Supplier ID'],c['Contact Person'],c.Phone,c.Email,c.Address,c['NTN/Tax ID'],c.Remarks].some(v=>norm(v).includes(q));});
   const active=list.filter(x=>(x.Status||'Active')==='Active').length; const inactive=list.length-active;
   const count=$(isCustomer?'customerCount':'supplierCount'); if(count) count.textContent='Showing '+filtered.length+' of '+list.length;
   const stat=$(isCustomer?'customerStats':'supplierStats'); if(stat) stat.innerHTML='<span class="party-stat active"><b>'+active+'</b> Active</span><span class="party-stat"><b>'+inactive+'</b> Inactive</span>';
@@ -1718,7 +1784,8 @@ async function renderReports(){
     const cy = new Date().getFullYear();
     for (let y = cy; y >= cy - 5; y--) { const o = document.createElement('option'); o.value = y; o.textContent = y; sel.appendChild(o); }
   }
-  const year = sel ? sel.value : new Date().getFullYear();
+  const year = GF.year || (sel ? sel.value : new Date().getFullYear());
+  if(sel && GF.year) sel.value=GF.year;
   const host = $('reports');
   if (host) host.innerHTML = '<div class="muted">Loading…</div>';
   const r = await api('getReports', {year});
@@ -1756,7 +1823,7 @@ function psLines(){
       const qty = +i.qty || 0, rate = +i.rate || 0; if (!qty) return;
       const p = findProd(i.model) || {};
       out.push({y:dt.getFullYear(), m:dt.getMonth(), inv:d.no, model:String(i.model || '').trim(), desc:p.Description || i.desc || '',
-        cat:p.Category || 'Others', brand:p.Brand || '-', qty:qty, amt:qty * rate});
+        cat:p.Category || 'Others', brand:p.Brand || '-', customer:d.customer || '', qty:qty, amt:qty * rate});
     });
   });
   return out;
@@ -1782,11 +1849,16 @@ async function renderProductSales(force){
   } catch (e) { out.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; return; }
   if ($('psmonth')) $('psmonth').style.display = PS.mode === 'month' ? '' : 'none';
   if ($('psmetric')) $('psmetric').style.display = PS.mode === 'year' ? '' : 'none';
-  const year = Number(($('ry') || {}).value) || new Date().getFullYear();
+  const year = Number(GF.year || ($('ry') || {}).value) || new Date().getFullYear();
+  if (GF.month !== '' && PS.mode === 'month') PS.month = Number(GF.month);
   const q = String(PS.q || '').trim().toLowerCase();
   const lines = psLines().filter(l => l.y === year
     && (PS.mode === 'year' || l.m === PS.month)
     && (!PS.cat || l.cat === PS.cat)
+    && (!GF.category || l.cat === GF.category)
+    && (!GF.brand || norm(l.brand) === norm(GF.brand))
+    && (!GF.model || norm(l.model) === norm(GF.model))
+    && (!GF.customer || norm(l.customer) === norm(GF.customer))
     && (!q || (l.model + ' ' + l.desc).toLowerCase().indexOf(q) >= 0));
   const map = {};
   lines.forEach(l => {
@@ -1955,7 +2027,7 @@ let ENQ_CACHE=[];
 async function renderEnquiries(){const r=await api('getEnquiries');if(!r.ok)return toast(r.error,true);ENQ_CACHE=r.documents||[];filterEnquiries();}
 function enquiryForm(){modal('New Enquiry','<div class="form-grid"><label>Date<input id="enqDate" type="date" value="'+todayStr()+'"></label><label>Customer Name<input id="enqCustomer"></label><label>Contact Person<input id="enqContact"></label><label>Phone<input id="enqPhone"></label><label class="wide">Requirement / Description<textarea id="enqRequirement" rows="4"></textarea></label></div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveEnquiry()">Save Enquiry</button></div>');}
 async function saveEnquiry(){const customerName=$('enqCustomer').value.trim();if(!customerName)return toast('Customer Name is required.',true);const r=await api('saveEnquiry',{date:$('enqDate').value,customerName:customerName,contactPerson:$('enqContact').value,phone:$('enqPhone').value,requirement:$('enqRequirement').value});if(!r.ok)return toast(r.error,true);closeModal();toast('Enquiry saved.');renderEnquiries();}
-function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rows=ENQ_CACHE.filter(d=>!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo].some(v=>norm(v).includes(q)));h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customerName)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+esc(d.requirement)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
+function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rows=ENQ_CACHE.filter(d=>gfDateMatch(d.date)&&(!GF.customer||norm(d.customerName)===norm(GF.customer))&&(!GF.status||String(d.status||'')===GF.status)&&(!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo].some(v=>norm(v).includes(q))));h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customerName)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+esc(d.requirement)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
 function makeQuotationFromEnquiry(en){const d=ENQ_CACHE.find(x=>x.id===decodeURIComponent(en));if(d)startQuotationFromEnquiry(d);}
 function viewEnquiryQuotation(q){const no=decodeURIComponent(q);showPage('qthistory');setTimeout(()=>loadQTHistory().then(()=>{const d=QT_CACHE.find(x=>x.no===no);if(d)printQuotation(d);}),0);}
 function quotationStatusForm(no,status,reason){const n=decodeURIComponent(no),s=decodeURIComponent(status),r=decodeURIComponent(reason||'');modal('Update Quotation Status','<div class="form-grid"><label>Status<select id="qstatus"><option '+(s==='Pending'?'selected':'')+'>Pending</option><option '+(s==='Won'?'selected':'')+'>Won</option><option '+(s==='Lost'?'selected':'')+'>Lost</option></select></label><label class="wide">Loss Reason<input id="qlossReason" value="'+esc(r)+'" placeholder="Required when status is Lost"></label></div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveQuotationStatus(\''+encA(n)+'\')">Save Status</button></div>');}
@@ -2082,7 +2154,7 @@ async function saveQuotation(){
 function printQuotationFromForm(){ const customer=$('qtcustomer').value.trim(); const items=QTL.filter(x=>(String(x.model||'').trim()||String(x.desc||'').trim())&&Number(x.qty)>0).map(x=>({...x,model:String(x.model||'').trim(),desc:String(x.desc||'').trim()})); if(!customer||!items.length)return toast('Enter customer and at least one item first.',true); printQuotation({no:$('qtno').value||'DRAFT',date:$('qtdate').value,customer:customer,address:$('qtaddress').value,ref:$('qtref')?.value||'',po:$('qtref')?.value||'',poDate:$('qtrefDate')?.value||'',validity:$('qtvalidity').value||'7 Days',paymentTerms:$('qtpaymentTerms')?.value||'20 Days',stn:$('qtstn').value,ntn:$('qtnTN').value,items:items,gst:Number($('qtgst')?.value||0),discount:Number($('qtdiscount')?.value||0),contact:$('qtcontact')?.value||'',customerId:$('qtcustomerId')?.value||'',createdBy:(typeof S!=='undefined'&&S.user&&(S.user.name||S.user.username))||''}); }
 async function loadQTHistory(){ const r=await api('quotationHistory'); if(!r.ok){if($('qtrows'))$('qtrows').innerHTML='<tr><td colspan="7">'+esc(r.error)+'</td></tr>';return;} QT_CACHE=r.documents||[]; filterQTHistory(); }
 function statusBadge(s){ return '<span class="badge" style="font-size:11px">'+esc(s||'Pending')+'</span>'; }
-function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); const rows=QT_CACHE.filter(d=>!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q)); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="reviseQuotation(\''+encA(d.no)+'\')">Revise</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
+function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); const rows=QT_CACHE.filter(d=>gfDateMatch(d.date)&&(!GF.customer||norm(d.customer)===norm(GF.customer))&&(!GF.status||String(d.status||'Pending')===GF.status)&&(!GF.model||((d.items||[]).some(x=>norm(x.model)===norm(GF.model))))&&(!GF.category||((d.items||[]).some(x=>gfItemMatch(x))))&&(!GF.brand||((d.items||[]).some(x=>gfItemMatch(x))))&&(!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q))); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="reviseQuotation(\''+encA(d.no)+'\')">Revise</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
 function viewQuotation(en){ const no=decodeURIComponent(en); const d=QT_CACHE.find(x=>x.no===no); if(d)printQuotation(d); }
 
 let REVISION_QUOTATION=null;
@@ -2416,6 +2488,8 @@ window.productDetail = productDetail;
 window.editProductForm = editProductForm;
 window.saveProductEdit = saveProductEdit;
 window.toggleProductStatus = toggleProductStatus;
+window.setGlobalFilter = setGlobalFilter;
+window.clearGlobalFilters = clearGlobalFilters;
 window.renderProducts = renderProducts;
 window.addDc = addDc;
 window.addInv = addInv;
