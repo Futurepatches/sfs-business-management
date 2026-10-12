@@ -367,7 +367,7 @@ const pages = {
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
   qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap"><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry, customer, contact, phone, requirement..." oninput="filterEnquiries()" style="flex:1;min-width:280px"></div><div class="panel table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Contact</th><th>Phone</th><th>Requirement</th><th>Status</th><th>Quotation</th><th>Action</th></tr></thead><tbody id="enqRows"><tr><td colspan="9">Loading...</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
-<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><label class="muted small" style="white-space:nowrap"><input id="custOutShowPaid" type="checkbox" onchange="filterCustOut()"> Show paid</label><span id="custOutInfo" class="muted small"></span></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><h3>Recent Supplier Payments</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
@@ -1382,7 +1382,7 @@ function viewInvoice(noEnc, print){
 /* ---------- ACCOUNTS (placeholder) ---------- */
 async function loadAccounts(){
   const [custOut, custPay, supOut, supPay] = await Promise.all([
-    api('getOutstanding', {}),
+    api('getOutstanding', {includeSettled:true}),
     api('getPaymentHistory', {}),
     api('getSupplierOutstanding', {}),
     api('getSupplierPaymentHistory', {})
@@ -1423,21 +1423,28 @@ function accDateParts(v){
 function accAmountParts(n){ const a = Number(n) || 0; return [String(a), money(a), money(a).replace(/,/g,'')]; }
 
 function custOutRowHtml(r){
+  const paid = Number(r.outstanding) <= 0.5;
   const di = dueInfo(r.date, paymentTermsOf(r.customer).days);
-  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${money(r.outstanding)}</b></td><td>${di?fmtDate(di.due):'—'}</td><td>${di&&Number(r.outstanding)>0.5?dueBadge(di.daysOver):'—'}</td><td><button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button></td></tr>`;
+  const paidBadge = '<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:800;background:#e8f6ee;color:#1a7f3c;letter-spacing:.5px">PAID</span>';
+  return `<tr><td>${esc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.customer)}</td><td>${money(r.total)}</td><td>${money(r.paid)}</td><td><b>${paid ? money(0) : money(r.outstanding)}</b></td><td>${di?fmtDate(di.due):'—'}</td><td>${paid ? paidBadge : (di?dueBadge(di.daysOver):'—')}</td><td>${paid ? '' : `<button class="btn small primary" onclick="openCustPayModal('${encA(r.no)}','${encA(r.customer)}',${r.outstanding})">Record Payment</button>`}</td></tr>`;
 }
 function filterCustOut(){
   const host = $('custOutRows');
   if (!host) return;
   const q = (($('custOutSearch') || {}).value || '').trim();
-  const hits = q ? ACC.out.filter(r => accMatch(r._hay, q)) : ACC.out;
+  const showPaid = !!(($('custOutShowPaid') || {}).checked);
+  const isOpen = r => Number(r.outstanding) > 0.5;
+  const openRows = ACC.out.filter(isOpen);
+  // Paid invoices show only when searching, or when "Show paid" is ticked
+  const pool = (q || showPaid) ? ACC.out : openRows;
+  const hits = q ? pool.filter(r => accMatch(r._hay, q)) : pool;
   host.innerHTML = ACC.outErr
     ? `<tr><td colspan="9" class="empty">${esc(ACC.outErr)}</td></tr>`
     : (hits.map(custOutRowHtml).join('') || `<tr><td colspan="9" class="empty">${q ? 'No invoice found.' : 'No outstanding invoices — all settled!'}</td></tr>`);
   const info = $('custOutInfo');
   if (info) {
-    const tot = hits.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
-    info.textContent = ACC.outErr ? '' : (q ? `${hits.length} of ${ACC.out.length} invoice(s) • Outstanding ${money(tot)}` : `${ACC.out.length} invoice(s) • Outstanding ${money(tot)}`);
+    const tot = hits.reduce((a, r) => a + (isOpen(r) ? (Number(r.outstanding) || 0) : 0), 0);
+    info.textContent = ACC.outErr ? '' : `${hits.length} of ${ACC.out.length} invoice(s) • Outstanding ${money(tot)}`;
   }
 }
 
