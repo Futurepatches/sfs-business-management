@@ -597,11 +597,20 @@ function renderDashInventory(){
     </div>` : ''}
 `);
   put('dashCat', `
-    <div class="panel"><h3>Stock by Category</h3>
-      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:center">
-        <div>${donutChart(catData)}</div>
-        <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:10px">
-          ${catData.map(d=>`<div style="display:flex;align-items:center;gap:10px"><span style="width:11px;height:11px;border-radius:3px;background:${d.color};flex:0 0 auto"></span><span style="flex:1;font-size:13.5px">${esc(d.label)}</span><span style="font-weight:700;font-size:13.5px">${d.value.toLocaleString()}</span><span style="color:var(--steel);font-size:12px;width:42px;text-align:right">${Math.round(d.value/catTotal*100)}%</span></div>`).join('') || '<div class="muted">No stock data yet.</div>'}
+    <div class="panel">
+      <div class="panel-head"><h3>Stock by Category</h3><span class="muted" style="font-size:12px">Current stock quantities</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:26px;align-items:center">
+        <div style="display:flex;justify-content:center;align-items:center;min-width:0">
+          ${donutChart(catData)}
+        </div>
+        <div style="min-width:0;display:flex;flex-direction:column;gap:15px">
+          ${catData.map(d=>`<div style="display:grid;grid-template-columns:minmax(95px,1fr) minmax(90px,2fr) auto;gap:10px;align-items:center">
+            <span style="font-size:12.5px;color:var(--ink-mid);overflow-wrap:anywhere">${esc(d.label)}</span>
+            <div style="height:12px;background:#edf1f7;border-radius:99px;overflow:hidden">
+              <div title="${esc(d.label)}: ${d.value.toLocaleString()}" style="height:100%;width:${catTotal>0?Math.max(0,Math.min(100,d.value/catTotal*100)):0}%;background:${d.color};border-radius:99px;min-width:${d.value>0?4:0}px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap">${d.value.toLocaleString()} <span style="font-weight:500;color:var(--steel)">(${catTotal>0?Math.round(d.value/catTotal*100):0}%)</span></span>
+          </div>`).join('') || '<div class="muted">No stock data yet.</div>'}
         </div>
       </div>
     </div>
