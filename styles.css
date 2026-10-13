@@ -745,3 +745,122 @@ html,body{
  .party-info.party-address{grid-column:auto}
  .party-actions .btn{flex:1}
 }
+
+
+/* ============================================================
+   SFS REFERENCE-INSPIRED LIGHT ERP THEME
+   Safe visual-only overrides. Keep existing markup and behavior.
+   ============================================================ */
+:root{
+  --ink:#263449;
+  --ink-mid:#34465f;
+  --ink-soft:#50627a;
+  --steel:#77859a;
+  --steel-light:#a3afbf;
+  --canvas:#eaf0fb;
+  --surface:#ffffff;
+  --line:#e8edf5;
+  --line-strong:#d8e1ee;
+  --brand:#344fe0;
+  --brand-dark:#263bc0;
+  --brand-soft:#eef0ff;
+  --accent:#43b987;
+  --accent-dark:#27996c;
+  --accent-soft:#e8f8f0;
+  --nav-bg-1:#ffffff;
+  --nav-bg-2:#ffffff;
+  --nav-text:#77849a;
+  --nav-text-active:#344fe0;
+  --nav-icon:#9ca8b9;
+  --radius:10px;
+  --radius-lg:14px;
+  --radius-sm:7px;
+  --shadow-sm:0 2px 7px rgba(45,65,100,.035);
+  --shadow:0 4px 14px rgba(45,65,100,.055);
+  --shadow-md:0 8px 22px rgba(45,65,100,.09);
+  --shadow-lg:0 24px 60px rgba(45,65,100,.16);
+  --font-display:'Inter',Arial,sans-serif;
+  --font-body:'Inter',Arial,sans-serif;
+}
+body{background:var(--canvas);color:var(--ink)}
+#app{background:var(--canvas);gap:0}
+aside{
+  margin:18px 0 18px 18px;
+  width:224px;flex-basis:224px;height:calc(100vh - 36px);
+  border:1px solid rgba(220,228,241,.9);
+  border-radius:15px;background:#fff;color:var(--nav-text);
+  box-shadow:var(--shadow);
+}
+aside.collapsed{width:68px;flex-basis:68px}
+.brand{padding:20px 16px;border-bottom:1px solid #edf1f7}
+.brand b{color:#263449}
+.brand small{color:#8794a8}
+.brand .collapse-btn{background:#f4f6fb;color:#7c8ba1}
+.brand .collapse-btn:hover{background:#e9edff;color:var(--brand)}
+#nav{padding:14px 10px}
+.nav-section{color:#a0aabc}
+.navbtn{color:#7a879b;border-radius:9px;padding:10px 11px}
+.nav-icon{color:#a2adbd}
+.navbtn:hover{background:#f5f7fc;color:#344fe0}
+.navbtn:hover .nav-icon{color:#344fe0}
+.navbtn.active{background:#edf0ff;color:#344fe0;font-weight:650}
+.navbtn.active .nav-icon{color:#344fe0}
+.navbtn.active::before{left:-10px;background:#344fe0;border-radius:0 4px 4px 0}
+.userbox{border-top:1px solid #edf1f7}
+.userbox b{color:#344258}
+.userbox small{color:#9aa5b5}
+.userbox .btn{background:#f7f8fc;border-color:#e8edf5;color:#67758a}
+.userbox .btn:hover{background:#fff0f0;border-color:#ffd7d7;color:#d94848}
+main{background:transparent}
+header{
+  margin:18px 22px 0;padding:19px 26px;
+  border:1px solid #e7edf6;border-radius:14px;
+  background:#fff;box-shadow:var(--shadow-sm);
+}
+header h1{font-size:25px;letter-spacing:-.025em}
+header p{color:#8a96a9}
+#content{padding:22px 22px 42px}
+.wrap{max-width:1600px}
+.card,.panel{
+  border:1px solid #e7edf5;border-radius:14px;background:#fff;
+  box-shadow:var(--shadow-sm);
+}
+.card{padding:19px 20px}
+.card::before{width:4px;opacity:.9}
+.card:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:#dbe4f1}
+.card span{font-size:11px;letter-spacing:.055em;color:#8592a6}
+.card strong{font-size:31px;letter-spacing:-.035em}
+.panel{padding:21px 22px;margin-bottom:18px}
+.panel h3,.section-title{font-size:18px;letter-spacing:-.02em}
+.cat{border-radius:11px;background:#f8faff;border-color:#e8edf6}
+.cat:hover{background:#fff;border-color:#cbd5ff}
+.btn{border-radius:9px;font-weight:600}
+.btn.primary{background:#344fe0;border-color:#344fe0;box-shadow:0 3px 8px rgba(52,79,224,.16)}
+.btn.primary:hover{background:#263bc0;border-color:#263bc0}
+.toolbar input,.toolbar select,
+input,select,textarea{border-radius:9px}
+.table-wrap{border-radius:11px;border-color:#e7edf5;background:#fff}
+table{font-size:13px}
+thead th{background:#f7f9fd;color:#718097}
+tbody tr:hover{background:#f8faff}
+.modal-card{border-radius:16px;box-shadow:0 24px 70px rgba(36,51,79,.22)}
+.modal-head{border-bottom-color:#edf1f7}
+.toast{border-radius:10px;box-shadow:var(--shadow-md)}
+@media(max-width:900px){
+  aside{margin:0;border-radius:0;height:100vh}
+  header{margin:12px 12px 0;padding:16px 18px}
+  #content{padding:16px 12px 30px}
+}
+@media(max-width:760px){
+  #app{display:block}
+  aside{margin:0;width:100%;height:auto;min-height:0;border-radius:0;position:relative}
+  header{margin:10px 10px 0;padding:14px 15px;position:relative}
+  header h1{font-size:22px}
+  #content{padding:12px 10px 26px}
+  .panel{padding:16px}
+  .card{padding:16px}
+}
+@media print{
+  #app,main{background:#fff!important}
+  header,.card,.panel{box-shadow:none!important}
+}
