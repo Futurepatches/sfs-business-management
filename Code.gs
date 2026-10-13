@@ -4,40 +4,40 @@ SFS BUSINESS MANAGEMENT - GOOGLE APPS SCRIPT BACKEND
 PHASE 3.1 — REVIEWED & FIXED
 
 DATA SAFETY:
-- Koi sheet clear nahi hoti, koi existing row automatically delete nahi hoti.
-- Source sync ab manual products ko delete NAHI karta.
-- Sirf missing columns / sheets add hoti hain.
+- No sheet is cleared and no existing row is deleted automatically.
+- Source sync no longer deletes manual products.
+- Only missing columns / sheets are added.
 
-IS VERSION MEIN KYA THEEK HUA (short):
- 1. Refresh Source ab manual products delete nahi karta; duplicate source models ek row banate hain.
- 2. Blank Modules wala comment/code ka tazaad khatam (blank = koi access nahi). Purane staff ke liye
-    migrateBlankModulesToFull() ek dafa chala len (neeche likha hai).
- 3. Login GET se band (ALLOW_GET_LOGIN=false). Bootstrap ab module permissions ke mutabiq data deta hai.
- 4. Session mein sirf username hota hai; role/modules/status har request par live check hote hain
-    (user disable / modules change foran lagu). Password badalne par baqi sessions khatam.
- 5. Reorder Level 0 ab 0 hi rehta hai (pehle 5 ban jata tha).
- 6. GST 0% ab sahi (pehle 18% ban jata tha) — outstanding, sales summary, payments.
- 7. DC: same product do baar ho to stock check cumulative. DC edit pehle validate karta hai, phir likhta hai.
- 8. Invoice: qty>0, rate>=0, DC ka wujood, DC ka customer, invoice qty <= DC qty (STRICT_INVOICE_VS_DC).
- 9. Inactive product / customer DC mein block.
-10. updateProduct partial update se purana data nahi mitata.
-11. Saari write actions lock ke andar (duplicate ID race khatam).
-12. Duplicate customer / supplier naam block. Password kam az kam 6 chars. Aakhri admin / khud ko disable nahi.
-13. Login lockout CacheService mein (Script Properties nahi bharte); expired sessions ki safai.
-14. Audit Log sheet (kis ne kya kiya), backupNow() / setupDailyBackup(), healthCheck().
-15. Bootstrap / DC / stock movement tez (ek pass mein stock maps).
-16. Reports: year filter durust, DC edit ke baad category units net hote hain.
-17. Dates: 'YYYY-MM-DD' ab script timezone ke mutabiq (din aage-peeche nahi hota).
-    ZAROORI: Apps Script > Project Settings > Time zone = (GMT+05:00) Karachi.
+WHAT WAS FIXED IN THIS VERSION (short):
+ 1. Refresh Source no longer deletes manual products; duplicate source models become a single row.
+ 2. Removed the Blank Modules comment/code contradiction (blank = no access). For older staff,
+    run migrateBlankModulesToFull() once (see below).
+ 3. Login via GET is disabled (ALLOW_GET_LOGIN=false). Bootstrap now returns data according to module permissions.
+ 4. The session stores only the username; role/modules/status are checked live on every request
+    (disabling a user or changing modules takes effect immediately). Changing a password ends the other sessions.
+ 5. Reorder Level 0 now stays 0 (it used to become 5).
+ 6. GST 0% now works (it used to become 18%) — outstanding, sales summary, payments.
+ 7. DC: if the same product appears twice, the stock check is cumulative. DC edit validates first, then writes.
+ 8. Invoice: qty>0, rate>=0, the DC must exist, the DC customer must match, invoice qty <= DC qty (STRICT_INVOICE_VS_DC).
+ 9. Inactive products / customers are blocked in DC.
+10. updateProduct uses partial updates and no longer wipes old data.
+11. All write actions run inside a lock (duplicate ID race removed).
+12. Duplicate customer / supplier names are blocked. Password minimum is 6 chars. The last admin / yourself cannot be disabled.
+13. Login lockout lives in CacheService (Script Properties no longer fill up); expired sessions are cleaned up.
+14. Audit Log sheet (who did what), backupNow() / setupDailyBackup(), healthCheck().
+15. Bootstrap / DC / stock movement are faster (stock maps built in a single pass).
+16. Reports: year filter fixed; category units are net after a DC edit.
+17. Dates: 'YYYY-MM-DD' now follows the script timezone (the day no longer shifts).
+    IMPORTANT: Apps Script > Project Settings > Time zone = (GMT+05:00) Karachi.
 
-HATA DIYA: API_TOKEN (kahin use nahi hota tha) aur DEV_MODE (bina login admin access ka khatra).
+REMOVED: API_TOKEN (it was unused) and DEV_MODE (risk of admin access without login).
 */
 
 /* ---------- SETTINGS ---------- */
 
-const ALLOW_GET_LOGIN = false;          // true = login GET (URL) se bhi ho sakta hai (password URL mein jata hai) — off rakhein
-const HIDE_COST_FROM_STAFF = false;     // true = STAFF ko Cost Price nahi dikhega (aur wo cost edit nahi kar sakte)
-const STRICT_INVOICE_VS_DC = true;      // true = invoice ki qty/models DC se match hon; false = sirf customer/DC ka wujood check
+const ALLOW_GET_LOGIN = false;          // true = allow login via GET (URL) too (the password ends up in the URL) — keep this off
+const HIDE_COST_FROM_STAFF = false;     // true = STAFF cannot see Cost Price (and cannot edit cost)
+const STRICT_INVOICE_VS_DC = true;      // true = invoice qty/models must match the DC; false = only check that the customer/DC exists
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_LOCK_LIMIT = 5;
 const LOGIN_LOCK_SECONDS = 300;
@@ -58,7 +58,8 @@ const HEADERS = {
   'Stock Movement':['Transaction ID','Date/Time','Type','Product ID','Model / Part No.','Quantity','Source / Destination','Reference Type','Reference No.','Created By'],
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
-  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Revision Of'],
+  'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Revision Of','Make','Delivery Status','Payment Terms','Contact','GST %','Enquiry ID','Status','Loss Reason','Discount %'],
+  'Enquiries':['Enquiry ID','Date','Customer Name','Contact Person','Phone','Requirement','Status','Quotation No.','Loss Reason','Created By'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status','Modules'],
@@ -73,7 +74,7 @@ const WRITE_ACTIONS = [
   'saveProduct','product','updateProduct','setProductStatus',
   'saveCustomer','updateCustomer','setCustomerStatus',
   'saveSupplier','updateSupplier','setSupplierStatus',
-  'saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','updateInvoice','saveQuotation','quotationHistory',
+  'saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','updateInvoice','saveQuotation','quotationHistory','saveEnquiry','updateQuotationStatus',
   'savePayment','saveSupplierPayment','saveTarget',
   'saveUser','updateUser','disableUser','changePassword',
   'refreshSource','sync'
@@ -87,7 +88,7 @@ function num_(v) { const n = Number(String(v === null || v === undefined ? '' : 
 function round2_(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function normName_(s) { return String(s || '').trim().toLowerCase(); }
 
-/* 'YYYY-MM-DD' ko script timezone ke din ke dopahar (12:00) par rakhta hai taake din aage-peeche na ho */
+/* Places 'YYYY-MM-DD' at noon (12:00) of the script-timezone day so the date never shifts by a day */
 function toDate_(v) {
   if (v instanceof Date) return isNaN(v) ? '' : v;
   const s = String(v === null || v === undefined ? '' : v).trim();
@@ -102,7 +103,7 @@ function yearOf_(v) { const d = toDate_(v); return d ? d.getFullYear() : null; }
 function gstOf_(v) {
   if (isBlank_(v)) return 18;
   const n = Number(v);
-  return isNaN(n) ? 18 : n;          // 0 ab 0 hi rehta hai
+  return isNaN(n) ? 18 : n;          // 0 now stays 0
 }
 
 /* ---------- WEB API ---------- */
@@ -126,7 +127,7 @@ function doGet(e) {
     }
 
     if (action === 'login') {
-      result = ALLOW_GET_LOGIN ? loginUser(p) : {ok:false, error:'Login GET par band hai. POST use karein.'};
+      result = ALLOW_GET_LOGIN ? loginUser(p) : {ok:false, error:'Login via GET is disabled. Please use POST.'};
     } else if (action === 'bootstrap') {
       result = bootstrap_(p);
     } else if (!action) {
@@ -186,7 +187,7 @@ function out(o) {
 }
 
 function need_(user, mod, label) {
-  return hasModule_(user, mod) ? null : {ok:false, error:'Aapko ' + label + ' ka access nahi hai.'};
+  return hasModule_(user, mod) ? null : {ok:false, error:'You do not have access to ' + label + '.'};
 }
 
 function dispatch_(action, p, user) {
@@ -256,6 +257,20 @@ function dispatch_(action, p, user) {
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
       return getQuotationHistory_();
 
+    case 'updateQuotationStatus':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      p.user = user.username;
+      return updateQuotationStatus(p);
+
+    case 'getEnquiries':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      return getEnquiries_();
+
+    case 'saveEnquiry':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      p.user = user.username;
+      return saveEnquiry(p);
+
     case 'savePayment':
       if ((d = need_(user, 'accounts', 'Accounts module'))) return d;
       p.user = user.username;
@@ -299,11 +314,11 @@ function dispatch_(action, p, user) {
       return saveSupplier_(p, user);
 
     case 'getLedger':
-      if (!hasModule_(user, 'parties') && !hasModule_(user, 'accounts')) return {ok:false, error:'Aapko Ledger ka access nahi hai.'};
+      if (!hasModule_(user, 'parties') && !hasModule_(user, 'accounts')) return {ok:false, error:'You do not have access to Ledger.'};
       return getLedgerForFrontend_(p);
 
     case 'getReports':
-      if (!hasModule_(user, 'reports') && !hasModule_(user, 'sales')) return {ok:false, error:'Aapko Reports ka access nahi hai.'};
+      if (!hasModule_(user, 'reports') && !hasModule_(user, 'sales')) return {ok:false, error:'You do not have access to Reports.'};
       return getReportsForFrontend_(p);
 
     case 'listUsers':
@@ -375,8 +390,8 @@ function normalizeModules_(raw) {
   return arr.filter(m => m && MODULES.indexOf(m) !== -1);
 }
 
-/* ADMIN = hamesha full access. STAFF = sirf wahi modules jo Modules column mein likhe hon.
-   Blank Modules = KOI access nahi (secure default). Purane staff ke liye migrateBlankModulesToFull() chalayen. */
+/* ADMIN = always full access. STAFF = only the modules listed in the Modules column.
+   Blank Modules = NO access (secure default). For older staff, run migrateBlankModulesToFull(). */
 function hasModule_(user, module) {
   if (!user) return false;
   if (String(user.role || '').toUpperCase() === 'ADMIN') return true;
@@ -394,9 +409,9 @@ function ensureModulesColumn_() {
   sh.getRange(1, lastCol + 1).setValue('Modules');
 }
 
-/* EK DAFA chalayen (Apps Script editor > function chunein > Run):
-   jin STAFF users ka Modules blank hai unko saare modules de deta hai taake purana access barqarar rahe.
-   Baad mein Users page se har staff ke modules apni marzi se set karein. */
+/* Run ONCE (Apps Script editor > select the function > Run):
+   gives all modules to STAFF users whose Modules is blank so that their old access is preserved.
+   Afterwards, set each staff member's modules from the Users page as needed. */
 function migrateBlankModulesToFull() {
   const ctx = readUsersSheet_(true);
   if (!ctx) return 'Users & Roles sheet not found.';
@@ -419,7 +434,7 @@ function migrateBlankModulesToFull() {
 /* ---------- DATABASE SETUP ---------- */
 
 function setupDatabase() {
-  // Purani sheets mein default columns pehle (default values ke saath) lagao
+  // Add the default columns to older sheets first (with default values)
   ensureReorderLevelColumn_();
   ensureInvoiceGstColumn_();
   ensurePaymentTaxColumns_();
@@ -496,7 +511,7 @@ function getUserCols_(sh) {
   };
 }
 
-/* NOTE: default admin: username "admin", password "admin123" — pehli dafa login ke baad foran badlein. */
+/* NOTE: default admin: username "admin", password "admin123" — change it immediately after the first login. */
 function ensureDefaultAdmin_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Users & Roles');
   if (!sh) return;
@@ -546,7 +561,7 @@ function writeSource(name, data) {
   sh.setFrozenRows(1);
 }
 
-/* ---------- STOCK MAPS (ek pass mein saara stock) ---------- */
+/* ---------- STOCK MAPS (all stock in a single pass) ---------- */
 
 function buildStockMaps_() {
   const src = {}, mov = {};
@@ -568,10 +583,10 @@ function buildStockMaps_() {
 
 /* ---------- PRODUCT MASTER ---------- */
 
-/* Refresh Source: Products sheet ki koi row delete nahi hoti.
-   - Source mein maujood models: description/location/image update, stock recalculate.
-   - Source mein na hone wale (manual) products: jaise hain waise, sirf stock recalculate.
-   - Source ke naye models: nayi row. Duplicate source models = ek hi row (qty jama). */
+/* Refresh Source: no row of the Products sheet is ever deleted.
+   - Models present in the source: description/location/image are updated, stock is recalculated.
+   - Products not in the source (manual): left as they are, only stock is recalculated.
+   - New source models: a new row. Duplicate source models = a single row (quantities are added up). */
 function syncProductsFromSource_(stock) {
   const sh = SpreadsheetApp.getActive().getSheetByName('Products');
   if (!sh) throw Error('Products sheet not found.');
@@ -647,6 +662,39 @@ function nextIds_(prefix, sheet, columnIndex, count) {
 }
 function nextSafeId_(prefix, sheet, columnIndex) { return nextIds_(prefix, sheet, columnIndex, 1)[0]; }
 
+/* Next document number that continues the existing numbering. The prefix and zero-padding are copied from
+   the most recent document, e.g. SFS-347 -> SFS-348. Falls back to the old PREFIX-000001 style on an empty sheet. */
+function nextDocNo_(sheetName, noHeader, defaultPrefix) {
+  const fallback = () => nextSafeId_(defaultPrefix, sheetName, 1);
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh || sh.getLastRow() < 2) return fallback();
+  const vals = sh.getDataRange().getValues();
+  const h = vals[0].map(String);
+  const nc = h.indexOf(noHeader), dc = h.indexOf('Date');
+  if (nc < 0) return fallback();
+  const rows = [], taken = {};
+  for (let i = 1; i < vals.length; i++) {
+    const no = String(vals[i][nc] || '').trim();
+    if (!no) continue;
+    taken[no] = true;
+    const m = no.match(/^(.*?)(\d+)$/);
+    if (!m) continue;
+    const raw = dc >= 0 ? vals[i][dc] : null;
+    const dt = raw instanceof Date ? raw : (raw ? toDate_(raw) : null);
+    rows.push({prefix: m[1], n: Number(m[2]), width: m[2].length, t: dt ? dt.getTime() : 0, i: i});
+  }
+  if (!rows.length) return fallback();
+  // The latest document (by date, then by position) decides the format; edited old documents cannot change it.
+  let last = rows[0];
+  rows.forEach(r => { if (r.t > last.t || (r.t === last.t && r.i > last.i)) last = r; });
+  let max = 0;
+  rows.forEach(r => { if (r.prefix === last.prefix && r.n > max) max = r.n; });
+  let candidate;
+  do { max++; candidate = last.prefix + String(max).padStart(last.width, '0'); } while (taken[candidate]);
+  return candidate;
+}
+
+
 function appendRows_(sheetName, rows) {
   if (!rows.length) return;
   const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
@@ -714,7 +762,7 @@ function ensurePaymentTaxColumns_() {
 }
 
 function paymentCredit_(pmt) {
-  // Amount = cash received; Income Tax + WHT = client deductions — sab invoice settle karte hain
+  // Amount = cash received; Income Tax + WHT = client deductions — all of them settle the invoice
   return round2_(
     num_(pmt.Amount) +
     num_(pmt['Income Tax Deducted']) +
@@ -745,14 +793,14 @@ function hideCost_(user) {
 
 function validStatus_(s) {
   const v = String(s || 'Active').trim();
-  if (v !== 'Active' && v !== 'Inactive') throw Error('Status Active ya Inactive hona chahiye.');
+  if (v !== 'Active' && v !== 'Inactive') throw Error('Status must be Active or Inactive.');
   return v;
 }
 
 function optionalMoney_(v, label) {
   if (isBlank_(v)) return '';
   const n = num_(v);
-  if (n < 0) throw Error(label + ' negative nahi ho sakta.');
+  if (n < 0) throw Error(label + ' cannot be negative.');
   return n;
 }
 
@@ -795,7 +843,7 @@ function updateProduct(p, user) {
 
   if (!isBlank_(p.reorderLevel)) {
     const rl = num_(p.reorderLevel);
-    if (rl < 0) throw Error('Reorder level negative nahi ho sakta.');
+    if (rl < 0) throw Error('Reorder level cannot be negative.');
     put('Reorder Level', rl);
   }
 
@@ -864,10 +912,10 @@ function setSupplierStatus_(p, authUser) { return setPartyStatus_('Suppliers', 2
 
 function saveImageToDrive_(base64Data, fileName) {
   if (!base64Data) return '';
-  if (String(base64Data).length > 5 * 1024 * 1024) throw Error('Image bohat bari hai (max ~3MB).');
+  if (String(base64Data).length > 5 * 1024 * 1024) throw Error('Image is too large (max ~3MB).');
   const match = String(base64Data).match(/^data:(.+);base64,(.+)$/);
   const mimeType = match ? match[1] : 'image/jpeg';
-  if (mimeType.indexOf('image/') !== 0) throw Error('Sirf image file upload karein.');
+  if (mimeType.indexOf('image/') !== 0) throw Error('Please upload an image file only.');
   try {
     const data = match ? match[2] : base64Data;
     const blob = Utilities.newBlob(Utilities.base64Decode(data), mimeType, fileName || 'product-image.jpg');
@@ -876,7 +924,7 @@ function saveImageToDrive_(base64Data, fileName) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return 'https://drive.google.com/uc?export=view&id=' + file.getId();
   } catch (e) {
-    throw Error('Image upload nahi ho saki: ' + errMsg_(e));
+    throw Error('Image upload failed: ' + errMsg_(e));
   }
 }
 
@@ -893,9 +941,9 @@ function saveProduct(p, user) {
   if (findProduct(model)) throw Error('Product already exists: ' + model);
 
   const openingStock = num_(p.openingStock);
-  if (openingStock < 0) throw Error('Opening stock negative nahi ho sakta.');
+  if (openingStock < 0) throw Error('Opening stock cannot be negative.');
   const reorder = isBlank_(p.reorderLevel) ? 5 : num_(p.reorderLevel);
-  if (reorder < 0) throw Error('Reorder level negative nahi ho sakta.');
+  if (reorder < 0) throw Error('Reorder level cannot be negative.');
   const cost = optionalMoney_(p.costPrice, 'Cost price');
   const price = optionalMoney_(p.salePrice, 'Sale price');
 
@@ -933,7 +981,7 @@ function movementBalanceForModel_(model, movements) {
   return balance;
 }
 
-/* Ek saath kai movements likhta hai (ek write) aur phir sirf mutaasir products ka stock refresh karta hai */
+/* Writes several movements at once (a single write) and then refreshes stock only for the affected products */
 function postMovements_(list, user) {
   if (!list.length) return;
   const sh = SpreadsheetApp.getActive().getSheetByName('Stock Movement');
@@ -1038,7 +1086,7 @@ function prepareDcItems_(rawItems, pmap) {
   });
 }
 
-/* Same product kai lines mein ho to unka total stock se compare hota hai */
+/* If the same product appears on several lines, their combined total is compared with stock */
 function checkStockAvailability_(prepared, maps, credit) {
   const need = {};
   prepared.forEach(x => { need[x.model] = (need[x.model] || 0) + x.qty; });
@@ -1064,7 +1112,7 @@ function saveDC(p) {
   const custName = cust ? cust['Customer Name'] : String(p.customer).trim();
   const custId = p.customerId || (cust ? cust['Customer ID'] : '');
 
-  const id = String(p.no || '').trim() || nextSafeId_('DC-', 'Delivery Challans', 1);
+  const id = String(p.no || '').trim() || nextDocNo_('Delivery Challans', 'DC No.', 'DC-');
   if (p.no && numberExistsInSheet_('Delivery Challans', id)) throw Error('Delivery Challan ' + id + ' already exists.');
 
   const pmap = getProductMap_();
@@ -1100,7 +1148,7 @@ function updateDC(p) {
   }
   if (!rowsToDelete.length) throw Error('Delivery Challan not found: ' + no);
 
-  // 1) Pehle sab validate karo (kuch likhne se pehle)
+  // 1) Validate everything first (before writing anything)
   const cust = resolveCustomer_(p.customer);
   const custName = cust ? cust['Customer Name'] : String(p.customer).trim();
   const custId = p.customerId || (cust ? cust['Customer ID'] : '');
@@ -1110,7 +1158,7 @@ function updateDC(p) {
   oldItems.forEach(it => { credit[it.model] = (credit[it.model] || 0) + it.qty; });
   checkStockAvailability_(prepared, buildStockMaps_(), credit);
 
-  // 2) Phir likho: naye rows -> movements -> purani rows delete (kabhi data khoya nahi jata)
+  // 2) Then write: new rows -> movements -> delete old rows (data is never lost)
   const date = toDate_(p.date) || new Date();
   appendRows_('Delivery Challans', prepared.map(x => dcRow_(no, date, custId, custName, p, x)));
 
@@ -1134,6 +1182,46 @@ function ensureQuotationSheet_() {
   return ensureSheet('Quotations', HEADERS.Quotations);
 }
 
+/* ---- helpers (header-name based, so column order never matters) ---- */
+function appendByHeaders_(sheetName, objs) {
+  if (!objs.length) return;
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh) throw Error(sheetName + ' sheet not found.');
+  const headers = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String);
+  const rows = objs.map(o => headers.map(h => (o[h] === undefined || o[h] === null) ? '' : o[h]));
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
+}
+
+function updateRowsWhere_(sheetName, keyHeader, keyValue, fields) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const vals = sh.getDataRange().getValues();
+  const headers = vals[0].map(String);
+  const kc = headers.indexOf(keyHeader);
+  if (kc < 0) return 0;
+  let n = 0;
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][kc]).trim() !== String(keyValue).trim()) continue;
+    Object.keys(fields).forEach(h => {
+      const c = headers.indexOf(h);
+      if (c >= 0) sh.getRange(i + 1, c + 1).setValue(fields[h]);
+    });
+    n++;
+  }
+  return n;
+}
+
+function userNameMap_() {
+  const map = {};
+  try {
+    objectsFromSheet_('Users & Roles').forEach(u => {
+      const un = String(u['Username'] || '').trim();
+      if (un) map[un.toLowerCase()] = String(u['Name'] || '').trim() || un;
+    });
+  } catch (ignore) {}
+  return map;
+}
+
 function saveQuotation(p) {
   const sh = ensureQuotationSheet_();
   const no = String(p.no || '').trim() || nextSafeId_('QT-', 'Quotations', 1);
@@ -1141,10 +1229,12 @@ function saveQuotation(p) {
   const customer = String(p.customer || '').trim();
   if (!customer) throw Error('Customer is required.');
   const items = Array.isArray(p.items) ? p.items : [];
-  const valid = items.filter(x => String(x.model || '').trim() && num_(x.qty) > 0);
+  const valid = items.filter(x => (String(x.model || '').trim() || String(x.desc || '').trim()) && num_(x.qty) > 0);
   if (!valid.length) throw Error('At least one quotation item is required.');
   const pmap = getProductMap_();
-  const rows = valid.map(x => {
+  const discount = Math.min(100, Math.max(0, num_(p.discount)));
+  const date = toDate_(p.date) || new Date();
+  const objs = valid.map(x => {
     const model = String(x.model || '').trim();
     const prod = model ? pmap[model] : null;
     const customDesc = String(x.desc || '').trim();
@@ -1153,23 +1243,98 @@ function saveQuotation(p) {
     if (prod && String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
     if (qty <= 0) throw Error('Invalid quantity for quotation item.');
     if (rate < 0) throw Error('Invalid rate for quotation item.');
-    return [no,toDate_(p.date)||new Date(),p.customerId||'',customer,p.address||'',p.po||'',toDate_(p.poDate)||'',p.validity||'30 Days',p.stn||'',p.ntn||'',x.make||((prod&&prod.data[0])||''),model,customDesc||((prod&&prod.data[2])||''),qty,x.unit||((prod&&prod.data[5])||'Pcs'),rate,round2_(qty*rate),p.user||'Staff',String(p.revisionOf||'').trim()];
+    return {
+      'Quotation No.': no, 'Date': date, 'Customer ID': p.customerId || '', 'Customer Name': customer,
+      'Address': p.address || '', 'PO #': p.po || p.ref || '', 'PO Date': toDate_(p.poDate) || '',
+      'Validity': p.validity || '7 Days', 'STN': p.stn || '', 'NTN': p.ntn || '',
+      'Product ID': (prod && prod.data[0]) || '', 'Model / Part No.': model,
+      'Description': customDesc || ((prod && prod.data[2]) || ''), 'Quantity': qty,
+      'Unit': x.unit || ((prod && prod.data[5]) || 'Pcs'), 'Rate / Unit': rate, 'Amount': round2_(qty * rate),
+      'Created By': p.user || 'Staff', 'Revision Of': String(p.revisionOf || '').trim(),
+      'Make': x.make || ((prod && prod.data[4]) || ''), 'Delivery Status': String(x.deliveryStatus || '').trim(),
+      'Payment Terms': p.paymentTerms || '20 Days', 'Contact': p.contact || '', 'GST %': gstOf_(p.gst),
+      'Enquiry ID': String(p.enquiryId || '').trim(), 'Status': 'Pending', 'Loss Reason': '', 'Discount %': discount
+    };
   });
-  appendRows_('Quotations', rows);
-  return {ok:true,id:no,subtotal:round2_(rows.reduce((a,r)=>a+Number(r[16]||0),0))};
+  appendByHeaders_('Quotations', objs);
+  const gross = objs.reduce((a, o) => a + Number(o['Amount'] || 0), 0);
+  const enq = String(p.enquiryId || '').trim();
+  if (enq) updateRowsWhere_('Enquiries', 'Enquiry ID', enq, {'Status': 'Quoted', 'Quotation No.': no, 'Loss Reason': ''});
+  return {ok:true, id:no, subtotal:round2_(gross - gross * discount / 100)};
 }
 
 function getQuotationHistory_() {
+  ensureQuotationSheet_();
   const rows = objectsFromSheet_('Quotations');
+  const names = userNameMap_();
   const map = {}, order = [];
   rows.forEach(r => {
     const no = String(r['Quotation No.'] || '').trim(); if (!no) return;
-    if (!map[no]) { map[no]={no:no,date:r['Date'],customerId:r['Customer ID']||'',customer:r['Customer Name']||'',address:r['Address']||'',po:r['PO #']||'',poDate:r['PO Date']||'',validity:r['Validity']||'30 Days',stn:r['STN']||'',ntn:r['NTN']||'',createdBy:r['Created By']||'',revisionOf:r['Revision Of']||'',items:[],subtotal:0}; order.push(no); }
-    const qty=num_(r['Quantity']), rate=num_(r['Rate / Unit']);
-    map[no].items.push({model:r['Model / Part No.']||'',desc:r['Description']||'',qty:qty,unit:r['Unit']||'Pcs',rate:rate});
-    map[no].subtotal += num_(r['Amount']) || round2_(qty*rate);
+    if (!map[no]) {
+      const by = String(r['Created By'] || '').trim();
+      map[no] = {no:no, date:r['Date'], customerId:r['Customer ID']||'', customer:r['Customer Name']||'', address:r['Address']||'',
+        po:r['PO #']||'', ref:r['PO #']||'', poDate:r['PO Date']||'', validity:r['Validity']||'7 Days', stn:r['STN']||'', ntn:r['NTN']||'',
+        createdBy:by, preparedBy:names[by.toLowerCase()]||by, revisionOf:r['Revision Of']||'',
+        paymentTerms:r['Payment Terms']||'20 Days', contact:r['Contact']||'', gst:gstOf_(r['GST %']),
+        enquiryId:r['Enquiry ID']||'', status:String(r['Status']||'').trim()||'Pending', lossReason:r['Loss Reason']||'',
+        discount:num_(r['Discount %']), items:[], gross:0, subtotal:0};
+      order.push(no);
+    }
+    const qty = num_(r['Quantity']), rate = num_(r['Rate / Unit']);
+    const pid = String(r['Product ID'] || '').trim();
+    const make = String(r['Make'] || '').trim() || (/^P-\d+$/.test(pid) ? '' : pid);   // old rows kept the make in Product ID
+    map[no].items.push({model:r['Model / Part No.']||'', desc:r['Description']||'', make:make, qty:qty, unit:r['Unit']||'Pcs',
+      rate:rate, deliveryStatus:String(r['Delivery Status']||'').trim()});
+    map[no].gross += num_(r['Amount']) || round2_(qty * rate);
   });
-  return {ok:true,documents:order.reverse().map(no=>map[no])};
+  return {ok:true, documents:order.reverse().map(no => {
+    const d = map[no];
+    d.gross = round2_(d.gross);
+    d.subtotal = round2_(d.gross - d.gross * d.discount / 100);   // net total shown in history
+    return d;
+  })};
+}
+
+function updateQuotationStatus(p) {
+  ensureQuotationSheet_();
+  const no = String(p.no || '').trim();
+  const status = String(p.status || '').trim();
+  if (!no) throw Error('Quotation number is required.');
+  if (['Pending', 'Won', 'Lost'].indexOf(status) === -1) throw Error('Invalid status.');
+  const reason = String(p.lossReason || '').trim();
+  if (status === 'Lost' && !reason) throw Error('Loss reason is required when status is Lost.');
+  const n = updateRowsWhere_('Quotations', 'Quotation No.', no, {'Status': status, 'Loss Reason': status === 'Lost' ? reason : ''});
+  if (!n) throw Error('Quotation not found: ' + no);
+  const first = objectsFromSheet_('Quotations').filter(r => String(r['Quotation No.']).trim() === no)[0];
+  const enq = first ? String(first['Enquiry ID'] || '').trim() : '';
+  if (enq) updateRowsWhere_('Enquiries', 'Enquiry ID', enq, {'Status': status === 'Lost' ? 'Lost' : 'Quoted', 'Quotation No.': no, 'Loss Reason': status === 'Lost' ? reason : ''});
+  return {ok:true, id:no, status:status};
+}
+
+/* ---------- ENQUIRIES ---------- */
+
+function saveEnquiry(p) {
+  ensureSheet('Enquiries', HEADERS.Enquiries);
+  const customerName = String(p.customerName || '').trim();
+  if (!customerName) throw Error('Customer Name is required.');
+  const id = nextSafeId_('ENQ-', 'Enquiries', 1);
+  appendByHeaders_('Enquiries', [{
+    'Enquiry ID': id, 'Date': toDate_(p.date) || new Date(), 'Customer Name': customerName,
+    'Contact Person': String(p.contactPerson || '').trim(), 'Phone': String(p.phone || '').trim(),
+    'Requirement': String(p.requirement || '').trim(), 'Status': 'New', 'Quotation No.': '', 'Loss Reason': '',
+    'Created By': p.user || 'Staff'
+  }]);
+  return {ok:true, id:id};
+}
+
+function getEnquiries_() {
+  ensureSheet('Enquiries', HEADERS.Enquiries);
+  const docs = objectsFromSheet_('Enquiries').filter(r => String(r['Enquiry ID'] || '').trim()).map(r => ({
+    id: r['Enquiry ID'], date: r['Date'], customerName: r['Customer Name'] || '', contactPerson: r['Contact Person'] || '',
+    phone: r['Phone'] || '', requirement: r['Requirement'] || '', status: String(r['Status'] || '').trim() || 'New',
+    quotationNo: r['Quotation No.'] || '', lossReason: r['Loss Reason'] || '', createdBy: r['Created By'] || ''
+  }));
+  return {ok:true, documents:docs.reverse()};
 }
 
 function saveInvoice(p) {
@@ -1186,14 +1351,14 @@ function saveInvoice(p) {
   const custName = cust ? cust['Customer Name'] : String(p.customer).trim();
   const custId = p.customerId || (cust ? cust['Customer ID'] : '');
 
-  const id = String(p.no || '').trim() || nextSafeId_('INV-', 'Invoices', 1);
+  const id = String(p.no || '').trim() || nextDocNo_('Invoices', 'Invoice No.', 'INV-');
   if (p.no && numberExistsInSheet_('Invoices', id) && !p._editing) throw Error('Invoice ' + id + ' already exists.');
 
   if (dcNos.length) {
     const invoices=objectsFromSheet_('Invoices');
     dcNos.forEach(no=>{ if(invoices.some(r=>String(r['DC No.']||'').split(/[,\n]+/).map(x=>x.trim()).indexOf(no)!==-1 && String(r['Invoice No.']||'').trim()!==String(p.no||'').trim())) throw Error('An invoice already exists for DC '+no+'.'); });
     if (dcDoc.customer && normName_(dcDoc.customer) !== normName_(custName)) {
-      throw Error('DC ' + dcNo + ' ' + dcDoc.customer + ' ke naam hai, ' + custName + ' ke nahi.');
+      throw Error('DC ' + dcNo + ' belongs to ' + dcDoc.customer + ', not ' + custName + '.');
     }
   }
 
@@ -1208,7 +1373,7 @@ function saveInvoice(p) {
     if (!dcNos.length && String(prod.data[12] || 'Active').toLowerCase() === 'inactive') throw Error('Product is inactive: ' + model);
     const qty = num_(it.qty), rate = num_(it.rate);
     if (!(qty > 0)) throw Error('Invalid quantity for ' + model);
-    if (rate < 0) throw Error('Rate negative nahi ho sakta: ' + model);
+    if (rate < 0) throw Error('Rate cannot be negative: ' + model);
     return {it:it, prod:prod, model:model, qty:qty, rate:rate};
   });
 
@@ -1217,15 +1382,15 @@ function saveInvoice(p) {
     dcDocs.forEach(dc=>dc.items.forEach(x => { const m = String(x.model).trim(); dcQty[m] = (dcQty[m] || 0) + Number(x.qty || 0); }));
     items.forEach(x => { invQty[x.model] = (invQty[x.model] || 0) + x.qty; });
     Object.keys(invQty).forEach(m => {
-      if (dcQty[m] === undefined) throw Error(m + ' DC ' + dcNo + ' mein nahi hai.');
-      if (invQty[m] > dcQty[m] + 1e-9) throw Error(m + ': invoice qty (' + invQty[m] + ') DC qty (' + dcQty[m] + ') se zyada hai.');
+      if (dcQty[m] === undefined) throw Error(m + ' is not in DC ' + dcNo + '.');
+      if (invQty[m] > dcQty[m] + 1e-9) throw Error(m + ': invoice qty (' + invQty[m] + ') exceeds DC qty (' + dcQty[m] + ').');
     });
   }
 
   let gst = 18;
   if (!isBlank_(p.gstPercent)) {
     gst = Number(p.gstPercent);
-    if (isNaN(gst) || gst < 0 || gst > 100) throw Error('GST % 0 se 100 ke beech hona chahiye.');
+    if (isNaN(gst) || gst < 0 || gst > 100) throw Error('GST % must be between 0 and 100.');
   }
 
   const date = toDate_(p.date) || new Date();
@@ -1298,7 +1463,7 @@ function findUserRow_(username) {
 function userCacheKey_(u) { return 'SFS_U_' + String(u || '').trim().toLowerCase(); }
 function invalidateUserCache_(u) { try { CacheService.getScriptCache().remove(userCacheKey_(u)); } catch (ignore) {} }
 
-/* Har request par user ki current role / status / modules (45 second cache; badlav par cache foran saaf) */
+/* Current role / status / modules of the user on every request (45-second cache; the cache is cleared immediately on changes) */
 function getLiveUser_(username) {
   const cache = CacheService.getScriptCache();
   const key = userCacheKey_(username);
@@ -1393,7 +1558,7 @@ function logoutUser_(p) {
   return {ok:true};
 }
 
-/* Expired sessions + purane login-lock keys ki safai (ghante mein ek dafa login par; manual bhi chala sakte hain) */
+/* Cleans up expired sessions + old login-lock keys (once an hour on login; can also be run manually) */
 function cleanupSessions() {
   const props = PropertiesService.getScriptProperties();
   const all = props.getProperties();
@@ -1443,7 +1608,7 @@ function bootstrap_(p) {
   ensureModulesColumn_();
 
   const can = m => hasModule_(user, m);
-  // Sales ko products + customers chahiye (DC / Invoice), Inward ko suppliers, Accounts ko customers/suppliers
+  // Sales needs products + customers (DC / Invoice), Inward needs suppliers, Accounts needs customers/suppliers
   const seeProducts  = can('products') || can('sales') || can('reports');
   const seeCustomers = can('parties') || can('sales') || can('accounts');
   const seeSuppliers = can('parties') || can('accounts') || can('products');
@@ -1546,7 +1711,7 @@ function saveSupplier_(p, user) {
   return {ok:true, id:id};
 }
 
-/* Ye stock (qty) ka movement hai; paisay ka ledger frontend Outstanding + Payments se banata hai */
+/* This is the stock (qty) movement; the money ledger is built by the frontend from Outstanding + Payments */
 function getLedgerForFrontend_(p) {
   const party = String(p.name || p.party || '').trim();
   const type = String(p.type || p.partyType || '').trim();
@@ -1577,7 +1742,7 @@ function getReportsForFrontend_(p) {
     total:Number(x.Amount || 0) || 0
   }));
 
-  // DC ki net units (DC edit ke reversal minus ho jate hain)
+  // Net units of DCs (reversals from DC edits are subtracted)
   const catByModel = {};
   products.forEach(pr => { catByModel[String(pr['Model / Part No.'] || '').trim()] = String(pr.Category || 'Others'); });
   const DC_REFS = {'DC':1, 'DC Edit':1, 'DC Edit Reversal':1, 'DC Edit Reversal Undo':1};
@@ -1611,8 +1776,8 @@ function savePayment(p) {
   const incomeTax = num_(p.incomeTax);           // e.g. 5.5% income tax
   const wht = num_(p.wht);                       // withholding tax
   if (!invoiceNo) throw Error('Invoice number is required.');
-  if (amount < 0 || incomeTax < 0 || wht < 0) throw Error('Amounts negative nahi ho sakte.');
-  if (amount <= 0 && incomeTax <= 0 && wht <= 0) throw Error('Kam az kam ek amount (cash ya tax) zero se zyada hona chahiye.');
+  if (amount < 0 || incomeTax < 0 || wht < 0) throw Error('Amounts cannot be negative.');
+  if (amount <= 0 && incomeTax <= 0 && wht <= 0) throw Error('At least one amount (cash or tax) must be greater than zero.');
 
   const inv = buildInvoiceDocuments_().find(d => d.no === invoiceNo);
   if (!inv) throw Error('Invoice not found: ' + invoiceNo);
@@ -1625,7 +1790,7 @@ function savePayment(p) {
   const settlement = round2_(amount + incomeTax + wht);
 
   if (settlement > outstandingBefore + 0.5) {
-    throw Error('Payment + taxes outstanding se zyada hain (' + settlement + ' > ' + outstandingBefore + ').');
+    throw Error('Payment + taxes exceed the outstanding amount (' + settlement + ' > ' + outstandingBefore + ').');
   }
 
   const id = nextSafeId_('PMT-', 'Payments', 1);
@@ -1648,18 +1813,22 @@ function savePayment(p) {
 
 function getOutstandingForFrontend_(p) {
   const invoices = buildInvoiceDocuments_();
-  const paidByInvoice = {};
+  const paidByInvoice = {}, cashByInvoice = {}, taxByInvoice = {};
   objectsFromSheet_('Payments').forEach(pmt => {
     const no = String(pmt['Invoice No.'] || '').trim();
     paidByInvoice[no] = (paidByInvoice[no] || 0) + paymentCredit_(pmt);
+    cashByInvoice[no] = (cashByInvoice[no] || 0) + num_(pmt.Amount);
+    taxByInvoice[no] = (taxByInvoice[no] || 0) + num_(pmt['Income Tax Deducted']) + num_(pmt['WHT Deducted']);
   });
 
   let rows = invoices.map(inv => {
     const total = invoiceTotal_(inv);
-    const paid = paidByInvoice[inv.no] || 0;
+    const paid = paidByInvoice[inv.no] || 0;   // cash + tax = total settlement
     return {
       no:inv.no, date:inv.date, customer:inv.customer, customerId:inv.customerId,
-      total:total, paid:paid, outstanding:Math.max(0, round2_(total - paid))
+      total:total, paid:paid,
+      cash:round2_(cashByInvoice[inv.no] || 0), tax:round2_(taxByInvoice[inv.no] || 0),
+      outstanding:Math.max(0, round2_(total - paid))
     };
   });
 
@@ -1824,9 +1993,9 @@ function saveTarget(p, authUser) {
     return {ok:false, error:'Only an Admin can set sales targets.'};
   }
   const year = String(p.year || new Date().getFullYear()).trim();
-  if (!/^\d{4}$/.test(year)) throw Error('Year 4 digit hona chahiye.');
+  if (!/^\d{4}$/.test(year)) throw Error('Year must be 4 digits.');
   const amount = num_(p.amount);
-  if (amount < 0) throw Error('Target negative nahi ho sakta.');
+  if (amount < 0) throw Error('Target cannot be negative.');
   const sh = SpreadsheetApp.getActive().getSheetByName('Targets');
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
@@ -1993,11 +2162,11 @@ function saveUser_(p, authUser) {
   const username = String(p.username || '').trim();
 
   if (!username) return {ok:false, error:'Username is required'};
-  if (username.length < 3 || /\s/.test(username)) return {ok:false, error:'Username kam az kam 3 characters ka ho aur usmein space na ho.'};
+  if (username.length < 3 || /\s/.test(username)) return {ok:false, error:'Username must be at least 3 characters and contain no spaces.'};
   if (cols.username === -1) return {ok:false, error:'Users sheet has no Username column.'};
 
   const password = String(p.password || '');
-  if (password.length < MIN_PASSWORD_LENGTH) return {ok:false, error:'Password kam az kam ' + MIN_PASSWORD_LENGTH + ' characters ka ho.'};
+  if (password.length < MIN_PASSWORD_LENGTH) return {ok:false, error:'Password must be at least ' + MIN_PASSWORD_LENGTH + ' characters.'};
 
   const exists = ctx.values.slice(1).some(r => String(r[cols.username] || '').trim().toLowerCase() === username.toLowerCase());
   if (exists) return {ok:false, error:'Username already exists'};
@@ -2028,7 +2197,7 @@ function updateUser_(p, authUser) {
   const isSelf = username.toLowerCase() === String(authUser.username || '').trim().toLowerCase();
 
   if (p.password && String(p.password).length < MIN_PASSWORD_LENGTH) {
-    return {ok:false, error:'Password kam az kam ' + MIN_PASSWORD_LENGTH + ' characters ka ho.'};
+    return {ok:false, error:'Password must be at least ' + MIN_PASSWORD_LENGTH + ' characters.'};
   }
 
   for (let i = 1; i < ctx.values.length; i++) {
@@ -2037,8 +2206,8 @@ function updateUser_(p, authUser) {
       const newRole = p.role ? (String(p.role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'STAFF') : curRole;
 
       if (curRole === 'ADMIN' && newRole !== 'ADMIN') {
-        if (isSelf) return {ok:false, error:'Aap apna khud ka ADMIN role change nahi kar sakte.'};
-        if (countActiveAdmins_(ctx, username) < 1) return {ok:false, error:'Kam az kam ek active ADMIN rehna zaroori hai.'};
+        if (isSelf) return {ok:false, error:'You cannot change your own ADMIN role.'};
+        if (countActiveAdmins_(ctx, username) < 1) return {ok:false, error:'At least one active ADMIN is required.'};
       }
 
       if (cols.name !== -1 && p.name !== undefined) ctx.sh.getRange(i + 1, cols.name + 1).setValue(String(p.name || '').trim());
@@ -2072,10 +2241,10 @@ function disableUser_(p, authUser) {
   for (let i = 1; i < ctx.values.length; i++) {
     if (String(ctx.values[i][cols.username] || '').trim().toLowerCase() === username.toLowerCase()) {
       if (status === 'Inactive') {
-        if (isSelf) return {ok:false, error:'Aap apna khud ka account disable nahi kar sakte.'};
+        if (isSelf) return {ok:false, error:'You cannot disable your own account.'};
         const role = cols.role !== -1 ? String(ctx.values[i][cols.role] || '').toUpperCase() : '';
         if (role === 'ADMIN' && countActiveAdmins_(ctx, username) < 1) {
-          return {ok:false, error:'Kam az kam ek active ADMIN rehna zaroori hai.'};
+          return {ok:false, error:'At least one active ADMIN is required.'};
         }
       }
       ctx.sh.getRange(i + 1, cols.status + 1).setValue(status);
@@ -2101,7 +2270,7 @@ function changePassword_(p, authUser) {
     if (String(ctx.values[i][cols.username] || '').trim().toLowerCase() === String(authUser.username || '').trim().toLowerCase()) {
       if (!verifyPassword_(current, ctx.values[i][cols.password])) return {ok:false, error:'Current password is incorrect.'};
       ctx.sh.getRange(i + 1, cols.password + 1).setValue(hashPassword_(next));
-      revokeUserSessions_(authUser.username, String(p.session || '').trim());   // doosre devices ki sessions khatam
+      revokeUserSessions_(authUser.username, String(p.session || '').trim());   // ends the sessions on other devices
       return {ok:true};
     }
   }
@@ -2145,9 +2314,9 @@ function getSuppliers() {
   return {ok:true, suppliers:SpreadsheetApp.getActive().getSheetByName('Suppliers').getDataRange().getValues()};
 }
 
-/* ---------- MAINTENANCE (editor se manually chalayen) ---------- */
+/* ---------- MAINTENANCE (run manually from the editor) ---------- */
 
-/* Backup: is spreadsheet ki copy Drive ke "SFS Backups" folder mein (purani BACKUP_KEEP se zyada trash ho jati hain) */
+/* Backup: a copy of this spreadsheet in the Drive "SFS Backups" folder (copies beyond BACKUP_KEEP are trashed) */
 function backupNow() {
   const ss = SpreadsheetApp.getActive();
   const folder = getOrCreateFolder_('SFS Backups');
@@ -2162,7 +2331,7 @@ function backupNow() {
   return 'Backup done: SFS Backup ' + stamp;
 }
 
-/* Ek dafa chalayen: roz raat 2 baje automatic backup */
+/* Run once: automatic backup every night at 2 AM */
 function setupDailyBackup() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (t.getHandlerFunction() === 'backupNow') ScriptApp.deleteTrigger(t);
@@ -2171,7 +2340,7 @@ function setupDailyBackup() {
   return 'Daily backup trigger set (around 2 AM).';
 }
 
-/* Duplicate models dhoondta hai (koi change nahi karta) */
+/* Finds duplicate models (makes no changes) */
 function findDuplicateProducts() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Products');
   if (!sh) return 'No Products sheet.';
@@ -2187,15 +2356,15 @@ function findDuplicateProducts() {
   return msg;
 }
 
-/* Sehat ki jaanch: timezone, default admin password, duplicate products, sessions */
+/* Health check: timezone, default admin password, duplicate products, sessions */
 function healthCheck() {
   const lines = [];
-  lines.push('Time zone: ' + Session.getScriptTimeZone() + (Session.getScriptTimeZone() === 'Asia/Karachi' ? ' (OK)' : '  <-- Project Settings mein Asia/Karachi karein'));
+  lines.push('Time zone: ' + Session.getScriptTimeZone() + (Session.getScriptTimeZone() === 'Asia/Karachi' ? ' (OK)' : '  <-- set Asia/Karachi in Project Settings'));
   const rec = findUserRow_('admin');
   if (rec && rec.ctx.cols.password !== -1 && verifyPassword_('admin123', rec.row[rec.ctx.cols.password])) {
-    lines.push('WARNING: admin ka password abhi bhi admin123 hai — foran badlein.');
+    lines.push('WARNING: the admin password is still admin123 — change it immediately.');
   } else {
-    lines.push('Admin password: default nahi hai (OK).');
+    lines.push('Admin password: not the default (OK).');
   }
   lines.push(findDuplicateProducts());
   const sessions = Object.keys(PropertiesService.getScriptProperties().getProperties()).filter(k => k.indexOf('SFS_SESSION_') === 0).length;
