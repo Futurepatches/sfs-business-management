@@ -487,8 +487,8 @@ async function loadPaymentDue(){
     const t = paymentTermsOf(x.customer), di = dueInfo(x.date, t.days);
     return Object.assign({}, x, {terms:t.days, termsDefault:t.isDefault, due:di ? di.due : null, daysOver:di ? di.daysOver : null});
   });
-  host2.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 class="section-title" style="margin-bottom:3px">Payments Due &amp; Overdue</h3><div class="muted">Based on each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
-    + '<div class="toolbar" style="flex-wrap:wrap"><input id="pdQ" type="search" placeholder="Search client…" oninput="pdFilter()" style="flex:1;min-width:200px"><select id="pdSt" onchange="pdFilter()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select><button class="btn ghost small" onclick="clearFilters([\'pdQ\',\'pdSt\'],pdFilter)">Clear</button></div>'
+  host2.innerHTML = '<div class="dash-section-head"><div><h2>Collections</h2><div class="sub">Outstanding invoices against each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
+    + '<div class="panel dash-panel"><div class="panel-head"><h3>Payments Due &amp; Overdue</h3><div class="dash-filters"><input id="pdQ" type="search" placeholder="Search client…" oninput="pdFilter()"><select id="pdSt" onchange="pdFilter()" title="Due status"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select><button class="btn ghost small" onclick="clearFilters([\'pdQ\',\'pdSt\'],pdFilter)">Clear</button></div></div>'
     + '<div id="pdBody"></div></div>';
   if ($('pdQ')) $('pdQ').value = PDF.q; if ($('pdSt')) $('pdSt').value = PDF.st;
   drawPaymentDue();
@@ -513,19 +513,24 @@ function drawPaymentDue(){
   window.PAYDUE_GROUPS = groups;
   const sum = f => invs.filter(f).reduce((a, x) => a + (Number(x.outstanding) || 0), 0);
   const total = sum(() => true), over = sum(x => x.daysOver > 0), soon = sum(x => x.daysOver !== null && x.daysOver <= 0 && x.daysOver >= -7), later = total - over - soon;
-  const age = (lo, hi) => sum(x => x.daysOver !== null && x.daysOver >= lo && x.daysOver <= hi);
-  const kpi = (label, val, sub, color) => '<div class="card"><span>' + label + '</span><strong style="' + (color ? 'color:' + color : '') + '">' + money(val) + '</strong><small>' + sub + '</small></div>';
-  const canEdit = hasMod('parties');
-  body.innerHTML = '<div class="cards">' + kpi('Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
-    + kpi('Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? '#c0392b' : '')
-    + kpi('Due in next 7 days', soon, 'Collect soon', soon > 0 ? '#b86e00' : '')
-    + kpi('Not yet due', later, 'Beyond 7 days') + '</div>'
-    + (over > 0 ? '<div class="muted" style="margin:6px 0 10px">Overdue age: <b>1–30 days</b> ' + money(age(1, 30)) + ' &nbsp;•&nbsp; <b>31–60</b> ' + money(age(31, 60)) + ' &nbsp;•&nbsp; <b>61–90</b> ' + money(age(61, 90)) + ' &nbsp;•&nbsp; <b>90+</b> ' + money(age(91, 99999)) + '</div>' : '')
-    + (groups.length ? '<div class="table-wrap"><table><thead><tr><th>Client</th><th>Terms</th><th>Outstanding</th><th>Overdue</th><th>Status</th><th></th></tr></thead><tbody>'
-      + groups.slice(0, 15).map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td><b>' + money(g.out) + '</b></td><td>' + (g.overdue > 0 ? '<span style="color:#c0392b"><b>' + money(g.overdue) + '</b></span>' : '—') + '</td><td>'
-        + (g.maxOver > 0 ? dueBadge(g.maxOver) + (g.overdueN > 1 ? ' <span class="muted small">oldest of ' + g.overdueN + ' invoices</span>' : '') : (g.nextIn !== null ? dueBadge(-g.nextIn) : '<span class="muted">—</span>'))
-        + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
-      + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Use the filters above or open Accounts for the full list.</div>' : '')
+  const bucket = (lo, hi) => sum(x => x.daysOver !== null && x.daysOver >= lo && x.daysOver <= hi);
+  const segs = [
+    {label:'Overdue 90+ days', v:bucket(91, 99999), c:'#991b1b'}, {label:'Overdue 61–90', v:bucket(61, 90), c:'#dc2626'},
+    {label:'Overdue 31–60', v:bucket(31, 60), c:'#f97316'}, {label:'Overdue 1–30', v:bucket(1, 30), c:'#f59e0b'},
+    {label:'Due in 7 days', v:soon, c:'#eab308'}, {label:'Not yet due', v:later, c:'#10b981'}
+  ].filter(x => x.v > 0.5);
+  const tile = (label, val, sub, cls) => '<div class="stat-tile ' + (cls || '') + '"><div class="l">' + label + '</div><div class="v">' + money(val) + '</div><div class="s">' + sub + '</div></div>';
+  const canEdit = hasMod('parties'), shownGroups = groups.slice(0, 8);
+  body.innerHTML = '<div class="stat-tiles">' + tile('Total outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
+    + tile('Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? 'bad' : '')
+    + tile('Due in next 7 days', soon, 'Collect soon', soon > 0 ? 'warn' : '')
+    + tile('Not yet due', later, 'Beyond 7 days', 'good') + '</div>'
+    + (segs.length ? '<div class="agebar">' + segs.map(x => '<i style="width:' + (x.v / total * 100).toFixed(2) + '%;background:' + x.c + '" title="' + x.label + ': ' + money(x.v) + '"></i>').join('') + '</div><div class="agelegend">' + segs.map(x => '<span><i class="dot" style="background:' + x.c + '"></i>' + x.label + ' <b>' + money(x.v) + '</b></span>').join('') + '</div>' : '')
+    + (groups.length ? '<div class="table-wrap" style="margin-top:14px"><table class="compact"><thead><tr><th>Client</th><th>Terms</th><th class="r">Outstanding</th><th class="r">Overdue</th><th>Status</th><th></th></tr></thead><tbody>'
+      + shownGroups.map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td class="r"><b>' + money(g.out) + '</b></td><td class="r">' + (g.overdue > 0 ? '<b style="color:var(--bad)">' + money(g.overdue) + '</b>' : '<span class="muted">—</span>') + '</td><td>'
+        + (g.maxOver > 0 ? dueBadge(g.maxOver) + (g.overdueN > 1 ? ' <span class="muted small">+' + (g.overdueN - 1) + ' more</span>' : '') : (g.nextIn !== null ? dueBadge(-g.nextIn) : '<span class="muted">—</span>'))
+        + '</td><td class="act"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div>' + (groups.length > 8 ? '<div class="more-link">Showing 8 of ' + groups.length + ' clients — use the filters above or <a onclick="showPage(\'accounts\')">open Accounts</a> for the full list.</div>' : '')
       : '<div class="empty">' + ((PDF.q || PDF.st) ? 'No clients match this filter.' : 'No outstanding invoices — all settled!') + '</div>');
 }
 
@@ -577,7 +582,7 @@ function renderDashInventory(){
   const catTotal = catData.reduce((a,d)=>a+d.value,0) || 1;
   const put = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
   put('dashCards', `
-    <div class="cards">
+    <div class="dash-kpis">
       <div class="card dash-kpi dash-kpi-products" role="button" tabindex="0" onclick="showPage('products')" title="Open Products"><span>Products</span><strong>${P.length}</strong><small>View products →</small></div>
       <div class="card dash-kpi dash-kpi-stock" role="button" tabindex="0" onclick="showPage('products')" title="Open Current Stock"><span>Current Stock</span><strong>${P.reduce((a,x)=>a+(+x.currentStock||0),0).toLocaleString()}</strong><small>View stock →</small></div>
       <div class="card dash-kpi dash-kpi-customers" role="button" tabindex="0" onclick="showPage('customers')" title="Open Customers"><span>Customers</span><strong>${S.customers.length}</strong><small>View customers →</small></div>
@@ -586,34 +591,42 @@ function renderDashInventory(){
     </div>
 `);
   put('dashLow', `
-    ${lowStock.length ? `<div class="panel">
+    ${lowStock.length ? `<div class="panel dash-panel">
       <div class="panel-head">
-        <div><h3 class="section-title" style="color:#c0392b;margin-bottom:3px">⚠ Low Stock Items</h3><div class="muted">${lowStock.length} item${lowStock.length===1?'':'s'} need attention</div></div>
-        <button class="btn small" onclick="openLowStock()">View All →</button>
+        <div><h3>Low Stock Items</h3><div class="sub">${lowStock.length} item${lowStock.length===1?'':'s'} at or below reorder level</div></div>
+        <button class="btn small" onclick="openLowStock()">View all →</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Current Stock</th><th>Reorder Level</th></tr></thead>
-      <tbody>${lowStock.slice(0,8).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td>${esc(p.Description)}</td><td style="color:#c0392b"><b>${p.currentStock}</b></td><td>${reorderOf(p)}</td></tr>`).join('')}</tbody></table></div>
-      ${lowStock.length>8 ? `<div style="text-align:center;margin-top:12px"><button class="btn ghost small" onclick="openLowStock()">View all ${lowStock.length} low stock items</button></div>` : ''}
-    </div>` : ''}
+      <div class="table-wrap"><table class="compact"><thead><tr><th>Model</th><th>Description</th><th class="r">Stock</th><th class="r">Reorder</th></tr></thead>
+      <tbody>${lowStock.slice(0,6).map(p=>`<tr><td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td><td class="trunc">${esc(p.Description)}</td><td class="r"><b style="color:var(--bad)">${p.currentStock}</b></td><td class="r">${reorderOf(p)}</td></tr>`).join('')}</tbody></table></div>
+      ${lowStock.length>6 ? `<div class="more-link"><a onclick="openLowStock()">+ ${lowStock.length-6} more low stock items</a></div>` : ''}
+    </div>` : `<div class="panel dash-panel"><div class="panel-head"><div><h3>Low Stock Items</h3><div class="sub">Nothing below reorder level</div></div></div><div class="empty">All stock levels are healthy.</div></div>`}
 `);
   put('dashCat', `
-    <div class="panel"><h3>Stock by Category</h3>
-      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:center">
-        <div>${donutChart(catData)}</div>
-        <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:10px">
-          ${catData.map(d=>`<div style="display:flex;align-items:center;gap:10px"><span style="width:11px;height:11px;border-radius:3px;background:${d.color};flex:0 0 auto"></span><span style="flex:1;font-size:13.5px">${esc(d.label)}</span><span style="font-weight:700;font-size:13.5px">${d.value.toLocaleString()}</span><span style="color:var(--steel);font-size:12px;width:42px;text-align:right">${Math.round(d.value/catTotal*100)}%</span></div>`).join('') || '<div class="muted">No stock data yet.</div>'}
+    <div class="panel dash-panel">
+      <div class="panel-head"><div><h3>Stock by Category</h3><div class="sub">${catTotal.toLocaleString()} units in total</div></div></div>
+      <div class="cat-wrap">
+        <div class="cat-donut">${donutChart(catData, 150)}</div>
+        <div class="cat-legend">
+          ${catData.map(d=>`<div class="cat-row"><span class="cat-dot" style="background:${d.color}"></span><span class="cat-name">${esc(d.label)}</span><b>${d.value.toLocaleString()}</b><span class="cat-pct">${Math.round(d.value/catTotal*100)}%</span></div>`).join('') || '<div class="muted">No products match this filter.</div>'}
         </div>
       </div>
     </div>
 `);
 }
 function renderDashboard(){
-  $('dash').innerHTML = `<div class="toolbar" style="flex-wrap:wrap"><b class="muted">Filter inventory cards:</b><select id="dfCat" onchange="dashFilter()"></select><select id="dfBrand" onchange="dashFilter()"></select><button class="btn ghost small" onclick="clearFilters(['dfCat','dfBrand'],dashFilter)">Clear</button></div>
+  $('dash').classList.add('no-dirty-track');   /* the dashboard has no forms: its filters must never trigger "Unsaved Changes" */
+  $('dash').innerHTML = `
+    <div class="dash-section-head"><div><h2>Overview</h2><div class="sub">Inventory and parties at a glance</div></div>
+      <div class="dash-filters"><select id="dfCat" onchange="dashFilter()" title="Category"></select><select id="dfBrand" onchange="dashFilter()" title="Brand"></select><button class="btn ghost small" onclick="clearFilters(['dfCat','dfBrand'],dashFilter)">Clear</button></div></div>
     <div id="dashCards"></div>
+
     <div id="paymentDueSection"></div>
-    <div id="dashLow"></div>
-    <div id="dashCat"></div>
-    <div id="salesSummarySection"><div class="panel"><div class="muted">Loading sales summary…</div></div></div><div id="quotationPipelineSection"><div class="panel"><div class="muted">Loading quotation pipeline…</div></div></div>`;
+
+    <div class="dash-section-head"><div><h2>Inventory</h2><div class="sub">Items to reorder and stock distribution</div></div></div>
+    <div class="dash-grid"><div id="dashLow"></div><div id="dashCat"></div></div>
+
+    <div id="salesSummarySection"><div class="panel"><div class="muted">Loading sales summary…</div></div></div>
+    <div id="quotationPipelineSection"><div class="panel"><div class="muted">Loading quotation pipeline…</div></div></div>`;
   fillSelect('dfCat', S.products.map(p => p.Category), 'All Categories'); if ($('dfCat')) $('dfCat').value = DF.cat;
   fillSelect('dfBrand', S.products.map(p => p.Brand), 'All Brands'); if ($('dfBrand')) $('dfBrand').value = DF.brand;
   renderDashInventory();
@@ -639,7 +652,9 @@ async function loadSalesSummary(){
   window.SALES_SELECTED_YEAR = currentYear;
 
   host.innerHTML = `
-    <div class="panel">
+    <div class="dash-section-head"><div><h2>Sales</h2><div class="sub">Targets, monthly trend and best customers (net of GST)</div></div></div>
+    <div class="dash-grid wide-left">
+    <div class="panel dash-panel">
       <div class="panel-head">
         <h3>Year-wise Sales Target</h3>
         <select id="salesYearSelect" class="input" style="width:auto;min-width:130px" onchange="changeSalesTargetYear(this.value)">
@@ -649,11 +664,12 @@ async function loadSalesSummary(){
       <div id="selectedYearSalesTarget"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel dash-panel">
       <div class="panel-head">
         <h3 id="topCustomersYearTitle">Top Customers by Sales (${currentYear})</h3>
       </div>
       <div id="selectedYearTopCustomers"></div>
+    </div>
     </div>`;
 
   renderSelectedSalesYear(currentYear);
@@ -694,35 +710,25 @@ function renderSelectedSalesYear(year){
   const monthlyBars = monthly.map((x,i) => {
     const amount = Number(x.amount)||0;
     const h = Math.max(3, Math.round(amount/maxMonthly*100));
-    return '<div title="'+monthNames[i]+': Rs. '+money(amount)+'" style="flex:1;min-width:28px;height:170px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px">' +
-      '<div style="font-size:9px;color:var(--steel);white-space:nowrap">'+(amount ? money(amount) : '')+'</div>' +
+    const compact = amount >= 1e6 ? (amount/1e6).toFixed(1)+'M' : amount >= 1e3 ? Math.round(amount/1e3)+'K' : String(Math.round(amount));
+    return '<div title="'+monthNames[i]+': Rs. '+money(amount)+'" style="flex:1;min-width:0;height:170px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px">' +
+      '<div style="font-size:10px;color:var(--steel);white-space:nowrap">'+(amount ? compact : '')+'</div>' +
       '<div style="width:100%;max-width:42px;height:'+h+'%;min-height:4px;background:linear-gradient(180deg,#2F80ED,#78B5FF);border-radius:7px 7px 2px 2px;box-shadow:0 3px 8px rgba(47,128,237,.14)"></div>' +
       '<span style="font-size:10px;color:var(--steel)">'+monthNames[i]+'</span></div>';
   }).join('');
 
+  const reached = r.target > 0 && r.totalSales >= r.target;
   targetHost.innerHTML =
-    '<div style="display:grid;grid-template-columns:minmax(250px,1fr) minmax(220px,360px);gap:16px;align-items:stretch">' +
-      '<div class="panel" style="margin:0;padding:18px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-          '<div><h4 style="margin:0;color:#17345F;font-size:15px">Monthly Sales Overview</h4><div class="muted" style="font-size:11px;margin-top:3px">Net sales · GST excluded · '+r.year+'</div></div>' +
-          '<div style="font-size:11px;color:var(--brand);font-weight:700">Rs. '+money(r.totalSales)+'</div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:flex-end;gap:7px;height:205px;padding:5px 2px 0">'+monthlyBars+'</div>' +
-      '</div>' +
-      '<div class="panel" style="margin:0;padding:18px;display:flex;flex-direction:column;justify-content:center">' +
-        '<div style="font-size:12px;color:var(--steel);font-weight:600">ANNUAL SALES TARGET</div>' +
-        '<div style="display:flex;align-items:center;gap:18px;margin-top:12px">' +
-          '<div style="width:104px;height:104px;border-radius:50%;background:conic-gradient(#2F80ED '+Math.min(100,pct)+'%,#E7EEF7 0);display:grid;place-items:center;flex:0 0 auto">' +
-            '<div style="width:78px;height:78px;border-radius:50%;background:#fff;display:grid;place-items:center"><b style="font-size:19px;color:#17345F">'+pct+'%</b></div>' +
-          '</div>' +
-          '<div style="min-width:0"><div style="font-size:11px;color:var(--steel)">Target</div><b style="font-size:18px;color:#17345F">'+money(r.target)+'</b>' +
-          '<div style="font-size:11px;color:var(--steel);margin-top:7px">Actual · GST excl.</div><b style="font-size:16px;color:#2F80ED">'+money(r.totalSales)+'</b></div>' +
-        '</div>' +
-        '<div style="margin-top:14px;font-size:12px;color:var(--steel)">'+
-          (r.target > 0 ? (r.totalSales >= r.target ? '✓ Target reached' : money(remaining)+' remaining') : 'No target set for this year.')+
-        '</div>' +
-        (isAdmin() ? '<div style="margin-top:12px"><button class="btn small" onclick="setTargetForm('+r.year+','+r.target+')">'+(r.target > 0 ? 'Edit Target' : 'Set Target')+'</button></div>' : '') +
-      '</div>' +
+    '<div class="sales-chart">' +
+      '<div class="sales-chart-head"><div><b>Monthly sales</b><div class="sub">Net sales · GST excluded · '+r.year+'</div></div><div class="sales-total">Rs. '+money(r.totalSales)+'</div></div>' +
+      '<div style="display:flex;align-items:flex-end;gap:7px;height:205px;padding:5px 2px 0">'+monthlyBars+'</div>' +
+    '</div>' +
+    '<div class="sales-strip">' +
+      '<div class="donut-sm" style="background:conic-gradient(#2F80ED '+Math.min(100,pct)+'%,#E7EEF7 0)"><div><b>'+pct+'%</b></div></div>' +
+      '<div class="strip-item"><span>Annual target</span><b>'+money(r.target)+'</b></div>' +
+      '<div class="strip-item"><span>Actual (GST excl.)</span><b class="blue">'+money(r.totalSales)+'</b></div>' +
+      '<div class="strip-item"><span>'+(reached ? 'Status' : 'Remaining')+'</span><b>'+(r.target > 0 ? (reached ? '✓ Target reached' : money(remaining)) : 'No target set')+'</b></div>' +
+      (isAdmin() ? '<button class="btn small" style="margin-left:auto" onclick="setTargetForm('+r.year+','+r.target+')">'+(r.target > 0 ? 'Edit Target' : 'Set Target')+'</button>' : '') +
     '</div>';
 
   title.textContent = 'Top 10 Customers by Sales (' + r.year + ')';
@@ -733,22 +739,17 @@ function renderSelectedSalesYear(year){
   const maxAmt = Math.max(...top.map(c => Number(c.amount)||0), 1);
 
   customerHost.innerHTML = top.length ? 
-    '<div class="panel" style="margin:0;padding:18px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-        '<div><h4 style="margin:0;color:#17345F;font-size:15px">Top 10 Customers</h4><div class="muted" style="font-size:11px;margin-top:3px">Share of total net sales · '+r.year+'</div></div>' +
-        '<div style="font-size:11px;color:var(--steel)">Top 10 = '+Math.round(topTotal/totalCustomerSales*100)+'%</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:11px">' +
+    '<div>' +
+      '<div class="sub" style="margin:-4px 0 12px">Share of total net sales · '+r.year+' · Top 10 = '+Math.round(topTotal/totalCustomerSales*100)+'%</div>' +
+      '<div class="cust-list">' +
       top.map((c,i) => {
         const amount = Number(c.amount)||0;
         const share = amount/totalCustomerSales*100;
         const bar = amount/maxAmt*100;
-        return '<div style="display:grid;grid-template-columns:24px minmax(110px,1.25fr) minmax(130px,2fr) 82px;gap:9px;align-items:center">' +
-          '<span style="width:24px;height:24px;border-radius:7px;background:#EEF5FF;color:#2F80ED;display:grid;place-items:center;font-size:11px;font-weight:700">'+(i+1)+'</span>' +
-          '<span style="font-size:12px;color:#284A78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(c.customer)+'">'+esc(c.customer)+'</span>' +
-          '<div style="background:#EEF3F9;border-radius:8px;height:10px;overflow:hidden"><div style="width:'+bar+'%;height:100%;background:linear-gradient(90deg,#2F80ED,#69A8F7);border-radius:8px"></div></div>' +
-          '<div style="text-align:right;white-space:nowrap"><b style="font-size:12px;color:#17345F">'+money(amount)+'</b><span style="display:block;font-size:10px;color:#7087A6">'+share.toFixed(1)+'%</span></div>' +
-        '</div>';
+        return '<div class="cust-row"><span class="cust-rank">'+(i+1)+'</span>' +
+          '<div class="cust-main"><div class="cust-top"><span class="cust-nm" title="'+esc(c.customer)+'">'+esc(c.customer)+'</span><b>'+money(amount)+'</b></div>' +
+          '<div class="cust-track"><i style="width:'+bar.toFixed(1)+'%"></i></div></div>' +
+          '<span class="cust-share">'+share.toFixed(1)+'%</span></div>';
       }).join('') +
       '</div>' +
     '</div>' : '<div class="panel"><div class="muted">No invoice sales recorded for this year.</div></div>';
@@ -2106,10 +2107,12 @@ function drawPipeline(){
   const won = docs.filter(x => x.status === 'Won').length, lost = docs.filter(x => x.status === 'Lost').length, pending = docs.filter(x => (x.status || 'Pending') === 'Pending').length;
   const data = [{label:'Won', value:won, color:CHART_PALETTE[1]}, {label:'Pending', value:pending, color:CHART_PALETTE[2]}, {label:'Lost', value:lost, color:CHART_PALETTE[6]}].filter(x => x.value > 0);
   const lr = docs.filter(x => x.status === 'Lost').slice(0, 8);
-  host.innerHTML = '<div class="panel"><div class="panel-head"><h3>Enquiry & Quotation Pipeline</h3><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + periodSelectHtml('qpPer', 'pipelineFilterChanged()') + '</span></div>'
-    + '<div class="cards" style="margin:0 0 16px"><div class="card"><span>Total Enquiries</span><strong>' + enqs.length + '</strong></div><div class="card"><span>Total Quotations</span><strong>' + docs.length + '</strong></div><div class="card"><span>Won</span><strong>' + won + '</strong></div><div class="card"><span>Pending</span><strong>' + pending + '</strong></div><div class="card"><span>Lost</span><strong>' + lost + '</strong></div></div>'
-    + '<div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap"><div>' + donutChart(data, 180) + '</div><div style="flex:1;min-width:260px">'
-    + (lr.length ? '<h4>Lost Quotations</h4><div class="table-wrap"><table><thead><tr><th>Quotation</th><th>Customer</th><th>Loss Reason</th></tr></thead><tbody>' + lr.map(x => '<tr><td>' + esc(x.no) + '</td><td>' + esc(x.customer) + '</td><td>' + esc(x.lossReason || '') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="muted">No lost quotations.</div>') + '</div></div></div>';
+  const tile = (label, val, cls) => '<div class="stat-tile ' + (cls || '') + '"><div class="l">' + label + '</div><div class="v">' + val + '</div></div>';
+  const legend = data.map(x => '<div class="cat-row"><span class="cat-dot" style="background:' + x.color + '"></span><span class="cat-name">' + x.label + '</span><b>' + x.value + '</b></div>').join('');
+  host.innerHTML = '<div class="dash-section-head"><div><h2>Pipeline</h2><div class="sub">Enquiries converted into quotations, and their outcome</div></div><div class="dash-filters">' + periodSelectHtml('qpPer', 'pipelineFilterChanged()') + '</div></div>'
+    + '<div class="panel dash-panel"><div class="stat-tiles five">' + tile('Enquiries', enqs.length) + tile('Quotations', docs.length) + tile('Won', won, 'good') + tile('Pending', pending, 'warn') + tile('Lost', lost, 'bad') + '</div>'
+    + '<div class="pipe-grid"><div class="cat-wrap"><div class="cat-donut">' + donutChart(data, 140) + '</div><div class="cat-legend">' + (legend || '<div class="muted">No quotations in this period.</div>') + '</div></div>'
+    + '<div>' + (lr.length ? '<h4 class="mini-title">Lost quotations</h4><div class="table-wrap"><table class="compact"><thead><tr><th>Quotation</th><th>Customer</th><th>Loss reason</th></tr></thead><tbody>' + lr.map(x => '<tr><td>' + esc(x.no) + '</td><td>' + esc(x.customer) + '</td><td>' + esc(x.lossReason || '') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="muted">No lost quotations.</div>') + '</div></div></div>';
   if ($('qpPer')) { $('qpPer').value = QPF.per; if ($('qpPerFrom')) $('qpPerFrom').value = QPF.from; if ($('qpPerTo')) $('qpPerTo').value = QPF.to; periodChanged('qpPer'); }
 }
 /* ---------- HELPERS ---------- */
