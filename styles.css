@@ -1037,3 +1037,13 @@ table.pd-detail thead th{position:sticky;top:0;z-index:1}
 }
 @media print{button.card-btn .card-go{display:none}}
 .modal-card:has(table.pd-detail){max-width:940px}
+
+
+/* ---------- Ledger modal: PDF buttons ---------- */
+.ledger-actions{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;
+  margin:0 0 16px;padding:12px 14px;border-radius:12px;
+  background:var(--brand-soft);border:1px solid #d9dfff;
+}
+.ledger-actions .muted{margin-left:auto;font-style:italic}
+@media(max-width:600px){.ledger-actions .muted{margin-left:0;width:100%}}
