@@ -18,7 +18,8 @@ const ALL_MODULES = [
   {id:'accounts', label:'Accounts (Payments)'},
   {id:'parties',  label:'Parties (Customers / Suppliers)'},
   {id:'reports',  label:'Reports'},
-  {id:'enquiries',label:'Enquiries'}
+  {id:'enquiries',label:'Enquiries'},
+  {id:'imports', label:'Imports (confidential costing)'}
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -62,6 +63,7 @@ function nav(){
     {id:'dashboard', label:'Dashboard',   mod:null,       section:'Main'},
     {id:'products',  label:'Products',    mod:'products', section:'Inventory'},
     {id:'inward',    label:'Inward',      mod:'products', section:'Inventory'},
+    {id:'imports',   label:'Imports',     mod:'imports',  section:'Inventory'},
     {id:'dc',        label:'New Delivery Challan', mod:'sales', section:'Sales'},
     {id:'dchistory', label:'DC History',  mod:'sales',    section:'Sales'},
     {id:'invoices',  label:'New Invoice', mod:'sales',    section:'Sales'},
@@ -89,6 +91,7 @@ function nav(){
   const icons = {
     dashboard:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
     products:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+    imports:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg>',
     inward:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg>',
     dc:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
     dchistory:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
@@ -335,6 +338,7 @@ function showPage(p, btn){
   $('pageTitle').textContent = label;
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
+  if (p === 'imports' && !hasMod('imports')) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
@@ -346,6 +350,7 @@ function showPage(p, btn){
   if (p === 'quotations') renderQuotation();
   if (p === 'qthistory')  loadQTHistory();
   if (p === 'enquiries')  renderEnquiries();
+  if (p === 'imports')    renderImports();
   if (p === 'ivhistory')  renderIVHistory();
   if (p === 'accounts')   renderAccounts();
   if (p === 'customers')  renderCustomers();
@@ -359,6 +364,7 @@ function showPage(p, btn){
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
   products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button><button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  imports:()=>impPageHtml(),
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
@@ -891,7 +897,7 @@ function editProductForm(em){
        <label>Brand<input id="epbrand" value="${esc(p.Brand||'')}"></label>
        <label>Unit<input id="epunit" value="${esc(p.Unit||'Pcs')}"></label>
        <label>Location<input id="eploc" value="${esc(p.Location||'')}"></label>
-       <label>Cost Price<input id="epcost" type="number" value="${esc(p['Cost Price']||'')}"></label>
+       ${hasMod('imports') ? `<label>Cost Price<input id="epcost" type="number" value="${esc(p['Cost Price']||'')}"></label>` : `<input id="epcost" type="hidden" value="${esc(p['Cost Price']||'')}">`}
        <label>Sale Price<input id="epprice" type="number" value="${esc(p['Sale Price']||'')}"></label>
        <label>Reorder Level<input id="eprlevel" type="number" value="${reorderOf(p)}"></label>
        <label>Product Image<input id="epimg" type="file" accept="image/*"></label>
@@ -937,7 +943,7 @@ function productForm(){
        <label>Brand<input id="pbrand"></label>
        <label>Unit<input id="punit" value="Pcs"></label>
        <label>Location<input id="ploc"></label>
-       <label>Cost Price<input id="pcost" type="number"></label>
+       ${hasMod('imports') ? '<label>Cost Price<input id="pcost" type="number"></label>' : '<input id="pcost" type="hidden" value="">'}
        <label>Sale Price<input id="pprice" type="number"></label>
        <label>Opening Stock<input id="pop" type="number" value="0"></label>
        <label>Reorder Level<input id="prlevel" type="number" value="5"></label>
@@ -2643,6 +2649,365 @@ function printDoc(body, footerHtml, fileName){
   }
   setTimeout(() => window.print(), 100);
 }
+
+
+/* =====================================================================
+   IMPORTS — landed-cost costing + bulk Product / Inward entry
+   Visible only to ADMIN and users who have the "imports" module.
+   Per item:  value (foreign currency x rate) + share of freight / duty / charges
+              = landed cost  ->  landed cost per unit -> product Cost Price.
+   Saving uses the EXISTING backend actions (saveProduct / updateProduct / saveInward).
+   ===================================================================== */
+const IMP_CURRENCIES = ['USD','EUR','GBP','CNY','AED','JPY','INR','PKR'];
+let IMP = {h:null, rows:[], charges:[]};
+let IMP_DONE = {};   /* progress of a batch, so a retry after an error never creates duplicates */
+
+function impBlankRow(){ return {model:'', desc:'', cat:'Others', brand:'', unit:'Pcs', qty:'', price:'', sale:''}; }
+function impDefaultCharges(){
+  return [
+    {name:'Freight', amt:'', cur:'inv', inc:true},
+    {name:'Insurance', amt:'', cur:'inv', inc:true},
+    {name:'Customs Duty', amt:'', cur:'PKR', inc:true},
+    {name:'Clearing / Port / DO charges', amt:'', cur:'PKR', inc:true},
+    {name:'Local transport', amt:'', cur:'PKR', inc:true},
+    {name:'Sales Tax / Income Tax (adjustable)', amt:'', cur:'PKR', inc:false}
+  ];
+}
+function impNum(v){ const n = Number(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function impR2(n){ return Math.round((Number(n) || 0) * 100) / 100; }
+function impHistKey(){ return 'sfsImportHistory:' + ((S.user && S.user.username) || 'user'); }
+function impHistory(){ try { return JSON.parse(localStorage.getItem(impHistKey()) || '[]') || []; } catch(e){ return []; } }
+function impHistorySave(list){ try { localStorage.setItem(impHistKey(), JSON.stringify(list.slice(0, 100))); } catch(e){} }
+
+function impPageHtml(){
+  return `<div class="wrap" id="impPage">
+    <div class="imp-banner"><b>🔒 Confidential.</b> Rates, duty and costing on this page are visible only to Admin and users given “Imports” access.</div>
+
+    <div class="panel"><h3>1. Shipment Details</h3>
+      <div class="form-grid">
+        <label>Date<input id="impDate" type="date" oninput="impHdr()"></label>
+        <label>Supplier<input id="impSupplier" list="suplist" oninput="impHdr()"></label>
+        <label>Supplier Invoice / BL No.<input id="impRef" oninput="impHdr()"></label>
+        <label>Invoice Currency<select id="impCur" onchange="impHdr()">${IMP_CURRENCIES.map(c => '<option>' + c + '</option>').join('')}</select></label>
+        <label>Exchange Rate (Rs. per 1 unit)<input id="impRate" type="number" min="0" step="any" oninput="impHdr()" placeholder="e.g. 281.50"></label>
+        <label>Spread charges by<select id="impAlloc" onchange="impHdr()"><option value="value">Item value (recommended)</option><option value="qty">Quantity</option></select></label>
+        <label>Cost price of existing products<select id="impMode" onchange="impHdr()"><option value="avg">Weighted average (old stock + new)</option><option value="replace">Replace with new landed cost</option><option value="keep">Do not change</option></select></label>
+        <label class="chk" style="align-self:end"><input id="impPayable" type="checkbox" checked onchange="impHdr()"> Add supplier invoice value to Supplier Payable</label>
+      </div>
+    </div>
+
+    <div class="panel"><div class="panel-head"><h3>2. Freight, Duty &amp; Other Charges</h3><button class="btn small" onclick="impAddCharge()">+ Add Charge</button></div>
+      <div class="table-wrap" id="impCharges"></div>
+      <div class="muted small" style="margin-top:8px">Un-tick “Add to cost?” for adjustable taxes (Sales Tax / Income Tax) that you claim back — they will not be added to the landed cost.</div>
+    </div>
+
+    <div class="panel"><div class="panel-head"><h3>3. Items</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" onclick="impPasteForm()">Paste from Excel</button><button class="btn small" onclick="impAddRow()">+ Add Row</button></div></div>
+      <div class="table-wrap" id="impGrid"></div>
+      <div id="impSummary"></div>
+    </div>
+
+    <div class="imp-actions">
+      <span id="impProgress" class="muted"></span>
+      <button class="btn" onclick="impClear()">Clear</button>
+      <button class="btn" onclick="impPreview()">Preview Costing</button>
+      <button class="btn primary" onclick="impSave()">Save Import → Products + Inward Stock</button>
+    </div>
+
+    <div class="panel" id="impHistory"></div>
+  </div>`;
+}
+
+function renderImports(){
+  if (!hasMod('imports')) return;
+  if (!IMP.charges.length) IMP.charges = impDefaultCharges();
+  if (!IMP.rows.length) IMP.rows = [impBlankRow()];
+  const h = IMP.h || {date:todayStr(), supplier:'', ref:'', cur:'USD', rate:'', alloc:'value', mode:'avg', payable:true};
+  $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
+  $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
+  IMP.h = h; impSyncRateBox();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory();
+}
+function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
+function impHdr(){
+  const prevCur = IMP.h ? IMP.h.cur : null;
+  IMP.h = {date:$('impDate').value, supplier:$('impSupplier').value.trim(), ref:$('impRef').value.trim(), cur:$('impCur').value, rate:$('impRate').value, alloc:$('impAlloc').value, mode:$('impMode').value, payable:$('impPayable').checked};
+  impSyncRateBox();
+  if (prevCur !== IMP.h.cur) { impRenderCharges(); impRenderGrid(); }
+  impRecalc();
+}
+
+/* ---------- charges ---------- */
+function impRenderCharges(){
+  const cur = IMP.h ? IMP.h.cur : 'USD';
+  $('impCharges').innerHTML = '<table class="imp-table"><thead><tr><th>Charge</th><th class="right">Amount</th><th>Currency</th><th style="text-align:center">Add to cost?</th><th class="right">In Rs.</th><th></th></tr></thead><tbody>'
+    + IMP.charges.map((c, i) => `<tr>
+        <td><input class="imp-in wide" value="${esc(c.name)}" oninput="IMP.charges[${i}].name=this.value"></td>
+        <td><input class="imp-in num" type="number" min="0" step="any" value="${esc(c.amt)}" oninput="impChg(${i},'amt',this.value)"></td>
+        <td><select class="imp-in" onchange="impChg(${i},'cur',this.value)"><option value="inv"${c.cur === 'inv' ? ' selected' : ''}>${esc(cur)} (invoice currency)</option><option value="PKR"${c.cur === 'PKR' ? ' selected' : ''}>PKR</option></select></td>
+        <td style="text-align:center"><input type="checkbox"${c.inc ? ' checked' : ''} onchange="impChg(${i},'inc',this.checked)"></td>
+        <td class="right" id="imp-cpkr-${i}"></td>
+        <td><button class="btn small danger" onclick="impDelCharge(${i})">×</button></td></tr>`).join('')
+    + '</tbody></table>';
+}
+function impChg(i, k, v){ IMP.charges[i][k] = v; impRecalc(); }
+function impAddCharge(){ IMP.charges.push({name:'Other charge', amt:'', cur:'PKR', inc:true}); impRenderCharges(); impRecalc(); }
+function impDelCharge(i){ IMP.charges.splice(i, 1); impRenderCharges(); impRecalc(); }
+
+/* ---------- items grid ---------- */
+function impRenderGrid(){
+  const cur = IMP.h ? IMP.h.cur : 'USD';
+  $('impGrid').innerHTML = '<table class="imp-table"><thead><tr><th>#</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Brand</th><th>Unit</th><th class="right">Qty</th><th class="right">Unit Price (' + esc(cur) + ')</th><th class="right">Sale Price (Rs.)</th><th class="right">Value (Rs.)</th><th class="right">Charges (Rs.)</th><th class="right">Landed / Unit</th><th class="right">Margin</th><th>Status</th><th></th></tr></thead><tbody>'
+    + IMP.rows.map((r, i) => `<tr>
+        <td>${i + 1}</td>
+        <td><input class="imp-in" id="imp-model-${i}" list="mlist" value="${esc(r.model)}" onchange="impModel(${i},this.value)"></td>
+        <td><input class="imp-in wide" id="imp-desc-${i}" value="${esc(r.desc)}" oninput="IMP.rows[${i}].desc=this.value"></td>
+        <td><select class="imp-in" id="imp-cat-${i}" onchange="IMP.rows[${i}].cat=this.value">${CATS.map(c => `<option${c === r.cat ? ' selected' : ''}>${c}</option>`).join('')}</select></td>
+        <td><input class="imp-in sm" id="imp-brand-${i}" value="${esc(r.brand)}" oninput="IMP.rows[${i}].brand=this.value"></td>
+        <td><input class="imp-in xs" id="imp-unit-${i}" value="${esc(r.unit)}" oninput="IMP.rows[${i}].unit=this.value"></td>
+        <td><input class="imp-in num" type="number" min="0" step="any" value="${esc(r.qty)}" oninput="impSet(${i},'qty',this.value)"></td>
+        <td><input class="imp-in num" type="number" min="0" step="any" value="${esc(r.price)}" oninput="impSet(${i},'price',this.value)"></td>
+        <td><input class="imp-in num" type="number" min="0" step="any" value="${esc(r.sale)}" oninput="impSet(${i},'sale',this.value)"></td>
+        <td class="right" id="imp-val-${i}"></td><td class="right" id="imp-chg-${i}"></td>
+        <td class="right" id="imp-unitc-${i}"></td><td class="right" id="imp-mrg-${i}"></td>
+        <td id="imp-st-${i}"></td>
+        <td><button class="btn small danger" onclick="impDelRow(${i})">×</button></td></tr>`).join('')
+    + '</tbody></table>';
+}
+function impSet(i, k, v){ IMP.rows[i][k] = v; impRecalc(); }
+function impAddRow(){ IMP.rows.push(impBlankRow()); impRenderGrid(); impRecalc(); }
+function impDelRow(i){ IMP.rows.splice(i, 1); if (!IMP.rows.length) IMP.rows.push(impBlankRow()); impRenderGrid(); impRecalc(); }
+function impModel(i, val){
+  const r = IMP.rows[i], p = findProd(val);
+  r.model = String(val || '').trim();
+  if (p) {
+    r.model = p['Model / Part No.']; r.desc = p.Description || ''; r.cat = p.Category || 'Others'; r.brand = p.Brand || ''; r.unit = p.Unit || 'Pcs';
+    if (!r.sale) r.sale = p['Sale Price'] || '';
+    $('imp-model-' + i).value = r.model; $('imp-desc-' + i).value = r.desc; $('imp-cat-' + i).value = r.cat;
+    $('imp-brand-' + i).value = r.brand; $('imp-unit-' + i).value = r.unit;
+    impRenderGrid();
+  }
+  impRecalc();
+}
+function impPasteForm(){
+  modal('Paste Items from Excel',
+    `<div class="muted" style="margin-bottom:10px">One item per row, columns in this order (header row optional):<br><b>Model, Description, Category, Brand, Unit, Qty, Unit Price, Sale Price</b><br>Sale Price is optional. Unit Price is in the invoice currency.</div>
+     <textarea id="impPasteText" style="width:100%;min-height:220px;font-family:monospace"></textarea>
+     <div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="impPasteApply()">Add Rows</button></div>`);
+}
+function impPasteApply(){
+  const rows = parseBulkRows($('impPasteText').value);
+  if (!rows.length) return toast('Please paste the item rows.', true);
+  const added = rows.filter(r => (r[0] || '').trim()).map(r => ({model:(r[0] || '').trim(), desc:r[1] || '', cat:CATS.indexOf(r[2]) >= 0 ? r[2] : 'Others', brand:r[3] || '', unit:r[4] || 'Pcs', qty:impNum(r[5]) || '', price:impNum(r[6]) || '', sale:impNum(r[7]) || ''}));
+  added.forEach(a => { const p = findProd(a.model); if (p) { a.model = p['Model / Part No.']; a.desc = p.Description || a.desc; a.cat = p.Category || a.cat; a.brand = p.Brand || a.brand; a.unit = p.Unit || a.unit; if (!a.sale) a.sale = p['Sale Price'] || ''; } });
+  if (IMP.rows.length === 1 && !IMP.rows[0].model && !IMP.rows[0].qty) IMP.rows = [];
+  IMP.rows = IMP.rows.concat(added);
+  closeModal(); impRenderGrid(); impRecalc(); toast(added.length + ' row(s) added.');
+}
+
+/* ---------- the costing maths ---------- */
+function impCalc(){
+  const h = IMP.h || {cur:'USD', rate:'', alloc:'value', mode:'avg'};
+  const rate = h.cur === 'PKR' ? 1 : impNum(h.rate);
+  const rows = IMP.rows.map(r => {
+    const qty = impNum(r.qty), price = impNum(r.price), p = r.model ? findProd(r.model) : null;
+    return {model:p ? p['Model / Part No.'] : String(r.model || '').trim(), desc:r.desc, cat:r.cat, brand:r.brand, unit:r.unit, qty:qty, price:price, sale:impNum(r.sale),
+            valCur:qty * price, valPkr:qty * price * rate, exists:!!p, p:p, share:0, landed:0, unitCost:0, newCost:0, margin:null};
+  });
+  const charges = IMP.charges.map(c => { const a = impNum(c.amt); return {name:c.name, amt:a, cur:c.cur, pkr:c.cur === 'inv' ? a * rate : a, inc:!!c.inc}; });
+  const inc = charges.filter(c => c.inc).reduce((a, c) => a + c.pkr, 0);
+  const exc = charges.filter(c => !c.inc).reduce((a, c) => a + c.pkr, 0);
+  const totVal = rows.reduce((a, r) => a + r.valPkr, 0), totQty = rows.reduce((a, r) => a + r.qty, 0);
+  rows.forEach(r => {
+    const w = h.alloc === 'qty' ? (totQty ? r.qty / totQty : 0) : (totVal ? r.valPkr / totVal : (totQty ? r.qty / totQty : 0));
+    r.share = inc * w; r.landed = r.valPkr + r.share; r.unitCost = r.qty > 0 ? r.landed / r.qty : 0;
+    const oldStock = r.p ? impNum(r.p.currentStock) : 0, oldCost = r.p ? impNum(r.p['Cost Price']) : 0;
+    if (!r.p || h.mode === 'replace') r.newCost = r.unitCost;
+    else if (h.mode === 'keep') r.newCost = oldCost;
+    else r.newCost = (oldStock > 0 && oldCost > 0) ? (oldStock * oldCost + r.qty * r.unitCost) / (oldStock + r.qty) : r.unitCost;
+    r.newCost = impR2(r.newCost);
+    r.margin = (r.sale > 0 && r.unitCost > 0) ? (r.sale - r.unitCost) / r.sale * 100 : null;
+  });
+  return {rate:rate, rows:rows, charges:charges, inc:inc, exc:exc, totVal:totVal, totQty:totQty, totLanded:totVal + inc,
+          valCur:rows.reduce((a, r) => a + r.valCur, 0), cur:h.cur, method:h.alloc, mode:h.mode};
+}
+function impRecalc(){
+  if (!$('impGrid')) return null;
+  const c = impCalc(), set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+  c.rows.forEach((r, i) => {
+    set('imp-val-' + i, r.valPkr ? money(r.valPkr) : '');
+    set('imp-chg-' + i, r.share ? money(r.share) : '');
+    set('imp-unitc-' + i, r.unitCost ? money(r.unitCost) : '');
+    const m = $('imp-mrg-' + i); if (m) { m.textContent = r.margin === null ? '' : r.margin.toFixed(1) + '%'; m.style.color = r.margin !== null && r.margin < 0 ? '#c0392b' : ''; }
+    const st = $('imp-st-' + i);
+    if (st) st.innerHTML = !r.model ? '' : (r.exists ? '<span class="imp-tag old">Existing · stock ' + esc(r.p.currentStock) + '</span>' : '<span class="imp-tag new">New product</span>');
+    ['desc', 'brand', 'unit'].forEach(k => { const e = $('imp-' + k + '-' + i); if (e) e.readOnly = r.exists; });
+    const ct = $('imp-cat-' + i); if (ct) ct.disabled = r.exists;
+  });
+  c.charges.forEach((x, i) => set('imp-cpkr-' + i, x.pkr ? money(x.pkr) : ''));
+  const nNew = c.rows.filter(r => r.model && !r.exists).length, nOld = c.rows.filter(r => r.model && r.exists).length;
+  $('impSummary').innerHTML = `<div class="imp-sum">
+      <div><span>Goods value (${esc(c.cur)})</span><b>${money(c.valCur)}</b></div>
+      <div><span>Goods value (Rs.)</span><b>${money(c.totVal)}</b></div>
+      <div><span>Charges added to cost</span><b>${money(c.inc)}</b></div>
+      <div class="hi"><span>Total landed cost (Rs.)</span><b>${money(c.totLanded)}</b></div>
+      <div><span>Cost uplift over goods value</span><b>${c.totVal ? (c.inc / c.totVal * 100).toFixed(1) + '%' : '—'}</b></div>
+      ${c.exc ? '<div><span>Not added to cost (taxes)</span><b>' + money(c.exc) + '</b></div>' : ''}
+      <div><span>Items</span><b>${nNew} new · ${nOld} existing</b></div>
+    </div>`;
+  return c;
+}
+
+/* ---------- validate + save ---------- */
+function impValidate(){
+  const h = IMP.h, c = impCalc(), bad = m => ({ok:false, error:m});
+  if (!h.date) return bad('Date is required.');
+  if (c.cur !== 'PKR' && !(c.rate > 0)) return bad('Enter the exchange rate (Rs. per 1 ' + c.cur + ').');
+  const rows = c.rows.filter(r => r.model || r.qty || r.price);
+  if (!rows.length) return bad('Add at least one item.');
+  const seen = {};
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], k = norm(r.model);
+    if (!r.model) return bad('Row ' + (i + 1) + ': Model / Part No. is required.');
+    if (!(r.qty > 0)) return bad(r.model + ': quantity must be greater than zero.');
+    if (!(r.price >= 0)) return bad(r.model + ': invalid unit price.');
+    if (seen[k]) return bad(r.model + ' is entered twice. Please combine it into one row.');
+    seen[k] = 1;
+  }
+  return {ok:true, calc:Object.assign({}, c, {rows:rows})};
+}
+function impPreview(){
+  const v = impValidate(); if (!v.ok) return toast(v.error, true);
+  const e = impEntry(v.calc); window.IMP_PREVIEW_ENTRY = e;
+  modal('Costing Preview — ' + (e.ref || 'Import'), impSheetModalHtml(e, false));
+}
+function impEntry(c){
+  const h = IMP.h;
+  return {id:'imp' + Date.now(), ts:Date.now(), date:h.date, supplier:h.supplier, ref:h.ref, cur:c.cur, rate:c.rate, method:c.method, mode:c.mode,
+    charges:c.charges, totVal:c.totVal, inc:c.inc, exc:c.exc, totLanded:c.totLanded, valCur:c.valCur, user:(S.user && S.user.name) || '',
+    rows:c.rows.map(r => ({model:r.model, desc:r.desc, qty:r.qty, price:r.price, valCur:r.valCur, valPkr:r.valPkr, share:r.share, landed:r.landed, unitCost:r.unitCost, sale:r.sale, margin:r.margin, newCost:r.newCost, exists:r.exists}))};
+}
+async function impSave(){
+  if (!hasMod('imports')) return toast('You do not have access to Imports.', true);
+  const v = impValidate(); if (!v.ok) return toast(v.error, true);
+  const c = v.calc, h = IMP.h, entry = impEntry(c);
+  if (h.ref && impHistory().some(x => norm(x.ref) === norm(h.ref) && norm(x.supplier) === norm(h.supplier)) && !confirm('An import with this supplier and reference was already saved on this device. Save again?')) return;
+  if (h.payable && !h.supplier && !confirm('Supplier is empty — the supplier invoice value will not appear in Supplier Payable. Continue?')) return;
+  const nNew = c.rows.filter(r => !r.exists).length;
+  if (!confirm('Save this import?\n\n• ' + nNew + ' new product(s) will be created\n• ' + c.rows.length + ' inward stock entr' + (c.rows.length === 1 ? 'y' : 'ies') + ' will be added\n• Total landed cost: Rs. ' + money(c.totLanded))) return;
+
+  const key = [h.date, norm(h.supplier), norm(h.ref), c.rows.map(r => norm(r.model) + ':' + r.qty).join('|')].join('#');
+  IMP_DONE[key] = IMP_DONE[key] || {};
+  await guardedSave(async () => {
+    const prog = $('impProgress');
+    for (let i = 0; i < c.rows.length; i++) {
+      const r = c.rows[i], st = IMP_DONE[key][r.model] = IMP_DONE[key][r.model] || {};
+      if (prog) prog.textContent = 'Saving ' + (i + 1) + ' / ' + c.rows.length + ': ' + r.model + ' …';
+      if (!st.prod) {
+        let res;
+        if (!r.exists) {
+          res = await api('saveProduct', {model:r.model, category:r.cat || 'Others', description:r.desc, brand:r.brand, unit:r.unit || 'Pcs', location:'',
+            costPrice:r.newCost, salePrice:r.sale || '', openingStock:0, reorderLevel:5, remarks:'', imageBase64:''});
+        } else {
+          const p = r.p, newSale = r.sale > 0 ? r.sale : (p['Sale Price'] || '');
+          if (c.mode === 'keep' && !(r.sale > 0)) res = {ok:true};
+          else res = await api('updateProduct', {model:r.model, category:p.Category, description:p.Description, brand:p.Brand, unit:p.Unit, location:p.Location,
+            costPrice:c.mode === 'keep' ? (p['Cost Price'] || '') : r.newCost, salePrice:newSale, reorderLevel:reorderOf(p), remarks:p.Remarks || '', imageBase64:''});
+        }
+        if (!res || !res.ok) { if (prog) prog.textContent = ''; return toast('Stopped at ' + r.model + ': ' + ((res && res.error) || 'could not save') + '. Fix it and press Save again — items already saved will not be repeated.', true); }
+        st.prod = true;
+      }
+      if (!st.inw) {
+        const res = await api('saveInward', {date:h.date, sourceType:'Import', model:r.model, quantity:r.qty, supplier:h.supplier, supplierReference:h.ref,
+          purchaseCost:h.payable ? impR2(r.valPkr) : '', remarks:'Import' + (h.ref ? ' ' + h.ref : '')});
+        if (!res || !res.ok) { if (prog) prog.textContent = ''; return toast('Stopped at ' + r.model + ' (stock entry): ' + ((res && res.error) || 'could not save') + '. Press Save again — items already saved will not be repeated.', true); }
+        st.inw = true;
+      }
+    }
+    delete IMP_DONE[key];
+    const list = impHistory(); list.unshift(entry); impHistorySave(list);
+    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''});
+    if (prog) prog.textContent = '';
+    await refresh();
+    modal('Import Saved ✓', `<p><b>${c.rows.length}</b> item(s) saved — ${nNew} new product(s) created and stock increased.<br>Landed cost per unit has been saved as the product Cost Price.</p>`
+      + impSheetModalHtml(entry, true) );
+  });
+}
+function impClear(){
+  if (!confirm('Clear everything on this page?')) return;
+  IMP = {h:Object.assign({}, IMP.h, {ref:'', rate:IMP.h ? IMP.h.rate : ''}), rows:[impBlankRow()], charges:impDefaultCharges()}; renderImports();
+}
+
+/* ---------- costing sheet (screen / PDF / CSV) ---------- */
+function impSheetTable(e, cls){
+  const t = cls ? ' class="' + cls + '"' : '';
+  const rows = e.rows.map(r => '<tr><td><b>' + esc(r.model) + '</b></td><td class="r">' + r.qty + '</td><td class="r">' + money(r.price) + '</td><td class="r">' + money(r.valPkr) + '</td><td class="r">' + money(r.share) + '</td><td class="r">' + money(r.landed) + '</td><td class="r"><b>' + money(r.unitCost) + '</b></td><td class="r">' + (r.sale ? money(r.sale) : '') + '</td><td class="r">' + (r.margin === null || r.margin === undefined ? '' : r.margin.toFixed(1) + '%') + '</td></tr>').join('');
+  const items = '<table' + t + '><thead><tr><th>Model</th><th class="r">Qty</th><th class="r">Price (' + esc(e.cur) + ')</th><th class="r">Value Rs.</th><th class="r">Charges Rs.</th><th class="r">Landed Rs.</th><th class="r">Landed / Unit</th><th class="r">Sale Price</th><th class="r">Margin</th></tr></thead><tbody>' + rows
+    + '<tr><td colspan="3"><b>TOTAL</b></td><td class="r"><b>' + money(e.totVal) + '</b></td><td class="r"><b>' + money(e.inc) + '</b></td><td class="r"><b>' + money(e.totLanded) + '</b></td><td colspan="3"></td></tr></tbody></table>';
+  const ch = '<table' + t + '><thead><tr><th>Charge</th><th class="r">Amount</th><th>Currency</th><th class="r">In Rs.</th><th>In cost?</th></tr></thead><tbody>'
+    + e.charges.filter(c => c.amt).map(c => '<tr><td>' + esc(c.name) + '</td><td class="r">' + money(c.amt) + '</td><td>' + (c.cur === 'inv' ? esc(e.cur) : 'PKR') + '</td><td class="r">' + money(c.pkr) + '</td><td>' + (c.inc ? 'Yes' : 'No') + '</td></tr>').join('') + '</tbody></table>';
+  return {items:items, charges:e.charges.some(c => c.amt) ? ch : ''};
+}
+function impSheetModalHtml(e, saved){
+  const t = impSheetTable(e, '');
+  return `<div class="muted" style="margin-bottom:8px">${esc(e.supplier || '—')} • Ref: <b>${esc(e.ref || '—')}</b> • ${fmtDate(e.date)} • ${esc(e.cur)} @ ${e.rate} • Spread by ${e.method === 'qty' ? 'quantity' : 'value'}</div>
+    ${t.charges ? '<h4 style="margin:10px 0 6px">Charges</h4><div class="table-wrap imp-sheet">' + t.charges + '</div>' : ''}
+    <h4 style="margin:14px 0 6px">Items</h4><div class="table-wrap imp-sheet">${t.items}</div>
+    <div class="actions"><button class="btn" onclick="impCsv('${e.id}')">⬇ Excel / CSV</button><button class="btn" onclick="impPrintSheet('${e.id}')">⬇ PDF / Print</button><button class="btn primary" onclick="closeModal()">${saved ? 'Done' : 'Close'}</button></div>`;
+}
+function impFindEntry(id){
+  const h = impHistory().find(x => x.id === id); if (h) return h;
+  return (window.IMP_PREVIEW_ENTRY && window.IMP_PREVIEW_ENTRY.id === id) ? window.IMP_PREVIEW_ENTRY : null;
+}
+function impPrintSheet(id){
+  const e = impFindEntry(id) || (IMP.h && impValidate().ok ? impEntry(impValidate().calc) : null);
+  if (!e) return toast('Costing sheet not found.', true);
+  const t = impSheetTable(e, 'doc-items');
+  const body = `<div class="doc-head"><div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">IMPORT COSTING SHEET</div></div></div>
+    <div style="color:#b00020;font-weight:bold;font-size:11px;margin:-10px 0 12px">CONFIDENTIAL — INTERNAL USE ONLY</div>
+    <div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">Supplier:</span><span>${esc(e.supplier || '—')}</span></div><div class="meta-line"><span class="meta-tag">Invoice / BL:</span><span>${esc(e.ref || '—')}</span></div></div>
+      <div class="meta-right"><div class="meta-row"><span class="meta-label">Date:</span><span class="meta-value">${fmtDate(e.date)}</span></div><div class="meta-row"><span class="meta-label">Currency:</span><span class="meta-value">${esc(e.cur)} @ Rs. ${e.rate}</span></div><div class="meta-row"><span class="meta-label">Goods value:</span><span class="meta-value">${esc(e.cur)} ${money(e.valCur)}</span></div></div></div>
+    ${t.charges ? '<div style="font-weight:bold;margin:0 0 6px">CHARGES</div>' + t.charges + '<div style="height:14px"></div>' : ''}
+    <div style="font-weight:bold;margin:0 0 6px">ITEMS &amp; LANDED COST</div>${t.items}
+    <div style="margin-top:12px;font-size:13px"><b>Total landed cost: Rs. ${money(e.totLanded)}</b> &nbsp;(goods Rs. ${money(e.totVal)} + charges Rs. ${money(e.inc)})</div>`;
+  closeModal();
+  printDoc(body, '<div>Confidential — Standard Fluid Systems</div>', docFileName('Import Costing ' + (e.ref || e.date), e.supplier, 'Import Costing'));
+}
+function impCsv(id){
+  const e = impFindEntry(id) || (IMP.h && impValidate().ok ? impEntry(impValidate().calc) : null);
+  if (!e) return toast('Costing sheet not found.', true);
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', L = [];
+  L.push(['IMPORT COSTING SHEET (CONFIDENTIAL)'].map(q).join(','));
+  L.push(['Supplier', e.supplier, 'Invoice/BL', e.ref, 'Date', e.date, 'Currency', e.cur, 'Rate', e.rate].map(q).join(','));
+  L.push('');
+  L.push(['Charge', 'Amount', 'Currency', 'In Rs.', 'Added to cost'].map(q).join(','));
+  e.charges.filter(c => c.amt).forEach(c => L.push([c.name, c.amt, c.cur === 'inv' ? e.cur : 'PKR', impR2(c.pkr), c.inc ? 'Yes' : 'No'].map(q).join(',')));
+  L.push('');
+  L.push(['Model', 'Description', 'Qty', 'Unit Price (' + e.cur + ')', 'Value (' + e.cur + ')', 'Value Rs.', 'Charges Rs.', 'Landed Rs.', 'Landed / Unit Rs.', 'Sale Price', 'Margin %'].map(q).join(','));
+  e.rows.forEach(r => L.push([r.model, r.desc, r.qty, r.price, impR2(r.valCur), impR2(r.valPkr), impR2(r.share), impR2(r.landed), impR2(r.unitCost), r.sale || '', r.margin == null ? '' : r.margin.toFixed(1)].map(q).join(',')));
+  L.push(['TOTAL', '', '', '', impR2(e.valCur), impR2(e.totVal), impR2(e.inc), impR2(e.totLanded)].map(q).join(','));
+  const blob = new Blob(['\ufeff' + L.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = (docFileName('Import Costing ' + (e.ref || e.date), e.supplier, 'Import Costing')).replace(/[\\/:*?"<>|]+/g, '-') + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ---------- past imports (kept in THIS browser only) ---------- */
+function impRenderHistory(){
+  const host = $('impHistory'); if (!host) return;
+  const list = impHistory();
+  host.innerHTML = '<div class="panel-head"><h3>Past Imports</h3><span class="muted small">Saved on this browser only — download the CSV / PDF of each import to keep a permanent copy.</span></div>'
+    + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Ref</th><th class="right">Items</th><th class="right">Landed Cost (Rs.)</th><th></th></tr></thead><tbody>'
+      + list.slice(0, 20).map(e => `<tr><td>${fmtDate(e.date)}</td><td>${esc(e.supplier)}</td><td>${esc(e.ref)}</td><td class="right">${e.rows.length}</td><td class="right"><b>${money(e.totLanded)}</b></td>
+          <td style="white-space:nowrap"><button class="btn small" onclick="impViewEntry('${e.id}')">View</button> <button class="btn small danger" onclick="impDelEntry('${e.id}')">Delete</button></td></tr>`).join('')
+      + '</tbody></table></div>' : '<div class="muted">No imports saved yet.</div>');
+}
+function impViewEntry(id){ const e = impFindEntry(id); if (e) modal('Import Costing — ' + (e.ref || fmtDate(e.date)), impSheetModalHtml(e, false)); }
+function impDelEntry(id){ if (!confirm('Delete this saved costing sheet from this browser? (Products and stock are not affected.)')) return; impHistorySave(impHistory().filter(x => x.id !== id)); impRenderHistory(); }
+window.renderImports = renderImports; window.impHdr = impHdr; window.impChg = impChg; window.impAddCharge = impAddCharge; window.impDelCharge = impDelCharge;
+window.impSet = impSet; window.impAddRow = impAddRow; window.impDelRow = impDelRow; window.impModel = impModel; window.impPasteForm = impPasteForm; window.impPasteApply = impPasteApply;
+window.impPreview = impPreview; window.impSave = impSave; window.impClear = impClear; window.impPrintSheet = impPrintSheet; window.impCsv = impCsv;
+window.impViewEntry = impViewEntry; window.impDelEntry = impDelEntry;
 
 /* ---------- INIT ---------- */
 function showLogin(){
