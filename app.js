@@ -1842,8 +1842,8 @@ function ledgerPdf(mode){
         <div class="meta-row"><span class="meta-label">Payment Terms:</span><span class="meta-value">${terms.days} days</span></div>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:18px"><tr>${box('Total Invoiced', c.dr)}${box('Total Received', c.cr)}${box('Outstanding', outstanding, outstanding > 0.5)}</tr></table>
-    ${overdueTotal > 0.5 ? '<div style="margin:-4px 0 14px;font-size:12px;color:#b00020"><b>Overdue amount: Rs. ' + money(overdueTotal) + '</b> — kindly arrange payment at the earliest.</div>' : ''}
+    ${mode === 'full' ? '<table style="width:100%;border-collapse:collapse;margin-bottom:18px"><tr>' + box('Total Invoiced', c.dr) + box('Total Received', c.cr) + box('Outstanding', outstanding, outstanding > 0.5) + '</tr></table>' : ''}
+    ${mode === 'full' && overdueTotal > 0.5 ? '<div style="margin:-4px 0 14px;font-size:12px;color:#b00020"><b>Overdue amount: Rs. ' + money(overdueTotal) + '</b> — kindly arrange payment at the earliest.</div>' : ''}
     <div style="font-weight:bold;margin:0 0 6px;font-size:13px">OUTSTANDING INVOICES</div>
     ${openTable}
     ${fullTable}
