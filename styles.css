@@ -864,3 +864,137 @@ tbody tr:hover{background:#f8faff}
   #app,main{background:#fff!important}
   header,.card,.panel{box-shadow:none!important}
 }
+
+
+/* ============================================================
+   OUTSTANDING / PAYABLE / DUE — polish
+   CSS-only: styles the EXISTING markup in app.js (no JS/HTML change).
+   Targets: Dashboard "Payments Due & Overdue" (#paymentDueSection / #pdBody),
+            Accounts > Customer Outstanding (#custOutRows),
+            Accounts > Supplier Payable (#supOutRows), due badges.
+   ============================================================ */
+:root{
+  --os-red:#e5484d;   --os-red-bg:#fff1f1;   --os-red-line:#ffd5d6;
+  --os-amber:#e8890c; --os-amber-bg:#fff6e5; --os-amber-line:#fde3b0;
+  --os-green:#1f9d6b; --os-green-bg:#e8f8f0; --os-green-line:#bfeadb;
+  --os-blue:#344fe0;  --os-blue-bg:#eef0ff;  --os-blue-line:#d3d9ff;
+}
+
+/* ---------- 1) KPI cards in "Payments Due & Overdue" ---------- */
+#paymentDueSection .cards{grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:16px}
+#paymentDueSection .cards .card{
+  border:1px solid var(--line);border-top-width:1px;border-radius:16px;
+  padding:18px 20px 16px;overflow:hidden;
+}
+#paymentDueSection .cards .card::before{
+  display:block;content:"";left:auto;top:-38px;right:-38px;bottom:auto;
+  width:118px;height:118px;border-radius:50%;opacity:.08;background:currentColor;
+}
+#paymentDueSection .cards .card span{font-size:11px;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+#paymentDueSection .cards .card span::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 0 4px color-mix(in srgb,currentColor 16%,transparent)}
+#paymentDueSection .cards .card strong{display:block;font-size:27px;font-weight:800;letter-spacing:-.035em;font-variant-numeric:tabular-nums;line-height:1.1}
+#paymentDueSection .cards .card small{display:block;margin-top:8px;font-size:12px;color:var(--steel)}
+/* colours by meaning: total / overdue / due soon / not yet due */
+#paymentDueSection .cards .card:nth-child(1){color:var(--os-blue);border-color:var(--os-blue-line);background:linear-gradient(135deg,#fff 55%,var(--os-blue-bg))}
+#paymentDueSection .cards .card:nth-child(2){color:var(--os-red);border-color:var(--os-red-line);background:linear-gradient(135deg,#fff 55%,var(--os-red-bg))}
+#paymentDueSection .cards .card:nth-child(3){color:var(--os-amber);border-color:var(--os-amber-line);background:linear-gradient(135deg,#fff 55%,var(--os-amber-bg))}
+#paymentDueSection .cards .card:nth-child(4){color:var(--os-green);border-color:var(--os-green-line);background:linear-gradient(135deg,#fff 55%,var(--os-green-bg))}
+#paymentDueSection .cards .card strong{color:var(--ink)}              /* amount stays dark … */
+#paymentDueSection .cards .card:nth-child(2) strong{color:var(--os-red)} /* … except overdue */
+
+/* "Overdue age: 1-30 … 90+" line → neat strip */
+#pdBody>.muted{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  margin:2px 0 16px!important;padding:11px 16px;border-radius:12px;
+  background:var(--os-red-bg);border:1px solid var(--os-red-line);
+  color:#8a3b3e;font-size:12.5px;font-variant-numeric:tabular-nums;
+}
+#pdBody>.muted b{color:var(--os-red);font-weight:800}
+
+/* "all settled" empty message */
+#pdBody>.empty{
+  text-align:center;padding:38px 16px;border-radius:14px;
+  background:linear-gradient(180deg,#fff,var(--os-green-bg));
+  border:1px dashed var(--os-green-line);color:var(--os-green);font-weight:700;
+}
+#pdBody>.empty::before{content:"✓";display:grid;place-items:center;width:44px;height:44px;margin:0 auto 10px;border-radius:50%;background:var(--os-green-bg);border:1px solid var(--os-green-line);font-size:20px}
+
+/* ---------- 2) Due-status badges (dueBadge() uses inline styles) ---------- */
+td span[style*="border-radius:999px"]{
+  display:inline-flex!important;align-items:center;gap:6px;
+  padding:4px 11px!important;font-size:11.5px!important;font-weight:700;
+  letter-spacing:.01em;white-space:nowrap;border:1px solid transparent;
+}
+td span[style*="border-radius:999px"]::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+td span[style*="#c0392b"][style*="border-radius:999px"]{border-color:var(--os-red-line)}
+td span[style*="#b86e00"][style*="border-radius:999px"]{border-color:var(--os-amber-line)}
+td span[style*="#1a7f3c"][style*="border-radius:999px"]{border-color:var(--os-green-line)}
+td span[style*="#c0392b"][style*="border-radius:999px"]::before{animation:osPulse 1.8s ease-in-out infinite}
+@keyframes osPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.5)}50%{box-shadow:0 0 0 5px rgba(229,72,77,0)}}
+
+/* ---------- 3) Money columns: right-aligned, tabular numbers ---------- */
+/* Customer Outstanding: Total | Paid | Outstanding */
+.table-wrap:has(#custOutRows) :is(th,td):nth-child(n+4):nth-child(-n+6){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Supplier Payable: Purchased | Paid | Outstanding */
+.table-wrap:has(#supOutRows) :is(th,td):nth-child(n+2):nth-child(-n+4){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Payments Due table: Outstanding | Overdue */
+#pdBody .table-wrap :is(th,td):nth-child(n+3):nth-child(-n+4){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Modal (Payment Due details) Outstanding column */
+#modalBody .table-wrap:has(th:nth-child(5)) :is(th,td):nth-child(4){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* "Outstanding" column highlight */
+#custOutRows td:nth-child(6),
+#supOutRows td:nth-child(4){
+  color:var(--ink);background:linear-gradient(90deg,transparent,#f6f8ff 40%);font-size:14px;
+}
+#custOutRows td:nth-child(6) b,#supOutRows td:nth-child(4) b{font-weight:800;letter-spacing:-.01em}
+#custOutRows td:nth-child(5){color:var(--os-green)}             /* Paid */
+#supOutRows td:nth-child(3){color:var(--os-green)}              /* Paid */
+
+/* ---------- 4) Row accents (pure CSS via :has) ---------- */
+tbody tr:has(span[style*="#c0392b"][style*="border-radius:999px"]){
+  box-shadow:inset 3px 0 0 var(--os-red);
+  background:linear-gradient(90deg,var(--os-red-bg),#fff 45%)!important;
+}
+tbody tr:has(span[style*="#c0392b"][style*="border-radius:999px"]):hover{background:#ffe9e9!important}
+tbody tr:has(span[style*="#b86e00"][style*="border-radius:999px"]){box-shadow:inset 3px 0 0 var(--os-amber)}
+#custOutRows tr:has(span[style*="#c0392b"]) td:nth-child(6) b,
+#pdBody td span[style*="color:#c0392b"] b{color:var(--os-red)}
+
+/* Invoice # / client name as clear first column */
+#custOutRows td:first-child{font-weight:700;color:var(--brand)}
+#pdBody tbody td:first-child b{font-size:13.5px}
+
+/* ---------- 5) Buttons inside these tables ---------- */
+#custOutRows .btn.primary,#supOutRows .btn.primary{
+  background:var(--os-green-bg);border-color:var(--os-green-line);color:var(--os-green);box-shadow:none;
+}
+#custOutRows .btn.primary:hover,#supOutRows .btn.primary:hover{
+  background:var(--os-green);border-color:var(--os-green);color:#fff;box-shadow:0 4px 12px rgba(31,157,107,.28);
+}
+#pdBody .btn.small:not(.ghost){background:var(--os-blue-bg);border-color:var(--os-blue-line);color:var(--os-blue)}
+#pdBody .btn.small:not(.ghost):hover{background:var(--os-blue);border-color:var(--os-blue);color:#fff}
+
+/* Info text next to search ("12 invoice(s) • Outstanding Rs ...") */
+#custOutInfo{font-weight:600;color:var(--ink-soft);background:#f2f5fb;border:1px solid var(--line);padding:6px 12px;border-radius:999px;white-space:nowrap}
+#custOutInfo:empty{display:none}
+
+/* Panel headings for these sections get a small accent */
+.panel-head h3.section-title,.panel:has(#custOutRows)>.panel-head h3,.panel:has(#supOutRows)>.panel-head h3{
+  position:relative;padding-left:14px;
+}
+.panel-head h3.section-title::before,.panel:has(#custOutRows)>.panel-head h3::before,.panel:has(#supOutRows)>.panel-head h3::before{
+  content:"";position:absolute;left:0;top:3px;bottom:3px;width:4px;border-radius:4px;background:linear-gradient(180deg,var(--os-blue),var(--os-green));
+}
+
+/* ---------- 6) Responsive / print ---------- */
+@media(max-width:600px){
+  #paymentDueSection .cards{grid-template-columns:1fr 1fr;gap:10px}
+  #paymentDueSection .cards .card{padding:14px}
+  #paymentDueSection .cards .card strong{font-size:19px}
+  #pdBody>.muted{padding:10px 12px;gap:4px 10px}
+}
+@media print{
+  td span[style*="border-radius:999px"]::before{animation:none}
+  tbody tr:has(span[style*="#c0392b"]){background:#fff!important}
+}
