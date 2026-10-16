@@ -998,3 +998,42 @@ tbody tr:has(span[style*="#b86e00"][style*="border-radius:999px"]){box-shadow:in
   td span[style*="border-radius:999px"]::before{animation:none}
   tbody tr:has(span[style*="#c0392b"]){background:#fff!important}
 }
+
+
+/* ============================================================
+   CLICKABLE KPI CARDS (Total / Overdue / Due in 7 days / Not yet due)
+   Cards are now <button class="card card-btn"> → click opens invoice list
+   ============================================================ */
+button.card-btn{
+  appearance:none;-webkit-appearance:none;font:inherit;text-align:left;width:100%;
+  display:block;cursor:pointer;
+}
+button.card-btn:hover{
+  transform:translateY(-3px);
+  box-shadow:0 12px 28px rgba(45,65,100,.14);
+  border-color:currentColor!important;
+}
+button.card-btn:active{transform:translateY(-1px) scale(.99)}
+button.card-btn:focus-visible{outline:3px solid color-mix(in srgb,currentColor 35%,transparent);outline-offset:2px}
+button.card-btn .card-go{
+  display:inline-flex;align-items:center;gap:4px;margin-top:12px;
+  font-style:normal;font-size:11.5px;font-weight:700;letter-spacing:.02em;
+  color:currentColor;opacity:.75;transition:opacity .15s,transform .15s;
+}
+button.card-btn:hover .card-go{opacity:1;transform:translateX(4px)}
+
+/* Detail modal table (opened from the cards) */
+table.pd-detail :is(th,td):nth-child(5){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.pd-detail tfoot td{
+  padding:13px 14px;background:#f7f9fd;border-top:2px solid var(--line-strong);
+  font-weight:800;font-variant-numeric:tabular-nums;
+}
+table.pd-detail tfoot td:nth-child(2){text-align:right}
+#modalBody .table-wrap:has(table.pd-detail){max-height:60vh;overflow:auto}
+table.pd-detail thead th{position:sticky;top:0;z-index:1}
+
+@media(max-width:600px){
+  button.card-btn .card-go{margin-top:8px;font-size:10.5px}
+}
+@media print{button.card-btn .card-go{display:none}}
+.modal-card:has(table.pd-detail){max-width:940px}
