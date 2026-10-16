@@ -511,15 +511,16 @@ function drawPaymentDue(){
   });
   const groups = Object.values(by).sort((a, b) => (b.maxOver - a.maxOver) || ((a.nextIn === null ? 9999 : a.nextIn) - (b.nextIn === null ? 9999 : b.nextIn)) || (b.out - a.out));
   window.PAYDUE_GROUPS = groups;
+  window.PAYDUE_FILTERED = invs;
   const sum = f => invs.filter(f).reduce((a, x) => a + (Number(x.outstanding) || 0), 0);
   const total = sum(() => true), over = sum(x => x.daysOver > 0), soon = sum(x => x.daysOver !== null && x.daysOver <= 0 && x.daysOver >= -7), later = total - over - soon;
   const age = (lo, hi) => sum(x => x.daysOver !== null && x.daysOver >= lo && x.daysOver <= hi);
-  const kpi = (label, val, sub, color) => '<div class="card"><span>' + label + '</span><strong style="' + (color ? 'color:' + color : '') + '">' + money(val) + '</strong><small>' + sub + '</small></div>';
+  const kpi = (key, label, val, sub, color) => '<button type="button" class="card card-btn" title="Click to see invoices" onclick="pdKpiDetails(\'' + key + '\')"><span>' + label + '</span><strong style="' + (color ? 'color:' + color : '') + '">' + money(val) + '</strong><small>' + sub + '</small><em class="card-go">View details →</em></button>';
   const canEdit = hasMod('parties');
-  body.innerHTML = '<div class="cards">' + kpi('Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
-    + kpi('Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? '#c0392b' : '')
-    + kpi('Due in next 7 days', soon, 'Collect soon', soon > 0 ? '#b86e00' : '')
-    + kpi('Not yet due', later, 'Beyond 7 days') + '</div>'
+  body.innerHTML = '<div class="cards">' + kpi('all', 'Total Outstanding', total, invs.length + ' invoice(s) • ' + groups.length + ' client(s)')
+    + kpi('over', 'Overdue', over, groups.filter(g => g.overdueN).length + ' client(s) past due', over > 0 ? '#c0392b' : '')
+    + kpi('soon', 'Due in next 7 days', soon, 'Collect soon', soon > 0 ? '#b86e00' : '')
+    + kpi('later', 'Not yet due', later, 'Beyond 7 days') + '</div>'
     + (over > 0 ? '<div class="muted" style="margin:6px 0 10px">Overdue age: <b>1–30 days</b> ' + money(age(1, 30)) + ' &nbsp;•&nbsp; <b>31–60</b> ' + money(age(31, 60)) + ' &nbsp;•&nbsp; <b>61–90</b> ' + money(age(61, 90)) + ' &nbsp;•&nbsp; <b>90+</b> ' + money(age(91, 99999)) + '</div>' : '')
     + (groups.length ? '<div class="table-wrap"><table><thead><tr><th>Client</th><th>Terms</th><th>Outstanding</th><th>Overdue</th><th>Status</th><th></th></tr></thead><tbody>'
       + groups.slice(0, 15).map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td><b>' + money(g.out) + '</b></td><td>' + (g.overdue > 0 ? '<span style="color:#c0392b"><b>' + money(g.overdue) + '</b></span>' : '—') + '</td><td>'
@@ -527,6 +528,25 @@ function drawPaymentDue(){
         + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
       + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Use the filters above or open Accounts for the full list.</div>' : '')
       : '<div class="empty">' + ((PDF.q || PDF.st) ? 'No clients match this filter.' : 'No outstanding invoices — all settled!') + '</div>');
+}
+
+/* Click on a KPI card (Total / Overdue / Due in 7 days / Not yet due) -> list of invoices in that bucket */
+function pdKpiDetails(key){
+  const all = window.PAYDUE_FILTERED || [];
+  const isOver = x => x.daysOver !== null && x.daysOver > 0;
+  const isSoon = x => x.daysOver !== null && x.daysOver <= 0 && x.daysOver >= -7;
+  const pick = {all:() => true, over:isOver, soon:isSoon, later:x => !isOver(x) && !isSoon(x)}[key] || (() => true);
+  const titles = {all:'Total Outstanding', over:'Overdue Invoices', soon:'Due in next 7 days', later:'Not yet due'};
+  const rows = all.filter(pick).sort((a, b) => (b.daysOver === null ? -99999 : b.daysOver) - (a.daysOver === null ? -99999 : a.daysOver));
+  const total = rows.reduce((a, x) => a + (Number(x.outstanding) || 0), 0);
+  const clients = new Set(rows.map(x => x.customer)).size;
+  const body = rows.length
+    ? '<div class="muted" style="margin-bottom:10px"><b>' + rows.length + '</b> invoice(s) • <b>' + clients + '</b> client(s) • Total <b>' + money(total) + '</b></div>'
+      + '<div class="table-wrap"><table class="pd-detail"><thead><tr><th>Invoice #</th><th>Client</th><th>Invoice Date</th><th>Due Date</th><th>Outstanding</th><th>Status</th></tr></thead><tbody>'
+      + rows.map(x => '<tr><td>' + esc(x.no) + '</td><td><b>' + esc(x.customer) + '</b></td><td>' + fmtDate(x.date) + '</td><td>' + (x.due ? fmtDate(x.due) : '—') + '</td><td><b>' + money(x.outstanding) + '</b></td><td>' + (x.daysOver === null ? '—' : dueBadge(x.daysOver)) + '</td></tr>').join('')
+      + '</tbody><tfoot><tr><td colspan="4">Total</td><td>' + money(total) + '</td><td></td></tr></tfoot></table></div>'
+    : '<div class="empty" style="padding:30px;text-align:center">No invoices in this category.</div>';
+  modal(titles[key] || 'Outstanding', body + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>');
 }
 
 function paymentDueDetails(nameEnc){
