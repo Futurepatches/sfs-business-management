@@ -1795,6 +1795,63 @@ async function saveParty(type){
   });
 }
 
+/* Date -> sortable number. Missing / invalid dates go to the END of the statement (not the top). */
+function ledgerTime(v){ const t = new Date(v).getTime(); return isNaN(t) ? 8.64e15 : t; }
+
+/* Customer statement as PDF (print dialog -> Save as PDF), to send the outstanding to the customer.
+   mode 'outstanding' = summary + unpaid invoices only,  mode 'full' = also the complete ledger. */
+function ledgerPdf(mode){
+  const c = window.LEDGER_CTX; if (!c) return toast('Open the ledger first.', true);
+  const cust = findCust(c.name) || {};
+  const outstanding = c.dr - c.cr;
+  const terms = paymentTermsOf(c.name);
+  const open = (c.invoices || []).filter(r => Number(r.outstanding) > 0.5)
+    .map(r => { const di = dueInfo(r.date, terms.days); return Object.assign({}, r, {due:di ? di.due : null, daysOver:di ? di.daysOver : null}); })
+    .sort((a, b) => ledgerTime(a.date) - ledgerTime(b.date));
+  const openTotal = open.reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
+  const overdueTotal = open.filter(r => r.daysOver !== null && r.daysOver > 0).reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
+  const statusTxt = r => r.daysOver === null ? '' : (r.daysOver > 0 ? '<span style="color:#b00020;font-weight:bold">Overdue ' + r.daysOver + ' day' + (r.daysOver === 1 ? '' : 's') + '</span>' : (r.daysOver === 0 ? 'Due today' : 'Due in ' + (-r.daysOver) + ' day' + (r.daysOver === -1 ? '' : 's')));
+  const th = (t, cls) => '<th' + (cls ? ' class="' + cls + '"' : '') + '>' + t + '</th>';
+
+  const openRows = open.map(r => '<tr><td>' + esc(r.no) + '</td><td>' + fmtDate(r.date) + '</td><td>' + (r.due ? fmtDate(r.due) : '—') + '</td><td class="r">' + money(r.total) + '</td><td class="r">' + money(r.paid) + '</td><td class="r"><b>' + money(r.outstanding) + '</b></td><td>' + statusTxt(r) + '</td></tr>').join('');
+  const openTable = open.length
+    ? '<table class="doc-items"><colgroup><col style="width:11%"><col style="width:17%"><col style="width:17%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr>' + th('Invoice #') + th('Invoice Date') + th('Due Date') + th('Total', 'r') + th('Received', 'r') + th('Outstanding', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
+      + '<tr><td colspan="5" class="tot-label">TOTAL OUTSTANDING</td><td class="r"><b>' + money(openTotal) + '</b></td><td></td></tr></tbody></table>'
+    : '<p style="margin:10px 0"><b>No outstanding invoices — account is settled.</b></p>';
+
+  const fullRows = c.entries.map(e => '<tr><td>' + (fmtDate(e.date) || '—') + '</td><td>' + e.kind + '</td><td>' + esc(e.ref) + '</td><td class="r">' + (e.debit ? money(e.debit) : '') + '</td><td class="r">' + (e.credit ? money(e.credit) : '') + '</td><td class="r"><b>' + money(e.bal) + '</b></td></tr>').join('');
+  const fullTable = mode === 'full'
+    ? '<div style="font-weight:bold;margin:20px 0 6px;font-size:13px">ACCOUNT STATEMENT (LEDGER)</div><table class="doc-items"><colgroup><col style="width:17%"><col style="width:10%"><col style="width:31%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr>' + th('Date') + th('Type') + th('Reference') + th('Debit', 'r') + th('Credit', 'r') + th('Balance', 'r') + '</tr></thead><tbody>' + (fullRows || '<tr><td colspan="6">No invoices or payments.</td></tr>')
+      + '<tr><td colspan="3" class="tot-label">TOTAL</td><td class="r"><b>' + money(c.dr) + '</b></td><td class="r"><b>' + money(c.cr) + '</b></td><td class="r"><b>' + money(outstanding) + '</b></td></tr></tbody></table>'
+      + '<div class="muted" style="margin-top:6px">Debit = Invoices (including GST), Credit = Payments received. Positive balance = amount due from you.</div>'
+    : '';
+
+  const box = (label, val, red) => '<td style="border:1px solid #333;padding:9px 10px;width:33%"><div style="font-size:10.5px;color:#555;font-weight:bold;text-transform:uppercase">' + label + '</div><div style="font-size:16px;font-weight:bold' + (red ? ';color:#b00020' : '') + '">Rs. ' + money(val) + '</div></td>';
+  const body = `
+    <div class="doc-head">
+      <div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div>
+      <div class="doc-head-right"><div class="doc-title">ACCOUNT STATEMENT</div></div>
+    </div>
+    <div class="doc-meta">
+      <div class="meta-left">
+        <div class="meta-line"><span class="meta-tag">M/S:</span><span class="cust-name">${esc(c.name)}</span></div>
+        <div class="meta-line"><span class="meta-tag">Address:</span><span>${esc(cust.Address || '')}</span></div>
+      </div>
+      <div class="meta-right">
+        <div class="meta-row"><span class="meta-label">Statement Date:</span><span class="meta-value">${fmtDate(todayStr())}</span></div>
+        <div class="meta-row"><span class="meta-label">Payment Terms:</span><span class="meta-value">${terms.days} days</span></div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:18px"><tr>${box('Total Invoiced', c.dr)}${box('Total Received', c.cr)}${box('Outstanding', outstanding, outstanding > 0.5)}</tr></table>
+    ${overdueTotal > 0.5 ? '<div style="margin:-4px 0 14px;font-size:12px;color:#b00020"><b>Overdue amount: Rs. ' + money(overdueTotal) + '</b> — kindly arrange payment at the earliest.</div>' : ''}
+    <div style="font-weight:bold;margin:0 0 6px;font-size:13px">OUTSTANDING INVOICES</div>
+    ${openTable}
+    ${fullTable}
+    <div class="doc-endblock doc-footer-note"><div class="muted">This is a computer-generated statement. Please report any difference within 7 days.</div><div class="doc-sign-block"><i>FOR STANDARD FLUID SYSTEMS</i></div></div>`;
+  printDoc(body, null, docFileName('Statement ' + todayStr(), c.name, 'Statement'));
+}
+window.ledgerPdf = ledgerPdf;
+
 async function ledger(type, nameEnc){
   const name = decodeURIComponent(nameEnc);
   const isCust = type === 'Customer';
@@ -1808,15 +1865,21 @@ async function ledger(type, nameEnc){
   if (inv.ok && pay.ok) {
     if (isCust) {
       const entries = [];
-      (inv.rows||[]).forEach(r => entries.push({t:new Date(r.date).getTime()||0, ord:0, date:r.date, kind:'Invoice', ref:r.no, debit:Number(r.total)||0, credit:0}));
-      (pay.payments||[]).forEach(x => entries.push({t:new Date(x.Date).getTime()||0, ord:1, date:x.Date, kind:'Payment', ref:[x['Invoice No.'], x.Method, x.Reference].filter(Boolean).join(' • '), debit:0, credit:Number(x.Amount)||0}));
+      (inv.rows||[]).forEach(r => entries.push({t:ledgerTime(r.date), ord:0, date:r.date, kind:'Invoice', ref:r.no, debit:Number(r.total)||0, credit:0}));
+      (pay.payments||[]).forEach(x => entries.push({t:ledgerTime(x.Date), ord:1, date:x.Date, kind:'Payment', ref:[x['Invoice No.'], x.Method, x.Reference].filter(Boolean).join(' • '), debit:0, credit:Number(x.Amount)||0}));
       entries.sort((a,b) => (a.t - b.t) || (a.ord - b.ord));
       let bal = 0, dr = 0, cr = 0;
       const rows = entries.map(e => {
-        bal += e.debit - e.credit; dr += e.debit; cr += e.credit;
+        bal += e.debit - e.credit; dr += e.debit; cr += e.credit; e.bal = bal;
         return `<tr><td>${fmtDate(e.date)}</td><td>${e.kind}</td><td>${esc(e.ref)}</td><td class="right">${e.debit ? money(e.debit) : ''}</td><td class="right">${e.credit ? money(e.credit) : ''}</td><td class="right"><b>${money(bal)}</b></td></tr>`;
       }).join('');
-      html += `<h4 style="margin:0 0 8px">Account Statement</h4>
+      window.LEDGER_CTX = {name:name, entries:entries, dr:dr, cr:cr, invoices:(inv.rows||[])};
+      html += `<div class="ledger-actions">
+          <button class="btn small primary" onclick="ledgerPdf('outstanding')">⬇ Outstanding PDF</button>
+          <button class="btn small" onclick="ledgerPdf('full')">⬇ Full Statement PDF</button>
+          <span class="muted small">Opens print dialog → choose “Save as PDF”</span>
+        </div>
+        <h4 style="margin:0 0 8px">Account Statement</h4>
         <div class="table-wrap"><table>
           <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th class="right">Debit</th><th class="right">Credit</th><th class="right">Balance</th></tr></thead>
           <tbody>${rows || '<tr><td colspan="6" class="empty">No invoices or payments.</td></tr>'}</tbody>
