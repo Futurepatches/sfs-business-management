@@ -1816,6 +1816,17 @@ async function saveParty(type){
 /* Date -> sortable number. Missing / invalid dates go to the END of the statement (not the top). */
 function ledgerTime(v){ const t = new Date(v).getTime(); return isNaN(t) ? 8.64e15 : t; }
 
+/* Sales Tax Invoice # is always 200 less than the Invoice #  (2000 -> 1800, 1200 -> 1000).
+   Worked out automatically for every invoice, old and new. If the gap ever changes, edit ST_INV_OFFSET only. */
+const ST_INV_OFFSET = 200;
+function salesTaxInvNo(invNo){
+  const s = String(invNo == null ? '' : invNo).trim();
+  const m = s.match(/^(.*?)(\d+)$/);            /* keeps any prefix, e.g. SFS-347 -> SFS-147 */
+  if (!m) return s;
+  const n = Number(m[2]) - ST_INV_OFFSET;
+  return n < 1 ? '—' : m[1] + String(n).padStart(m[2].length, '0');
+}
+
 /* Customer statement as PDF (print dialog -> Save as PDF), to send the outstanding to the customer.
    mode 'outstanding' = summary + unpaid invoices only,  mode 'full' = also the complete ledger. */
 function ledgerPdf(mode){
@@ -1842,7 +1853,7 @@ function ledgerPdf(mode){
     let exTxt = '—', gstTxt = '—';
     if (hasSub) { const ex = (Number(r.subtotal) || 0) * f, gst = out - ex; exTxt = money(ex); gstTxt = money(gst); sumEx += ex; sumGst += gst; } else anyMissing = true;
     sumNet += out; if (partial) anyPartial = true;
-    return '<tr><td>' + esc(r.no) + (partial ? ' *' : '') + '</td><td>' + esc(r.stInv || r.no) + '</td><td>' + shortDate(r.date) + '</td><td>' + esc(r.po || '') + '</td><td>' + shortDate(r.poDate) + '</td><td class="r">' + exTxt + '</td><td class="r">' + gstTxt + '</td><td class="r"><b>' + money(out) + '</b></td><td>' + statusTxt(r) + '</td></tr>';
+    return '<tr><td>' + esc(r.no) + (partial ? ' *' : '') + '</td><td>' + esc(r.stInv || salesTaxInvNo(r.no)) + '</td><td>' + shortDate(r.date) + '</td><td>' + esc(r.po || '') + '</td><td>' + shortDate(r.poDate) + '</td><td class="r">' + exTxt + '</td><td class="r">' + gstTxt + '</td><td class="r"><b>' + money(out) + '</b></td><td>' + statusTxt(r) + '</td></tr>';
   }).join('');
   const openTable = open.length
     ? '<table class="doc-items stmt"><colgroup><col style="width:7%"><col style="width:9%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:13%"><col style="width:11%"><col style="width:14%"><col style="width:12%"></colgroup><thead><tr>' + th('Inv #') + th('Sales Tax Inv #') + th('Inv Date') + th('PO #') + th('PO Date') + th('Amount excl. GST', 'r') + th('GST', 'r') + th('Net Amount', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
