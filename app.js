@@ -531,7 +531,7 @@ function drawPaymentDue(){
     + (groups.length ? '<div class="table-wrap"><table><thead><tr><th>Client</th><th>Terms</th><th>Outstanding</th><th>Overdue</th><th>Status</th><th></th></tr></thead><tbody>'
       + groups.slice(0, 15).map(g => '<tr><td><b>' + esc(g.customer) + '</b></td><td>' + g.terms + ' days' + (g.termsDefault ? ' <span class="muted small">(default)</span>' : '') + '</td><td><b>' + money(g.out) + '</b></td><td>' + (g.overdue > 0 ? '<span style="color:#c0392b"><b>' + money(g.overdue) + '</b></span>' : '—') + '</td><td>'
         + (g.maxOver > 0 ? dueBadge(g.maxOver) + (g.overdueN > 1 ? ' <span class="muted small">oldest of ' + g.overdueN + ' invoices</span>' : '') : (g.nextIn !== null ? dueBadge(-g.nextIn) : '<span class="muted">—</span>'))
-        + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
+        + '</td><td style="white-space:nowrap"><button class="btn small" onclick="paymentDueDetails(\'' + encA(g.customer) + '\')">Details</button> <button class="btn small" title="Download outstanding statement (PDF)" onclick="pdClientPdf(\'' + encA(g.customer) + '\')">⬇ PDF</button>' + (canEdit ? ' <button class="btn small ghost" onclick="editPaymentTerms(\'' + encA(g.customer) + '\')">Set Terms</button>' : '') + '</td></tr>').join('')
       + '</tbody></table></div>' + (groups.length > 15 ? '<div class="muted small" style="margin-top:8px">Showing 15 of ' + groups.length + ' clients. Use the filters above or open Accounts for the full list.</div>' : '')
       : '<div class="empty">' + ((PDF.q || PDF.st) ? 'No clients match this filter.' : 'No outstanding invoices — all settled!') + '</div>');
 }
@@ -555,6 +555,18 @@ function pdKpiDetails(key){
   modal(titles[key] || 'Outstanding', body + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>');
 }
 
+/* Dashboard: download the client's Outstanding statement (same PDF as Customer Ledger > Outstanding PDF).
+   Always uses ALL of the client's outstanding invoices, not just the ones left after the dashboard filters. */
+function pdClientPdf(nameEnc){
+  const name = decodeURIComponent(nameEnc);
+  const invs = (window.PAYDUE_INVS || []).filter(x => x.customer === name);
+  if (!invs.length) return toast('No outstanding invoices for this client.', true);
+  const dr = invs.reduce((a, x) => a + (Number(x.total) || 0), 0), cr = invs.reduce((a, x) => a + (Number(x.paid) || 0), 0);
+  window.LEDGER_CTX = {name:name, entries:[], dr:dr, cr:cr, invoices:invs};
+  ledgerPdf('outstanding');
+}
+window.pdClientPdf = pdClientPdf;
+
 function paymentDueDetails(nameEnc){
   const name = decodeURIComponent(nameEnc);
   const g = (window.PAYDUE_GROUPS || []).find(x => x.customer === name); if (!g) return;
@@ -563,7 +575,7 @@ function paymentDueDetails(nameEnc){
     '<div class="muted" style="margin-bottom:10px">Payment terms: <b>' + g.terms + ' days</b>' + (g.termsDefault ? ' (default — not set for this client)' : '') + ' • Outstanding: <b>' + money(g.out) + '</b></div>'
     + '<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Invoice Date</th><th>Due Date</th><th>Outstanding</th><th>Status</th></tr></thead><tbody>'
     + rows.map(x => '<tr><td>' + esc(x.no) + '</td><td>' + fmtDate(x.date) + '</td><td>' + (x.due ? fmtDate(x.due) : '—') + '</td><td><b>' + money(x.outstanding) + '</b></td><td>' + (x.daysOver === null ? '—' : dueBadge(x.daysOver)) + '</td></tr>').join('')
-    + '</tbody></table></div><div class="actions"><button class="btn" onclick="closeModal()">Close</button>' + (hasMod('parties') ? '<button class="btn primary" onclick="editPaymentTerms(\'' + encA(name) + '\')">Set Payment Terms</button>' : '') + '</div>');
+    + '</tbody></table></div><div class="actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="pdClientPdf(\'' + encA(name) + '\')">⬇ Outstanding PDF</button>' + (hasMod('parties') ? '<button class="btn primary" onclick="editPaymentTerms(\'' + encA(name) + '\')">Set Payment Terms</button>' : '') + '</div>');
 }
 
 function editPaymentTerms(nameEnc){
