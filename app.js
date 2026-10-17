@@ -1845,14 +1845,14 @@ function ledgerPdf(mode){
     return '<tr><td>' + esc(r.no) + (partial ? ' *' : '') + '</td><td>' + esc(r.stInv || r.no) + '</td><td>' + shortDate(r.date) + '</td><td>' + esc(r.po || '') + '</td><td>' + shortDate(r.poDate) + '</td><td class="r">' + exTxt + '</td><td class="r">' + gstTxt + '</td><td class="r"><b>' + money(out) + '</b></td><td>' + statusTxt(r) + '</td></tr>';
   }).join('');
   const openTable = open.length
-    ? '<table class="doc-items"><colgroup><col style="width:9%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:13%"><col style="width:12%"></colgroup><thead><tr>' + th('Inv #') + th('Sales Tax Inv #') + th('Inv Date') + th('PO #') + th('PO Date') + th('Amount excl. GST', 'r') + th('GST', 'r') + th('Net Amount', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
+    ? '<table class="doc-items stmt"><colgroup><col style="width:7%"><col style="width:9%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:13%"><col style="width:11%"><col style="width:14%"><col style="width:12%"></colgroup><thead><tr>' + th('Inv #') + th('Sales Tax Inv #') + th('Inv Date') + th('PO #') + th('PO Date') + th('Amount excl. GST', 'r') + th('GST', 'r') + th('Net Amount', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
       + '<tr><td colspan="5" class="tot-label">TOTAL OUTSTANDING</td><td class="r"><b>' + (anyMissing ? '—' : money(sumEx)) + '</b></td><td class="r"><b>' + (anyMissing ? '—' : money(sumGst)) + '</b></td><td class="r"><b>' + money(openTotal) + '</b></td><td></td></tr></tbody></table>'
       + (anyPartial ? '<div class="muted" style="margin-top:6px">* Part payment already received — amounts shown are for the balance due.</div>' : '')
     : '<p style="margin:10px 0"><b>No outstanding invoices — account is settled.</b></p>';
 
   const fullRows = c.entries.map(e => '<tr><td>' + (fmtDate(e.date) || '—') + '</td><td>' + e.kind + '</td><td>' + esc(e.ref) + '</td><td class="r">' + (e.debit ? money(e.debit) : '') + '</td><td class="r">' + (e.credit ? money(e.credit) : '') + '</td><td class="r"><b>' + money(e.bal) + '</b></td></tr>').join('');
   const fullTable = mode === 'full'
-    ? '<div style="font-weight:bold;margin:20px 0 6px;font-size:13px">ACCOUNT STATEMENT (LEDGER)</div><table class="doc-items"><colgroup><col style="width:17%"><col style="width:10%"><col style="width:31%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr>' + th('Date') + th('Type') + th('Reference') + th('Debit', 'r') + th('Credit', 'r') + th('Balance', 'r') + '</tr></thead><tbody>' + (fullRows || '<tr><td colspan="6">No invoices or payments.</td></tr>')
+    ? '<div style="font-weight:bold;margin:20px 0 6px;font-size:13px">ACCOUNT STATEMENT (LEDGER)</div><table class="doc-items stmt"><colgroup><col style="width:15%"><col style="width:9%"><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr>' + th('Date') + th('Type') + th('Reference') + th('Debit', 'r') + th('Credit', 'r') + th('Balance', 'r') + '</tr></thead><tbody>' + (fullRows || '<tr><td colspan="6">No invoices or payments.</td></tr>')
       + '<tr><td colspan="3" class="tot-label">TOTAL</td><td class="r"><b>' + money(c.dr) + '</b></td><td class="r"><b>' + money(c.cr) + '</b></td><td class="r"><b>' + money(outstanding) + '</b></td></tr></tbody></table>'
       + '<div class="muted" style="margin-top:6px">Debit = Invoices (including GST), Credit = Payments received. Positive balance = amount due from you.</div>'
     : '';
@@ -3013,9 +3013,11 @@ function impClear(){
 function impSheetTable(e, cls){
   const t = cls ? ' class="' + cls + '"' : '';
   const rows = e.rows.map(r => '<tr><td><b>' + esc(r.model) + '</b></td><td class="r">' + r.qty + '</td><td class="r">' + money(r.price) + '</td><td class="r">' + money(r.valPkr) + '</td><td class="r">' + money(r.share) + '</td><td class="r">' + money(r.landed) + '</td><td class="r"><b>' + money(r.unitCost) + '</b></td><td class="r">' + (r.sale ? money(r.sale) : '') + '</td><td class="r">' + (r.margin === null || r.margin === undefined ? '' : r.margin.toFixed(1) + '%') + '</td></tr>').join('');
-  const items = '<table' + t + '><thead><tr><th>Model</th><th class="r">Qty</th><th class="r">Price (' + esc(e.cur) + ')</th><th class="r">Value Rs.</th><th class="r">Charges Rs.</th><th class="r">Landed Rs.</th><th class="r">Landed / Unit</th><th class="r">Sale Price</th><th class="r">Margin</th></tr></thead><tbody>' + rows
+  const cgI = cls ? '<colgroup><col style="width:19%"><col style="width:6%"><col style="width:10%"><col style="width:12%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:10%"><col style="width:9%"></colgroup>' : '';
+  const cgC = cls ? '<colgroup><col style="width:38%"><col style="width:18%"><col style="width:14%"><col style="width:18%"><col style="width:12%"></colgroup>' : '';
+  const items = '<table' + t + '>' + cgI + '<thead><tr><th>Model</th><th class="r">Qty</th><th class="r">Price (' + esc(e.cur) + ')</th><th class="r">Value Rs.</th><th class="r">Charges Rs.</th><th class="r">Landed Rs.</th><th class="r">Landed / Unit</th><th class="r">Sale Price</th><th class="r">Margin</th></tr></thead><tbody>' + rows
     + '<tr><td colspan="3"><b>TOTAL</b></td><td class="r"><b>' + money(e.totVal) + '</b></td><td class="r"><b>' + money(e.inc) + '</b></td><td class="r"><b>' + money(e.totLanded) + '</b></td><td colspan="3"></td></tr></tbody></table>';
-  const ch = '<table' + t + '><thead><tr><th>Charge</th><th class="r">Amount</th><th>Currency</th><th class="r">In Rs.</th><th>In cost?</th></tr></thead><tbody>'
+  const ch = '<table' + t + '>' + cgC + '<thead><tr><th>Charge</th><th class="r">Amount</th><th>Currency</th><th class="r">In Rs.</th><th>In cost?</th></tr></thead><tbody>'
     + e.charges.filter(c => c.amt).map(c => '<tr><td>' + esc(c.name) + '</td><td class="r">' + money(c.amt) + '</td><td>' + (c.cur === 'inv' ? esc(e.cur) : 'PKR') + '</td><td class="r">' + money(c.pkr) + '</td><td>' + (c.inc ? 'Yes' : 'No') + '</td></tr>').join('') + '</tbody></table>';
   return {items:items, charges:e.charges.some(c => c.amt) ? ch : ''};
 }
@@ -3033,7 +3035,7 @@ function impFindEntry(id){
 function impPrintSheet(id){
   const e = impFindEntry(id) || (IMP.h && impValidate().ok ? impEntry(impValidate().calc) : null);
   if (!e) return toast('Costing sheet not found.', true);
-  const t = impSheetTable(e, 'doc-items');
+  const t = impSheetTable(e, 'doc-items stmt');
   const body = `<div class="doc-head"><div class="doc-head-left"><img src="${printLogoSrc()}" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">IMPORT COSTING SHEET</div></div></div>
     <div style="color:#b00020;font-weight:bold;font-size:11px;margin:-10px 0 12px">CONFIDENTIAL — INTERNAL USE ONLY</div>
     <div class="doc-meta"><div class="meta-left"><div class="meta-line"><span class="meta-tag">Supplier:</span><span>${esc(e.supplier || '—')}</span></div><div class="meta-line"><span class="meta-tag">Invoice / BL:</span><span>${esc(e.ref || '—')}</span></div></div>
