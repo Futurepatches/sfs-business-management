@@ -2675,9 +2675,14 @@ function impDefaultCharges(){
 }
 function impNum(v){ const n = Number(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
 function impR2(n){ return Math.round((Number(n) || 0) * 100) / 100; }
-function impHistKey(){ return 'sfsImportHistory:' + ((S.user && S.user.username) || 'user'); }
-function impHistory(){ try { return JSON.parse(localStorage.getItem(impHistKey()) || '[]') || []; } catch(e){ return []; } }
-function impHistorySave(list){ try { localStorage.setItem(impHistKey(), JSON.stringify(list.slice(0, 100))); } catch(e){} }
+let IMP_HIST = [];
+function impHistory(){ return IMP_HIST; }
+async function impLoadHistory(){
+  const r = await api('getImportCostings', {});
+  if (r && r.ok) IMP_HIST = r.imports || [];
+  else if (r && r.error && !/unknown action/i.test(r.error)) toast(r.error, true);
+  impRenderHistory();
+}
 
 function impPageHtml(){
   return `<div class="wrap" id="impPage">
@@ -2714,6 +2719,7 @@ function impPageHtml(){
       <button class="btn primary" onclick="impSave()">Save Import → Products + Inward Stock</button>
     </div>
 
+    <div class="panel" id="impProfit"></div>
     <div class="panel" id="impHistory"></div>
   </div>`;
 }
@@ -2726,7 +2732,7 @@ function renderImports(){
   $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
   $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
   IMP.h = h; impSyncRateBox();
-  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impLoadHistory();
 }
 function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
 function impHdr(){
@@ -2925,11 +2931,17 @@ async function impSave(){
       }
     }
     delete IMP_DONE[key];
-    const list = impHistory(); list.unshift(entry); impHistorySave(list);
+    const cs = await api('saveImportCosting', {date:h.date, supplier:h.supplier, ref:h.ref, cur:c.cur, rate:c.rate, method:c.method,
+      charges:c.charges, rows:c.rows.map(r => ({model:r.model, desc:r.desc, qty:r.qty, price:r.price, valCur:r.valCur, valPkr:r.valPkr, share:r.share, landed:r.landed, unitCost:r.unitCost, sale:r.sale, newCost:r.newCost}))});
+    window.IMP_PREVIEW_ENTRY = entry;
+    const costingSaved = !!(cs && cs.ok);
+    if (costingSaved) { entry.id = cs.id; IMP_HIST.unshift(entry); }
     IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''});
     if (prog) prog.textContent = '';
     await refresh();
     modal('Import Saved ✓', `<p><b>${c.rows.length}</b> item(s) saved — ${nNew} new product(s) created and stock increased.<br>Landed cost per unit has been saved as the product Cost Price.</p>`
+      + (costingSaved ? '<p class="muted small">Costing sheet saved securely on the server (Imports access only).</p>'
+                      : '<p style="color:#c0392b"><b>Warning:</b> products and stock were saved, but the costing sheet could not be stored on the server (' + esc((cs && cs.error) || 'unknown error') + '). Please download the PDF / CSV below now and keep it.</p>')
       + impSheetModalHtml(entry, true) );
   });
 }
@@ -2992,22 +3004,66 @@ function impCsv(id){
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
-/* ---------- past imports (kept in THIS browser only) ---------- */
+
+/* ---------- PROFIT REPORT (server calculates; Admin / Imports access only) ---------- */
+const IMP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function impRenderProfit(){
+  const host = $('impProfit'); if (!host) return;
+  const y = new Date().getFullYear();
+  const prev = host.dataset.year || String(y), prevM = host.dataset.month || '0';
+  host.innerHTML = `<div class="panel-head"><h3>Profit Report</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="impPYear" class="imp-in">${[y, y - 1, y - 2, y - 3].map(v => '<option' + (String(v) === prev ? ' selected' : '') + '>' + v + '</option>').join('')}</select>
+        <select id="impPMonth" class="imp-in"><option value="0">Whole year</option>${IMP_MONTHS.map((m, i) => '<option value="' + (i + 1) + '"' + (String(i + 1) === prevM ? ' selected' : '') + '>' + m + '</option>').join('')}</select>
+        <button class="btn small primary" onclick="impLoadProfit()">Show Profit</button>
+      </div></div>
+    <div id="impProfitBody" class="muted">Choose a year (and month) and press “Show Profit”. Sales are taken without GST; cost = quantity sold × the product’s current Cost Price.</div>`;
+}
+async function impLoadProfit(){
+  const year = Number($('impPYear').value), month = Number($('impPMonth').value);
+  $('impProfit').dataset.year = year; $('impProfit').dataset.month = month;
+  const r = await api('getProfit', {year:year, month:month});
+  const body = $('impProfitBody');
+  if (!r || !r.ok) { body.innerHTML = '<span style="color:#c0392b">' + esc((r && r.error) || 'Could not load profit.') + (r && /unknown action/i.test(r.error || '') ? ' (update the Apps Script backend first)' : '') + '</span>'; return; }
+  const t = r.totals, cls = v => v < 0 ? 'amt-due' : 'amt-ok';
+  const label = month ? IMP_MONTHS[month - 1] + ' ' + year : String(year);
+  body.innerHTML = `<div class="imp-sum">
+      <div><span>Sales ${label} (excl. GST)</span><b>${money(t.sales)}</b></div>
+      <div><span>Cost of goods sold</span><b>${money(t.cost)}</b></div>
+      <div class="hi"><span>Profit</span><b class="${cls(t.profit)}">${money(t.profit)}</b></div>
+      <div><span>Profit margin</span><b>${t.marginPct === null ? '—' : t.marginPct.toFixed(1) + '%'}</b></div>
+    </div>
+    ${t.noCostLines ? '<div class="imp-warn">⚠ ' + t.noCostLines + ' invoice line(s) worth Rs. ' + money(t.noCostSales) + ' have <b>no Cost Price</b> on the product, so their profit is not counted. Import them (or enter a cost) to complete the report.</div>' : ''}
+    <h4 style="margin:18px 0 8px">Month by month — ${year}</h4>
+    <div class="table-wrap"><table class="imp-table"><thead><tr><th>Month</th><th class="right">Sales</th><th class="right">Cost</th><th class="right">Profit</th></tr></thead><tbody>
+      ${r.monthly.map(m => '<tr' + (month === m.month ? ' style="background:#eef0ff"' : '') + '><td>' + IMP_MONTHS[m.month - 1] + '</td><td class="right">' + money(m.sales) + '</td><td class="right">' + money(m.cost) + '</td><td class="right ' + cls(m.profit) + '"><b>' + money(m.profit) + '</b></td></tr>').join('')}
+    </tbody></table></div>
+    <h4 style="margin:18px 0 8px">By category — ${label}</h4>
+    <div class="table-wrap"><table class="imp-table"><thead><tr><th>Category</th><th class="right">Sales</th><th class="right">Cost</th><th class="right">Profit</th></tr></thead><tbody>
+      ${r.byCategory.length ? r.byCategory.map(c => '<tr><td>' + esc(c.category) + '</td><td class="right">' + money(c.sales) + '</td><td class="right">' + money(c.cost) + '</td><td class="right ' + cls(c.profit) + '"><b>' + money(c.profit) + '</b></td></tr>').join('') : '<tr><td colspan="4" class="muted">No sales in this period.</td></tr>'}
+    </tbody></table></div>
+    <h4 style="margin:18px 0 8px">Top products by profit — ${label}</h4>
+    <div class="table-wrap"><table class="imp-table"><thead><tr><th>Model</th><th class="right">Qty sold</th><th class="right">Sales</th><th class="right">Cost</th><th class="right">Profit</th></tr></thead><tbody>
+      ${r.topProducts.length ? r.topProducts.map(p => '<tr><td><b>' + esc(p.model) + '</b>' + (p.noCost ? ' <span class="imp-tag old">no cost</span>' : '') + '</td><td class="right">' + p.qty + '</td><td class="right">' + money(p.sales) + '</td><td class="right">' + money(p.cost) + '</td><td class="right ' + cls(p.profit) + '"><b>' + money(p.profit) + '</b></td></tr>').join('') : '<tr><td colspan="5" class="muted">No sales in this period.</td></tr>'}
+    </tbody></table></div>`;
+}
+window.impLoadProfit = impLoadProfit;
+
+/* ---------- past imports (stored on the server) ---------- */
 function impRenderHistory(){
   const host = $('impHistory'); if (!host) return;
   const list = impHistory();
-  host.innerHTML = '<div class="panel-head"><h3>Past Imports</h3><span class="muted small">Saved on this browser only — download the CSV / PDF of each import to keep a permanent copy.</span></div>'
+  host.innerHTML = '<div class="panel-head"><h3>Past Imports</h3><span class="muted small">Stored on the server — visible only to Admin and users with Imports access.</span></div>'
     + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Ref</th><th class="right">Items</th><th class="right">Landed Cost (Rs.)</th><th></th></tr></thead><tbody>'
       + list.slice(0, 20).map(e => `<tr><td>${fmtDate(e.date)}</td><td>${esc(e.supplier)}</td><td>${esc(e.ref)}</td><td class="right">${e.rows.length}</td><td class="right"><b>${money(e.totLanded)}</b></td>
-          <td style="white-space:nowrap"><button class="btn small" onclick="impViewEntry('${e.id}')">View</button> <button class="btn small danger" onclick="impDelEntry('${e.id}')">Delete</button></td></tr>`).join('')
+          <td style="white-space:nowrap"><button class="btn small" onclick="impViewEntry('${e.id}')">View</button></td></tr>`).join('')
       + '</tbody></table></div>' : '<div class="muted">No imports saved yet.</div>');
 }
 function impViewEntry(id){ const e = impFindEntry(id); if (e) modal('Import Costing — ' + (e.ref || fmtDate(e.date)), impSheetModalHtml(e, false)); }
-function impDelEntry(id){ if (!confirm('Delete this saved costing sheet from this browser? (Products and stock are not affected.)')) return; impHistorySave(impHistory().filter(x => x.id !== id)); impRenderHistory(); }
 window.renderImports = renderImports; window.impHdr = impHdr; window.impChg = impChg; window.impAddCharge = impAddCharge; window.impDelCharge = impDelCharge;
 window.impSet = impSet; window.impAddRow = impAddRow; window.impDelRow = impDelRow; window.impModel = impModel; window.impPasteForm = impPasteForm; window.impPasteApply = impPasteApply;
 window.impPreview = impPreview; window.impSave = impSave; window.impClear = impClear; window.impPrintSheet = impPrintSheet; window.impCsv = impCsv;
-window.impViewEntry = impViewEntry; window.impDelEntry = impDelEntry;
+window.impViewEntry = impViewEntry;
 
 /* ---------- INIT ---------- */
 function showLogin(){
