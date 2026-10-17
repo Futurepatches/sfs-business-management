@@ -1831,10 +1831,23 @@ function ledgerPdf(mode){
   const statusTxt = r => r.daysOver === null ? '' : (r.daysOver > 0 ? '<span style="color:#b00020;font-weight:bold">Overdue ' + r.daysOver + ' day' + (r.daysOver === 1 ? '' : 's') + '</span>' : (r.daysOver === 0 ? 'Due today' : 'Due in ' + (-r.daysOver) + ' day' + (r.daysOver === -1 ? '' : 's')));
   const th = (t, cls) => '<th' + (cls ? ' class="' + cls + '"' : '') + '>' + t + '</th>';
 
-  const openRows = open.map(r => '<tr><td>' + esc(r.no) + '</td><td>' + fmtDate(r.date) + '</td><td>' + (r.due ? fmtDate(r.due) : '—') + '</td><td class="r">' + money(r.total) + '</td><td class="r">' + money(r.paid) + '</td><td class="r"><b>' + money(r.outstanding) + '</b></td><td>' + statusTxt(r) + '</td></tr>').join('');
+  /* Outstanding invoices table: Inv #, Sales Tax Inv #, Inv Date, PO #, PO Date, Amount excl. GST, GST, Net Amount.
+     A part-paid invoice is shown for its BALANCE only (amounts scaled), so the column total always equals the outstanding. */
+  const shortDate = v => { if (!v) return '—'; const d = new Date(v); if (isNaN(d)) return esc(v); return String(d.getDate()).padStart(2, '0') + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '-' + d.getFullYear(); };
+  let anyPartial = false, anyMissing = false, sumEx = 0, sumGst = 0, sumNet = 0;
+  const openRows = open.map(r => {
+    const total = Number(r.total) || 0, out = Number(r.outstanding) || 0;
+    const f = total > 0 ? Math.min(1, out / total) : 1, partial = f < 0.9999;
+    const hasSub = r.subtotal !== undefined && r.subtotal !== null && r.subtotal !== '';
+    let exTxt = '—', gstTxt = '—';
+    if (hasSub) { const ex = (Number(r.subtotal) || 0) * f, gst = out - ex; exTxt = money(ex); gstTxt = money(gst); sumEx += ex; sumGst += gst; } else anyMissing = true;
+    sumNet += out; if (partial) anyPartial = true;
+    return '<tr><td>' + esc(r.no) + (partial ? ' *' : '') + '</td><td>' + esc(r.stInv || r.no) + '</td><td>' + shortDate(r.date) + '</td><td>' + esc(r.po || '') + '</td><td>' + shortDate(r.poDate) + '</td><td class="r">' + exTxt + '</td><td class="r">' + gstTxt + '</td><td class="r"><b>' + money(out) + '</b></td><td>' + statusTxt(r) + '</td></tr>';
+  }).join('');
   const openTable = open.length
-    ? '<table class="doc-items"><colgroup><col style="width:11%"><col style="width:17%"><col style="width:17%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr>' + th('Invoice #') + th('Invoice Date') + th('Due Date') + th('Total', 'r') + th('Received', 'r') + th('Outstanding', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
-      + '<tr><td colspan="5" class="tot-label">TOTAL OUTSTANDING</td><td class="r"><b>' + money(openTotal) + '</b></td><td></td></tr></tbody></table>'
+    ? '<table class="doc-items"><colgroup><col style="width:9%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:13%"><col style="width:12%"></colgroup><thead><tr>' + th('Inv #') + th('Sales Tax Inv #') + th('Inv Date') + th('PO #') + th('PO Date') + th('Amount excl. GST', 'r') + th('GST', 'r') + th('Net Amount', 'r') + th('Status') + '</tr></thead><tbody>' + openRows
+      + '<tr><td colspan="5" class="tot-label">TOTAL OUTSTANDING</td><td class="r"><b>' + (anyMissing ? '—' : money(sumEx)) + '</b></td><td class="r"><b>' + (anyMissing ? '—' : money(sumGst)) + '</b></td><td class="r"><b>' + money(openTotal) + '</b></td><td></td></tr></tbody></table>'
+      + (anyPartial ? '<div class="muted" style="margin-top:6px">* Part payment already received — amounts shown are for the balance due.</div>' : '')
     : '<p style="margin:10px 0"><b>No outstanding invoices — account is settled.</b></p>';
 
   const fullRows = c.entries.map(e => '<tr><td>' + (fmtDate(e.date) || '—') + '</td><td>' + e.kind + '</td><td>' + esc(e.ref) + '</td><td class="r">' + (e.debit ? money(e.debit) : '') + '</td><td class="r">' + (e.credit ? money(e.credit) : '') + '</td><td class="r"><b>' + money(e.bal) + '</b></td></tr>').join('');
