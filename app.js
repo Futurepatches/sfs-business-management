@@ -35,7 +35,8 @@ let S = {
 
 const $  = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const norm = s => String(s||'').toLowerCase().trim();
+const cleanName = s => String(s == null ? '' : s).replace(/[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/g, ' ').replace(/\s+/g, ' ').trim();
+const norm = s => cleanName(s).toLowerCase();
 /* encA: safe encoding inside onclick="fn('...')" (apostrophes are encoded too) */
 const encA = s => encodeURIComponent(String(s ?? '')).replace(/'/g, '%27');
 function toInputDate(v){
@@ -482,6 +483,12 @@ function dueBadge(daysOver){
   return '<span style="' + sty('#e8f6ee', '#1a7f3c') + '">Due in ' + (-daysOver) + ' days</span>';
 }
 
+/* One display name per client: the Customers-sheet name if the client exists there, otherwise the first spelling seen.
+   Names that differ only by case / extra or odd spaces become the same client. */
+function pdCanonName(){
+  const canon = {};
+  return n => { const k = norm(n); if (!(k in canon)) { const c = findCust(n); canon[k] = cleanName(c ? c['Customer Name'] : n); } return canon[k]; };
+}
 const PDF = {st:'', q:''};
 async function loadPaymentDue(){
   const host = $('paymentDueSection'); if (!host) return;
@@ -489,9 +496,10 @@ async function loadPaymentDue(){
   const r = await api('getOutstanding', {});
   const host2 = $('paymentDueSection'); if (!host2) return;
   if (!r.ok) { host2.innerHTML = ''; return; }
+  const canonName = pdCanonName();
   window.PAYDUE_INVS = (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
-    const t = paymentTermsOf(x.customer), di = dueInfo(x.date, t.days);
-    return Object.assign({}, x, {terms:t.days, termsDefault:t.isDefault, due:di ? di.due : null, daysOver:di ? di.daysOver : null});
+    const cust = canonName(x.customer), t = paymentTermsOf(cust), di = dueInfo(x.date, t.days);
+    return Object.assign({}, x, {customer:cust, terms:t.days, termsDefault:t.isDefault, due:di ? di.due : null, daysOver:di ? di.daysOver : null});
   });
   host2.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 class="section-title" style="margin-bottom:3px">Payments Due &amp; Overdue</h3><div class="muted">Based on each client\'s payment terms (default ' + DEFAULT_PAYMENT_TERMS_DAYS + ' days where not set)</div></div><button class="btn small" onclick="showPage(\'accounts\')">Open Accounts →</button></div>'
     + '<div class="toolbar" style="flex-wrap:wrap"><input id="pdQ" type="search" placeholder="Search client…" oninput="pdFilter()" style="flex:1;min-width:200px"><select id="pdSt" onchange="pdFilter()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select><button class="btn ghost small" onclick="clearFilters([\'pdQ\',\'pdSt\'],pdFilter)">Clear</button></div>'
