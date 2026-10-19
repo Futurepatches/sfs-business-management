@@ -2232,7 +2232,9 @@ function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enq
 /* ---------- Email enquiries: tag, long text, reply ---------- */
 function enqSrcHtml(d){
   if (d.source !== 'Email') return '';
-  return '<div class="enq-src"><span class="imp-tag new">✉ Email</span>' + (d.email ? ' <span class="muted small">' + esc(d.email) + '</span>' : '') + '</div>';
+  return '<div class="enq-src"><span class="imp-tag new">✉ Email</span>' + (d.email ? ' <span class="muted small">' + esc(d.email) + '</span>' : '')
+    + (d.attachments && d.attachments.length ? ' <span class="muted small" title="Original files attached">📎 ' + d.attachments.length + '</span>' : '')
+    + (d.needsReview ? ' <span class="imp-tag enq-check" title="' + esc(d.aiNote || 'Please check this enquiry against the original mail') + '">⚠ Check</span>' : '') + '</div>';
 }
 function enqReqHtml(d){
   const t = String(d.requirement || ''), sub = d.source === 'Email' && d.subject ? '<div><b>' + esc(d.subject) + '</b></div>' : '';
@@ -2253,7 +2255,9 @@ function enqReplyHtml(d){
 function enqViewFull(en){
   const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(en)); if (!d) return;
   modal('Enquiry ' + d.id + (d.subject ? ' — ' + d.subject : ''),
-    '<div class="muted" style="margin-bottom:10px">' + esc(d.customerName) + (d.email ? ' • ' + esc(d.email) : '') + (d.phone ? ' • ' + esc(d.phone) : '') + ' • ' + fmtDate(d.date) + '</div>'
+    '<div class="muted" style="margin-bottom:10px">' + esc(d.customerName) + (d.email ? ' • ' + esc(d.email) : '') + (d.phone ? ' • ' + esc(d.phone) : '') + ' • ' + fmtDate(d.date) + (d.parsedBy ? ' • read by ' + esc(d.parsedBy === 'AI' ? 'AI' : 'basic rules') : '') + '</div>'
+    + (d.needsReview || d.aiNote ? '<div class="imp-warn" style="margin:0 0 12px">' + (d.needsReview ? '<b>⚠ Please check against the original mail / files.</b> ' : '') + esc(d.aiNote || '') + '</div>' : '')
+    + (d.attachments && d.attachments.length ? '<div style="margin:0 0 12px;display:flex;gap:8px;flex-wrap:wrap">' + d.attachments.map(a => '<a class="btn small" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(a.url) + '">📎 ' + esc(a.name) + '</a>').join('') + '</div>' : '')
     + (d.items && d.items.length ? '<h4 style="margin:6px 0 8px">Requested items' + (d.customerRef ? ' — Ref ' + esc(d.customerRef) : '') + '</h4><div class="table-wrap"><table><thead><tr><th>#</th><th>Description</th><th class="right">Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody>'
         + d.items.map((it, i) => '<tr><td>' + esc(it.sn || i + 1) + '</td><td>' + esc(it.desc) + '</td><td class="right"><b>' + esc(it.qty) + '</b></td><td>' + esc(it.unit) + '</td><td class="muted small">' + esc(it.note) + '</td></tr>').join('') + '</tbody></table></div>' : '')
     + '<details style="margin-top:12px"' + (d.items && d.items.length ? '' : ' open') + '><summary style="cursor:pointer;font-weight:600">Original mail text</summary><div style="white-space:pre-wrap;max-height:40vh;overflow:auto;margin-top:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafbff">' + esc(d.requirement) + '</div></details>'
