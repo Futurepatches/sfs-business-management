@@ -60,7 +60,7 @@ const HEADERS = {
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
   'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Revision Of','Make','Delivery Status','Payment Terms','Contact','GST %','Enquiry ID','Status','Loss Reason','Discount %'],
   'Enquiries':['Enquiry ID','Date','Customer Name','Contact Person','Phone','Requirement','Status','Quotation No.','Loss Reason','Created By'],
-  'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
+  'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status','Price Adjustment (%)'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status','Modules'],
   'Categories':['Category ID','Category Name'],
@@ -208,6 +208,7 @@ function dispatch_(action, p, user) {
 
     case 'updateCustomer':
       if ((d = need_(user, 'parties', 'Parties module'))) return d;
+      ensureCustomerPriceAdjustmentColumn_();
       return updateCustomer(p);
 
     case 'setCustomerStatus':
@@ -256,6 +257,10 @@ function dispatch_(action, p, user) {
     case 'quotationHistory':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
       return getQuotationHistory_();
+
+    case 'quotationItemHistory':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      return getQuotationItemHistory_(p);
 
     case 'updateQuotationStatus':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
@@ -438,6 +443,7 @@ function setupDatabase() {
   ensureReorderLevelColumn_();
   ensureInvoiceGstColumn_();
   ensurePaymentTaxColumns_();
+  ensureCustomerPriceAdjustmentColumn_();
 
   Object.keys(HEADERS).forEach(name => { ensureSheet(name, HEADERS[name]); });
 
@@ -726,6 +732,11 @@ function getProductMap_() {
   return map;
 }
 
+function ensureCustomerPriceAdjustmentColumn_() {
+  // Append the new field without moving or overwriting existing customer columns.
+  ensureSheet('Customers', HEADERS.Customers);
+}
+
 function ensureInvoiceGstColumn_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Invoices');
   if (!sh) return;
@@ -905,7 +916,24 @@ function setPartyStatus_(sheetName, nameCol, statusCol, p, authUser) {
   throw Error(sheetName.slice(0, -1) + ' not found: ' + name);
 }
 
-function updateCustomer(p) { return updateParty_('Customers', 2, p); }
+function updateCustomer(p) {
+  ensureCustomerPriceAdjustmentColumn_();
+  const raw = p.priceAdjustmentPct !== undefined ? p.priceAdjustmentPct : p.markupPercent;
+  let pct;
+  if (p.priceAdjustmentPct !== undefined || p.markupPercent !== undefined) {
+    pct = isBlank_(raw) ? 0 : Number(raw);
+    if (!isFinite(pct) || pct < -100 || pct > 1000) throw Error('Price adjustment must be between -100% and 1000%.');
+  }
+  const result = updateParty_('Customers', 2, p);
+  if (pct !== undefined) {
+    const sh = SpreadsheetApp.getActive().getSheetByName('Customers');
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const col = headers.indexOf('Price Adjustment (%)') + 1;
+    const vals = sh.getDataRange().getValues();
+    for (let i = 1; i < vals.length; i++) if (normName_(vals[i][1]) === normName_(p.name)) { sh.getRange(i + 1, col).setValue(pct); break; }
+  }
+  return result;
+}
 function setCustomerStatus_(p, authUser) { return setPartyStatus_('Customers', 2, 9, p, authUser); }
 function updateSupplier(p) { return updateParty_('Suppliers', 2, p); }
 function setSupplierStatus_(p, authUser) { return setPartyStatus_('Suppliers', 2, 9, p, authUser); }
@@ -1263,6 +1291,23 @@ function saveQuotation(p) {
   return {ok:true, id:no, subtotal:round2_(gross - gross * discount / 100)};
 }
 
+function getQuotationItemHistory_(p) {
+  const customerId = String(p.customerId || '').trim(), customer = normName_(p.customer || ''), model = normName_(p.model || '');
+  if (!model || (!customerId && !customer)) return {ok:true, history:null};
+  const matches = [];
+  objectsFromSheet_('Invoices').forEach((r, index) => {
+    if (normName_(r['Model / Part No.']) !== model) return;
+    const sameCustomer = customerId ? String(r['Customer ID'] || '').trim() === customerId : normName_(r['Customer Name']) === customer;
+    if (!sameCustomer) return;
+    const rawDate = r['Date'], date = toDate_(rawDate);
+    matches.push({invoiceNo:String(r['Invoice No.'] || '').trim(), date:date || rawDate || '', po:String(r['PO #'] || '').trim(), rate:num_(r['Rate / Unit']), _sort:date ? date.getTime() : 0, _index:index});
+  });
+  matches.sort((a,b) => b._sort - a._sort || b._index - a._index);
+  const latest = matches[0] || null;
+  if (latest) { delete latest._sort; delete latest._index; }
+  return {ok:true, history:latest};
+}
+
 function getQuotationHistory_() {
   ensureQuotationSheet_();
   const rows = objectsFromSheet_('Quotations');
@@ -1606,6 +1651,7 @@ function bootstrap_(p) {
   ensureReorderLevelColumn_();
   ensureInvoiceGstColumn_();
   ensureModulesColumn_();
+  ensureCustomerPriceAdjustmentColumn_();
 
   const can = m => hasModule_(user, m);
   // Sales needs products + customers (DC / Invoice), Inward needs suppliers, Accounts needs customers/suppliers
@@ -1678,19 +1724,23 @@ function getMovementObjectsForFrontend_() {
 }
 
 function saveCustomer_(p, user) {
+  ensureCustomerPriceAdjustmentColumn_();
   const name = String(p.name || '').trim();
   if (!name) throw Error('Customer name is required.');
   if (objectsFromSheet_('Customers').some(c => normName_(c['Customer Name']) === normName_(name))) {
     throw Error('Customer already exists: ' + name);
   }
   const id = nextSafeId_('CUST-', 'Customers', 1);
-  appendRows_('Customers', [[
-    id, name,
-    String(p.contact || p.contactPerson || '').trim(),
-    String(p.phone || '').trim(), String(p.email || '').trim(),
-    String(p.address || '').trim(), String(p.ntn || '').trim(),
-    String(p.remarks || '').trim(), 'Active'
-  ]]);
+  const rawPct = p.priceAdjustmentPct !== undefined ? p.priceAdjustmentPct : (p.markupPercent !== undefined ? p.markupPercent : 0);
+  const pct = isBlank_(rawPct) ? 0 : Number(rawPct);
+  if (!isFinite(pct) || pct < -100 || pct > 1000) throw Error('Price adjustment must be between -100% and 1000%.');
+  appendByHeaders_('Customers', [{
+    'Customer ID':id, 'Customer Name':name,
+    'Contact Person':String(p.contact || p.contactPerson || '').trim(),
+    'Phone':String(p.phone || '').trim(), 'Email':String(p.email || '').trim(),
+    'Address':String(p.address || '').trim(), 'NTN/Tax ID':String(p.ntn || '').trim(),
+    'Remarks':String(p.remarks || '').trim(), 'Status':'Active', 'Price Adjustment (%)':pct
+  }]);
   return {ok:true, id:id};
 }
 
