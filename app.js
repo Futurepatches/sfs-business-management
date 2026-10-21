@@ -3754,3 +3754,154 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     discard:function(){ dirty=false; baseline=''; navigate(); }
   };
 })();
+
+/* ============================================================
+   NOTIFICATION BELL (header)
+   Low Stock • Overdue Payments • Pending Enquiries
+   Read-only add-on: only reads data the ERP already loads, never saves anything.
+   Respects module access: each section shows only if the user can open that module.
+   ============================================================ */
+(function(){
+  var NB = {low:[], overdue:[], soon:[], enq:[], loading:false, loadedAt:0};
+
+  function canSee(mod){ try { return typeof hasMod === 'function' && hasMod(mod); } catch(e){ return false; } }
+
+  function ensureBell(){
+    var host = document.querySelector('header .header-actions');
+    if (!host || document.getElementById('nbBell')) return;
+    var st = document.createElement('style');
+    st.textContent = '#nbBell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0}'
+      + '#nbBell svg{width:19px;height:19px}'
+      + '#nbBell .nb-count{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#c0392b;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;box-shadow:0 0 0 2px #fff}'
+      + '#nbBell .nb-count.hidden{display:none}'
+      + '.nb-sec{margin:0 0 18px}.nb-sec h4{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;gap:10px}'
+      + '.nb-sec .table-wrap{max-height:260px;overflow:auto}.nb-empty{color:#1a7f3c;font-weight:600;padding:6px 0}'
+      + '@media print{#nbBell{display:none!important}}';
+    document.head.appendChild(st);
+    var b = document.createElement('button');
+    b.id = 'nbBell'; b.type = 'button'; b.className = 'btn'; b.title = 'Notifications';
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="nb-count hidden" id="nbCount">0</span>';
+    b.onclick = function(){ openPanel(); };
+    host.insertBefore(b, host.firstChild);
+  }
+
+  function setCount(){
+    var el = document.getElementById('nbCount'); if (!el) return;
+    var n = NB.low.length + NB.overdue.length + NB.enq.length;
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.classList.toggle('hidden', n === 0);
+    var b = document.getElementById('nbBell');
+    if (b) b.title = n ? (n + ' notification' + (n === 1 ? '' : 's')) : 'No notifications';
+  }
+
+  async function load(){
+    if (NB.loading || typeof S === 'undefined' || !S.user) return;
+    NB.loading = true;
+    try {
+      /* 1. Low stock: same rule as the Dashboard (uses the products already loaded) */
+      NB.low = (S.products || []).filter(function(p){ return Number(p.currentStock) <= reorderOf(p) && (p.Status || 'Active') === 'Active'; })
+        .sort(function(a, b){ return Number(a.currentStock) - Number(b.currentStock); });
+
+      /* 2. Overdue / due soon: same rule as "Payments Due & Overdue" */
+      NB.overdue = []; NB.soon = [];
+      if (canSee('accounts')) {
+        var r = await api('getOutstanding', {});
+        if (r && r.ok) {
+          var canonName = pdCanonName();
+          (r.rows || []).forEach(function(x){
+            if (!(Number(x.outstanding) > 0.5)) return;
+            var cust = canonName(x.customer), t = paymentTermsOf(cust), di = dueInfo(x.date, t.days);
+            if (!di) return;
+            var row = {no:x.no, customer:cust, due:di.due, daysOver:di.daysOver, outstanding:Number(x.outstanding)};
+            if (di.daysOver > 0) NB.overdue.push(row); else if (di.daysOver >= -7) NB.soon.push(row);
+          });
+          NB.overdue.sort(function(a, b){ return b.daysOver - a.daysOver; });
+          NB.soon.sort(function(a, b){ return b.daysOver - a.daysOver; });
+        }
+      }
+
+      /* 3. Pending enquiries: status "New" */
+      NB.enq = [];
+      if (canSee('enquiries') || canSee('sales')) {
+        var e = await api('getEnquiries');
+        if (e && e.ok) NB.enq = (e.documents || []).filter(function(d){ return (d.status || 'New') === 'New'; });
+      }
+      NB.loadedAt = Date.now();
+    } catch (err) {
+      /* a notification problem must never disturb the rest of the ERP */
+    } finally {
+      NB.loading = false;
+      setCount();
+    }
+  }
+
+  function daysTxt(n){ return n + ' day' + (n === 1 ? '' : 's'); }
+
+  function panelHtml(){
+    var h = '';
+    var low = NB.low, ov = NB.overdue, so = NB.soon, en = NB.enq;
+    var sum = function(l){ return l.reduce(function(a, x){ return a + x.outstanding; }, 0); };
+
+    if (canSee('accounts')) {
+      h += '<div class="nb-sec"><h4><span style="color:#c0392b">Overdue Payments (' + ov.length + ')' + (ov.length ? ' — ' + money(sum(ov)) : '') + '</span>'
+        + '<button class="btn small" onclick="closeModal();showPage(\'accounts\')">Open Accounts →</button></h4>'
+        + (ov.length ? '<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Client</th><th>Due Date</th><th>Overdue</th><th>Outstanding</th></tr></thead><tbody>'
+          + ov.map(function(x){ return '<tr><td><b>' + esc(x.no) + '</b></td><td>' + esc(x.customer) + '</td><td>' + fmtDate(x.due) + '</td><td><b style="color:#c0392b">' + daysTxt(x.daysOver) + '</b></td><td><b>' + money(x.outstanding) + '</b></td></tr>'; }).join('')
+          + '</tbody></table></div>' : '<div class="nb-empty">✓ No overdue payments.</div>')
+        + (so.length ? '<div class="muted small" style="margin-top:6px">Also due in the next 7 days: <b>' + so.length + '</b> invoice(s), ' + money(sum(so)) + '</div>' : '')
+        + '</div>';
+    }
+    if ((S.products || []).length) {
+      h += '<div class="nb-sec"><h4><span style="color:#c0392b">Low Stock (' + low.length + ')</span>'
+        + '<button class="btn small" onclick="closeModal();openLowStock()">Open Low Stock →</button></h4>'
+        + (low.length ? '<div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description</th><th>Stock</th><th>Reorder Level</th></tr></thead><tbody>'
+          + low.map(function(p){ var s = Number(p.currentStock); return '<tr><td><b>' + esc(p['Model / Part No.']) + '</b></td><td>' + esc(String(p.Description || '').slice(0, 70)) + '</td><td><b style="color:' + (s <= 0 ? '#c0392b' : '#d97706') + '">' + esc(p.currentStock) + '</b></td><td>' + reorderOf(p) + '</td></tr>'; }).join('')
+          + '</tbody></table></div>' : '<div class="nb-empty">✓ No low stock items.</div>')
+        + '</div>';
+    }
+    if (canSee('enquiries') || canSee('sales')) {
+      h += '<div class="nb-sec"><h4><span style="color:#b86e00">Pending Enquiries (' + en.length + ')</span>'
+        + '<button class="btn small" onclick="closeModal();showPage(\'enquiries\')">Open Enquiries →</button></h4>'
+        + (en.length ? '<div class="table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Requirement</th></tr></thead><tbody>'
+          + en.map(function(d){ return '<tr><td><b>' + esc(d.id) + '</b></td><td>' + fmtDate(d.date) + '</td><td>' + esc(d.customerName) + '</td><td>' + esc(String(d.requirement || '').slice(0, 80)) + '</td></tr>'; }).join('')
+          + '</tbody></table></div>' : '<div class="nb-empty">✓ No pending enquiries.</div>')
+        + '</div>';
+    }
+    if (!h) h = '<div class="muted">No notifications for your modules.</div>';
+    var when = NB.loadedAt ? new Date(NB.loadedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+    return h + '<div class="actions"><span class="muted small" style="margin-right:auto">' + (when ? 'Updated ' + when : '') + '</span>'
+      + '<button class="btn" onclick="SFSNotify.reload(true)">↻ Check again</button><button class="btn primary" onclick="closeModal()">Close</button></div>';
+  }
+
+  async function openPanel(){
+    modal('Notifications', '<div class="muted">Checking…</div>');
+    if (!NB.loadedAt || Date.now() - NB.loadedAt > 60000) await load();
+    if (!$('modal').classList.contains('hidden') && $('modalTitle').textContent === 'Notifications') $('modalBody').innerHTML = panelHtml();
+  }
+
+  /* Start once the user is logged in; re-check every 10 minutes and after every ↻ Refresh */
+  var started = false;
+  function tick(){
+    if (typeof S === 'undefined' || !S.user || !document.querySelector('header .header-actions')) return;
+    var app = document.getElementById('app');
+    if (app && app.classList.contains('hidden')) return;
+    ensureBell();
+    if (!started) { started = true; load(); }
+  }
+  setInterval(tick, 1500);
+  setInterval(function(){ if (started) load(); }, 10 * 60 * 1000);
+
+  var origRefresh = window.refresh;
+  if (typeof origRefresh === 'function') {
+    window.refresh = async function(){
+      var res = await origRefresh.apply(this, arguments);
+      if (started) load();
+      return res;
+    };
+  }
+
+  window.SFSNotify = {
+    reload:async function(reopen){ await load(); if (reopen && !$('modal').classList.contains('hidden') && $('modalTitle').textContent === 'Notifications') $('modalBody').innerHTML = panelHtml(); },
+    data:function(){ return NB; }
+  };
+})();
