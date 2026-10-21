@@ -2513,10 +2513,17 @@ function printQuotation(d){
   const row = (k,v,cls)=>`<tr><td class="k">${k}</td><td class="v ${cls||''}">${v||'&nbsp;'}</td></tr>`;
   const css = `<style>
     .qt{--navy:#1f3b63;--red:#c8102e;--ink:#1d2433;--mut:#5b6573;--line:#d5dbe3;--soft:#f4f6f9;color:var(--ink)}
-    .qt-top{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:6px}
+    .qt-top{display:flex;justify-content:space-between;align-items:center;padding-bottom:6px}
     .qt-logo{height:52px}
     .qt-word{font-size:26px;font-weight:bold;letter-spacing:6px;color:var(--navy);text-align:right;line-height:1}
-    .qt-tag{font-size:8.5px;letter-spacing:.6px;color:var(--mut);text-align:right;margin-top:6px;font-weight:bold}
+    .qt-tag{font-size:9px;letter-spacing:1px;color:var(--mut);text-align:right;margin-top:7px;font-weight:bold}
+    .qt-dist{padding:2px 16px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+    .qt-dist .r{display:flex;align-items:center;white-space:nowrap;margin:3px 0}
+    .qt-dist .r>*{margin-right:7px}.qt-dist .r>*:last-child{margin-right:0}
+    .qt-dist .s{font-size:8.5px;font-style:italic;color:var(--mut);width:68px;text-align:right}
+    .qt-dist .n{font-size:17px;font-weight:900;letter-spacing:1.5px;line-height:1}
+    .qt-dist .it{font-size:8.5px;font-style:italic;color:var(--mut)}
+    .qt-flag{display:inline-flex;width:15px;height:10px;border:1px solid #ccc}.qt-flag i{flex:1}
     .qt-rule{height:3px;background:linear-gradient(90deg,var(--red) 0,var(--red) 70px,var(--navy) 70px);margin-bottom:10px}
     .qt-info{display:flex;gap:10px;align-items:stretch;margin-bottom:10px}
     .qt-card{border:1px solid var(--line);border-radius:4px;overflow:hidden}
@@ -2559,14 +2566,16 @@ function printQuotation(d){
     .qt-thanks{text-align:center;font-weight:bold;font-size:12px;color:var(--navy);margin-top:14px}
     .qt-sign{width:36%;margin-left:auto;margin-top:30px;text-align:center;font-size:10px}
     .qt-sign .ln{border-top:1px solid var(--ink);padding-top:5px;margin-top:40px}
-    .qt-foot{font-size:9px;line-height:1.5;color:var(--mut)}
-    .qt-foot b{color:var(--navy);font-size:11px}
-    .qt-brands{display:flex;justify-content:space-between;margin-top:8px;font-weight:bold;font-size:10.5px;padding:7px 6px 0;border-top:1px solid var(--line)}
+    .qt-foot{text-align:center;font-size:9px;line-height:1.55;color:var(--mut)}
+    .qt-foot b{display:block;color:var(--navy);font-size:14px;letter-spacing:1px;margin-bottom:2px}
+    .qt-brands{display:flex;align-items:center;margin-top:8px;padding:8px 4px 0;border-top:1px solid var(--line)}
+    .qt-brands span{flex:1;text-align:center;font-weight:900;font-size:13px;letter-spacing:1.2px;line-height:1;border-left:1px solid var(--line)}
+    .qt-brands span:first-child{border-left:none}
     .print-company{border-top:none!important;padding-top:6px!important}
   </style>`;
   const totals = `<table class="qt-tot">${discPct>0?`<tr><td class="l">SUB TOTAL</td><td class="r">${money(gross)}</td></tr><tr class="dis"><td class="l" style="background:#fff8e1;color:#a15c00">LESS ${discPct}% DISCOUNT</td><td class="r">- ${money(discAmt)}</td></tr>`:''}<tr class="gt"><td>TOTAL</td><td class="r">${total>0?money(total):'-'}</td></tr></table>`;
   const body = css + `<div class="qt">`
-    + `<div class="qt-top"><img src="${printLogoSrc()}" class="qt-logo"><div><div class="qt-word">QUOTATION</div><div class="qt-tag">PNEUMATIC SOLUTION PROVIDER &nbsp;•&nbsp; SOLE AGENT UNIVER ITALY</div></div></div><div class="qt-rule"></div>`
+    + `<div class="qt-top"><img src="${printLogoSrc()}" class="qt-logo"><div class="qt-dist"><div class="r"><span class="s">Sole Distributor</span><span class="n" style="color:#1d4e9e">UNIVER</span><span class="it">Italy</span></div><div class="r"><span class="s">Distributor</span><span class="n" style="color:#c8102e">AIGNEP</span><span class="qt-flag"><i style="background:#009246"></i><i style="background:#fff"></i><i style="background:#ce2b37"></i></span></div></div><div><div class="qt-word">QUOTATION</div><div class="qt-tag">PNEUMATIC AUTOMATION &nbsp;|&nbsp; AUTOMOTIVE</div></div></div><div class="qt-rule"></div>`
     + `<div class="qt-info"><div class="qt-card qt-to"><div class="qt-cap">TO</div><div class="qt-tobody">${d.contact?'<div class="qt-attn">'+esc(d.contact)+'</div>':''}<div class="qt-cust">${esc(d.customer)}</div><div class="qt-mini">${custId?'Customer ID: <b>'+esc(custId)+'</b>':''}${d.stn?' &nbsp;|&nbsp; STN: <b>'+esc(d.stn)+'</b>':''}${d.ntn?' &nbsp;|&nbsp; NTN: <b>'+esc(d.ntn)+'</b>':''}</div><div class="qt-mini">Ref # Your Requested: <b>${esc(ref)}</b></div></div></div>`
     + `<div class="qt-card qt-det"><div class="qt-cap">QUOTATION DETAILS</div><table><tr><td class="k">Date</td><td class="v">${fmtDate(d.date)}</td><td class="k">Quotation #</td><td class="v last">${esc(d.no)}</td></tr><tr><td class="k">Payment</td><td class="v">${esc(d.paymentTerms||'20 Days')}</td><td class="k">Delivery</td><td class="v last qt-green">${esc(delivery)}</td></tr><tr><td class="k">Valid until</td><td class="v qt-red">${esc(d.validity||'7 Days')}</td><td class="k">Prepared by</td><td class="v last">${esc(prepared)}</td></tr></table></div></div>`
     + `<table class="qt-items"><colgroup><col style="width:5%"><col style="width:42%"><col style="width:7%"><col style="width:14%"><col style="width:15%"><col style="width:17%"></colgroup><thead><tr><th class="c">Ser#</th><th>Description</th><th class="c">Qty</th><th class="c">Rate / Unit</th><th class="c">Amount</th><th class="c">Delivery / Remarks</th></tr></thead><tbody>${rows}<tr class="qt-fill" style="height:${spacerH}mm"><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>`
@@ -2574,7 +2583,7 @@ function printQuotation(d){
     + `<div class="qt-q">If you have any questions concerning this quotation, please feel free to contact : <b>021-32464447</b></div>`
     + `<div class="qt-thanks">Thank you for Your Business!</div>`
     + `<div class="qt-sign"><div class="ln"><i>Authorised by</i> &nbsp;<b>M. Adeel Khan</b></div></div></div>`;
-  const footer = `<div class="qt-foot"><b>STANDARD FLUID SYSTEMS</b><br>e-mail:sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph:021 32464447, cell: 0301 8212041.</div><div class="qt-brands"><span style="color:#2e7d32">CKD</span><span style="color:#1565c0">SMC</span><span style="color:#0b5cab">FESTO</span><span style="color:#4a6fa5">UNIVER</span><span style="color:#d32f2f">Rexroth</span><span style="color:#222">PNEUMAX</span></div>`;
+  const footer = `<div class="qt-foot"><b>STANDARD FLUID SYSTEMS</b>e-mail: sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>1410, 14th Floor, K.S Trade Tower, New Challi, Karachi, Ph: 021 32464447, cell: 0301 8212041.</div><div class="qt-brands"><span style="color:#1d4e9e">SMC</span><span style="color:#0a63a8">ASCO</span><span style="color:#d0021b">HYDAC</span><span style="color:#0091dc">FESTO</span><span style="color:#2e7d32">CKD</span><span style="color:#2b3a67">EMERSON</span></div>`;
   printDoc(body, footer, docFileName(d.no, d.customer, 'Quotation'));
 }
 function printDC(d){
