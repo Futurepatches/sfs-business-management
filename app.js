@@ -2571,10 +2571,10 @@ function printQuotation(d){
     .qt-foot{text-align:center;font-size:9px;line-height:1.55;color:var(--mut)}
     .qt-foot b{display:block;color:var(--navy);font-size:14px;letter-spacing:1px;margin-bottom:2px}
     .qt-brands{display:flex;align-items:center;margin-top:8px;padding:8px 4px 0;border-top:1px solid var(--line)}
-    .qt-brands span{flex:1;display:flex;align-items:center;justify-content:center;height:30px;border-left:1px solid var(--line)}
+    .qt-brands span{flex:1 1 0;min-width:0;display:flex;align-items:flex-end;justify-content:center;height:22px;padding-bottom:2px;border-left:1px solid var(--line)}
     .qt-brands span:first-child{border-left:none}
-    .qt-brands img{height:20px;max-width:84%;width:auto;display:block}
-    .qt-brands img.b-smc{height:23px}.qt-brands img.b-emerson{height:30px}
+    .qt-brands img{height:14px;max-width:70%;width:auto;display:block;object-fit:contain}
+    .qt-brands img.b-smc{height:15px}.qt-brands img.b-emerson{height:21px}.qt-brands img.b-aventics{height:15px}
     .print-company{border-top:none!important;padding-top:6px!important}
   </style>`;
   const totals = `<table class="qt-tot">${discPct>0?`<tr><td class="l">SUB TOTAL</td><td class="r">${money(gross)}</td></tr><tr class="dis"><td class="l" style="background:#fff8e1;color:#a15c00">LESS ${discPct}% DISCOUNT</td><td class="r">- ${money(discAmt)}</td></tr>`:''}<tr class="gt"><td>TOTAL</td><td class="r">${total>0?money(total):'-'}</td></tr></table>`;
