@@ -11,7 +11,17 @@
    ============================================================ */
 
 const DEFAULT_API = (window.SFS_CONFIG && window.SFS_CONFIG.API_URL) || '';
-const CATS = ['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Others'];
+const CATS = ['Airline Equipment','Valves','Cylinder','Fittings/Tubing','Fittings/Tubing China','Others'];
+/* Any other category found in the product data is added automatically (before "Others") */
+function mergeProductCategories(){
+  try {
+    (S.products || []).forEach(p => {
+      const c = String(p.Category || '').trim();
+      if (!c || CATS.some(x => x.toLowerCase() === c.toLowerCase())) return;
+      const at = CATS.indexOf('Others'); CATS.splice(at >= 0 ? at : CATS.length, 0, c);
+    });
+  } catch (e) {}
+}
 const ALL_MODULES = [
   {id:'products', label:'Products'},
   {id:'sales',    label:'Sales (DC / Invoice)'},
@@ -206,6 +216,7 @@ async function api(action, data = {}){
 
 /* Datalists (customer / product / supplier autocomplete) — clist and mlist were previously undefined */
 function syncDatalists(){
+  mergeProductCategories();
   let host = $('sfsLists');
   if (!host) {
     host = document.createElement('div');
@@ -2045,7 +2056,7 @@ async function renderProductSales(force){
       + '<select id="psmode" onchange="psSet(\'mode\',this.value)">' + opt('month','Monthly',PS.mode) + opt('year','Yearly (month by month)',PS.mode) + '</select>'
       + '<select id="psmonth" onchange="psSet(\'month\',this.value)">' + PS_MONTHS.map((m,i) => opt(i, m, PS.month)).join('') + '</select>'
       + '<select id="psgroup" onchange="psSet(\'group\',this.value)">' + opt('cat','By Category',PS.group) + opt('brand','By Brand',PS.group) + opt('model','By Product / Model',PS.group) + '</select>'
-      + '<select id="pscat" onchange="psSet(\'cat\',this.value)">' + opt('','All Categories',PS.cat) + CATS.concat(['Others']).map(c => opt(c, c, PS.cat)).join('') + '</select>'
+      + '<select id="pscat" onchange="psSet(\'cat\',this.value)">' + opt('','All Categories',PS.cat) + (CATS.indexOf('Others') >= 0 ? CATS : CATS.concat(['Others'])).map(c => opt(c, c, PS.cat)).join('') + '</select>'
       + '<input id="psq" placeholder="Search model / description" value="' + esc(PS.q) + '" oninput="psSet(\'q\',this.value)">'
       + '<select id="psmetric" onchange="psSet(\'metric\',this.value)">' + opt('amt','Sales Amount',PS.metric) + opt('qty','Quantity',PS.metric) + '</select>'
       + '<button class="btn" onclick="psCsv()">Download CSV</button></div>'
