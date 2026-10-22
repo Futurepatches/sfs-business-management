@@ -50,7 +50,7 @@ const SOURCE = {
   returns: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-L0Qdw8fesYpscH6K9sA5WIXOTMp9-ja47HrnDoVoI814-v-lMjhze3LMfDK8mDDqj_gislv0ZmE8/pub?gid=169812999&single=true&output=csv'
 };
 
-const MODULES = ['products','sales','accounts','parties','reports'];
+const MODULES = ['products','sales','accounts','parties','reports','enquiries','imports'];
 
 const HEADERS = {
   'Products':['Product ID','Model / Part No.','Description','Category','Brand','Unit','Location','Cost Price','Sale Price','Current Stock','Product Image','Remarks','Status','Reorder Level'],
@@ -59,7 +59,7 @@ const HEADERS = {
   'Delivery Challans':['DC No.','Date','Customer ID','Customer Name','Delivery Address','PO #','PO Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Created By'],
   'Invoices':['Invoice No.','Date','Customer ID','Customer Name','PO #','PO Date','DC No.','DC Date','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Rate / Unit','Amount','Created By','GST %'],
   'Quotations':['Quotation No.','Date','Customer ID','Customer Name','Address','PO #','PO Date','Validity','STN','NTN','Product ID','Model / Part No.','Description','Quantity','Unit','Rate / Unit','Amount','Created By','Revision Of','Make','Delivery Status','Payment Terms','Contact','GST %','Enquiry ID','Status','Loss Reason','Discount %'],
-  'Enquiries':['Enquiry ID','Date','Customer Name','Contact Person','Phone','Requirement','Status','Quotation No.','Loss Reason','Created By'],
+  'Enquiries':['Enquiry ID','Date','Customer Name','Contact Person','Phone','Requirement','Status','Quotation No.','Loss Reason','Created By','Email','Subject','Source','Mail ID','Items','Customer Ref','AI Note','Attachments','Parsed By','Needs Review'],
   'Customers':['Customer ID','Customer Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status','Price Adjustment (%)'],
   'Suppliers':['Supplier ID','Supplier Name','Contact Person','Phone','Email','Address','NTN/Tax ID','Remarks','Status'],
   'Users & Roles':['User ID','Name','Username','Role','Password','Status','Modules'],
@@ -74,7 +74,7 @@ const WRITE_ACTIONS = [
   'saveProduct','product','updateProduct','setProductStatus',
   'saveCustomer','updateCustomer','setCustomerStatus',
   'saveSupplier','updateSupplier','setSupplierStatus',
-  'saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','updateInvoice','saveQuotation','quotationHistory','saveEnquiry','updateQuotationStatus',
+  'saveImportCosting','saveInward','inward','saveDC','dc','updateDC','saveInvoice','invoice','updateInvoice','saveQuotation','quotationHistory','saveEnquiry','updateQuotationStatus',
   'savePayment','saveSupplierPayment','saveTarget',
   'saveUser','updateUser','disableUser','changePassword',
   'refreshSource','sync'
@@ -156,6 +156,7 @@ function doPost(e) {
     if (action === 'login') return out(loginUser(p));
     if (action === 'logout') return out(logoutUser_(p));
     if (action === 'bootstrap') return out(bootstrap_(p));
+    if (action === 'emailEnquiry') return out(emailEnquiry_(p));
 
     const auth = requireSession_(p);
     if (!auth.ok) return out(auth);
@@ -187,7 +188,8 @@ function out(o) {
 }
 
 function need_(user, mod, label) {
-  return hasModule_(user, mod) ? null : {ok:false, error:'You do not have access to ' + label + '.'};
+  const ok = hasModule_(user, mod) || (mod === 'products' && hasModule_(user, 'imports'));
+  return ok ? null : {ok:false, error:'You do not have access to ' + label + '.'};
 }
 
 function dispatch_(action, p, user) {
@@ -252,11 +254,16 @@ function dispatch_(action, p, user) {
     case 'saveQuotation':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
       p.user = user.username;
-      return saveQuotation(p);
+      return saveQuotationFull_(p);
+
+    case 'updateQuotation':
+      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      p.user = user.username;
+      return updateQuotation_(p, user);
 
     case 'quotationHistory':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
-      return getQuotationHistory_();
+      return quotationHistoryFull_();
 
     case 'quotationItemHistory':
       if ((d = need_(user, 'sales', 'Sales module'))) return d;
@@ -268,11 +275,11 @@ function dispatch_(action, p, user) {
       return updateQuotationStatus(p);
 
     case 'getEnquiries':
-      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      if ((d = need_(user, 'enquiries', 'Enquiries module'))) return d;
       return getEnquiries_();
 
     case 'saveEnquiry':
-      if ((d = need_(user, 'sales', 'Sales module'))) return d;
+      if ((d = need_(user, 'enquiries', 'Enquiries module'))) return d;
       p.user = user.username;
       return saveEnquiry(p);
 
@@ -326,6 +333,10 @@ function dispatch_(action, p, user) {
       if (!hasModule_(user, 'reports') && !hasModule_(user, 'sales')) return {ok:false, error:'You do not have access to Reports.'};
       return getReportsForFrontend_(p);
 
+    case 'getUserActivity':
+      if (String(user.role || '').toUpperCase() !== 'ADMIN') return {ok:false, error:'Only an Admin can see user activity.'};
+      return getUserActivity_(p);
+
     case 'listUsers':
       return listUsers_(user);
     case 'saveUser':
@@ -362,6 +373,26 @@ function dispatch_(action, p, user) {
     case 'suppliers':
       if ((d = need_(user, 'parties', 'Suppliers'))) return d;
       return getSuppliers();
+
+    case 'saveImportCosting':
+      if ((d = need_(user, 'imports', 'Imports module'))) return d;
+      return saveImportCosting_(p, user);
+
+    case 'getImportCostings':
+      if ((d = need_(user, 'imports', 'Imports module'))) return d;
+      return getImportCostings_(p);
+
+    case 'getProfit':
+      if ((d = need_(user, 'imports', 'Imports module'))) return d;
+      return getProfit_(p);
+
+    case 'getInvoiceProfit':
+      if ((d = need_(user, 'imports', 'Imports module'))) return d;
+      return getInvoiceProfit_(p);
+
+    case 'getEnquiryMail':
+      if ((d = need_(user, 'enquiries', 'Enquiries module'))) return d;
+      return getEnquiryMail_(p);
 
     default:
       return {ok:false, error:'Unknown action: ' + action};
@@ -428,7 +459,7 @@ function migrateBlankModulesToFull() {
     if (role === 'ADMIN') continue;
     if (!String(ctx.values[i][cols.username] || '').trim()) continue;
     if (!normalizeModules_(ctx.values[i][cols.modules]).length) {
-      ctx.sh.getRange(i + 1, cols.modules + 1).setValue(MODULES.join(','));
+      ctx.sh.getRange(i + 1, cols.modules + 1).setValue(MODULES.filter(m => m !== 'imports').join(','));
       changed++;
     }
   }
@@ -799,7 +830,8 @@ function ensureReorderLevelColumn_() {
 }
 
 function hideCost_(user) {
-  return HIDE_COST_FROM_STAFF && String((user && user.role) || '').toUpperCase() !== 'ADMIN';
+  // Admin always has the "imports" module, so this hides Cost Price from every other user.
+  return !hasModule_(user, 'imports');
 }
 
 function validStatus_(s) {
@@ -972,7 +1004,7 @@ function saveProduct(p, user) {
   if (openingStock < 0) throw Error('Opening stock cannot be negative.');
   const reorder = isBlank_(p.reorderLevel) ? 5 : num_(p.reorderLevel);
   if (reorder < 0) throw Error('Reorder level cannot be negative.');
-  const cost = optionalMoney_(p.costPrice, 'Cost price');
+  const cost = hideCost_(user) ? '' : optionalMoney_(p.costPrice, 'Cost price');
   const price = optionalMoney_(p.salePrice, 'Sale price');
 
   const id = nextSafeId_('P-', 'Products', 1);
@@ -1377,7 +1409,10 @@ function getEnquiries_() {
   const docs = objectsFromSheet_('Enquiries').filter(r => String(r['Enquiry ID'] || '').trim()).map(r => ({
     id: r['Enquiry ID'], date: r['Date'], customerName: r['Customer Name'] || '', contactPerson: r['Contact Person'] || '',
     phone: r['Phone'] || '', requirement: r['Requirement'] || '', status: String(r['Status'] || '').trim() || 'New',
-    quotationNo: r['Quotation No.'] || '', lossReason: r['Loss Reason'] || '', createdBy: r['Created By'] || ''
+    quotationNo: r['Quotation No.'] || '', lossReason: r['Loss Reason'] || '', createdBy: r['Created By'] || '',
+    email: r['Email'] || '', subject: r['Subject'] || '', source: r['Source'] || 'Manual', mailId: r['Mail ID'] || '',
+    items: parseItemsJson_(r['Items']), customerRef: r['Customer Ref'] || '',
+    aiNote: r['AI Note'] || '', attachments: parseItemsJson_(r['Attachments']), parsedBy: r['Parsed By'] || '', needsReview: String(r['Needs Review'] || '') === 'Yes'
   }));
   return {ok:true, documents:docs.reverse()};
 }
@@ -1655,9 +1690,9 @@ function bootstrap_(p) {
 
   const can = m => hasModule_(user, m);
   // Sales needs products + customers (DC / Invoice), Inward needs suppliers, Accounts needs customers/suppliers
-  const seeProducts  = can('products') || can('sales') || can('reports');
+  const seeProducts  = can('products') || can('sales') || can('reports') || can('imports');
   const seeCustomers = can('parties') || can('sales') || can('accounts');
-  const seeSuppliers = can('parties') || can('accounts') || can('products');
+  const seeSuppliers = can('parties') || can('accounts') || can('products') || can('imports');
   const seeMovements = can('products') || can('reports');
 
   const products = seeProducts ? objectsFromSheet_('Products') : [];
@@ -1876,6 +1911,7 @@ function getOutstandingForFrontend_(p) {
     const paid = paidByInvoice[inv.no] || 0;   // cash + tax = total settlement
     return {
       no:inv.no, date:inv.date, customer:inv.customer, customerId:inv.customerId,
+      po:inv.po, poDate:inv.poDate, subtotal:round2_(inv.subtotal), gstPercent:inv.gstPercent,
       total:total, paid:paid,
       cash:round2_(cashByInvoice[inv.no] || 0), tax:round2_(taxByInvoice[inv.no] || 0),
       outstanding:Math.max(0, round2_(total - paid))
@@ -2422,4 +2458,199 @@ function healthCheck() {
   const msg = lines.join('\n');
   Logger.log(msg);
   return msg;
+}
+
+/* ============================================================
+   SFS ERP — QUOTATION FIX (edit / item remarks)
+   1. Edit → "Update Quotation" now works (the backend had no updateQuotation).
+      The same quotation number is kept, in the same place in the sheet,
+      and its Status / Loss Reason / Created By / Revision Of are preserved.
+   2. Item Remarks are now saved, and come back in Quotation History
+      (View / Print and Edit no longer lose them).
+
+   Uses the existing functions above (saveQuotation, getQuotationHistory_ …)
+   and does not change them.
+   ============================================================ */
+
+const QT_ITEM_REMARKS_HEADER = 'Item Remarks';
+
+function qtfxSheet_() {
+  return ensureSheet('Quotations', HEADERS.Quotations.concat([QT_ITEM_REMARKS_HEADER]));
+}
+
+/* Same item filter saveQuotation uses, so row N of the saved quotation = item N here */
+function qtfxValidItems_(p) {
+  const items = Array.isArray(p.items) ? p.items : [];
+  return items.filter(x => (String(x.model || '').trim() || String(x.desc || '').trim()) && num_(x.qty) > 0);
+}
+
+/* Writes each item's remarks into the rows of quotation `no` (in row order) */
+function qtfxWriteRemarks_(no, p) {
+  const sh = qtfxSheet_();
+  const vals = sh.getDataRange().getValues();
+  const headers = vals[0].map(String);
+  const kc = headers.indexOf('Quotation No.'), rc = headers.indexOf(QT_ITEM_REMARKS_HEADER);
+  if (kc < 0 || rc < 0) return;
+  const valid = qtfxValidItems_(p);
+  let k = 0;
+  for (let i = 1; i < vals.length && k < valid.length; i++) {
+    if (String(vals[i][kc]).trim() !== String(no).trim()) continue;
+    sh.getRange(i + 1, rc + 1).setValue(String(valid[k].itemRemarks || '').trim());
+    k++;
+  }
+}
+
+/* New quotation = the normal saveQuotation + item remarks */
+function saveQuotationFull_(p) {
+  qtfxSheet_();
+  const res = saveQuotation(p);
+  if (res && res.ok) qtfxWriteRemarks_(res.id, p);
+  return res;
+}
+
+/* Edit an existing quotation and keep its number */
+function updateQuotation_(p, user) {
+  const lock = LockService.getScriptLock();
+  const ownLock = !lock.hasLock();
+  if (ownLock) { try { lock.waitLock(30000); } catch (e) { return {ok:false, error:'System busy. Please try again.'}; } }
+  try {
+    const no = String(p.no || '').trim();
+    if (!no) throw Error('Quotation number is required for an update.');
+    const sh = qtfxSheet_();
+    const vals = sh.getDataRange().getValues();
+    const headers = vals[0].map(String);
+    const kc = headers.indexOf('Quotation No.');
+    const idx = [];
+    for (let i = 1; i < vals.length; i++) if (String(vals[i][kc]).trim() === no) idx.push(i);
+    if (!idx.length) throw Error('Quotation not found: ' + no);
+
+    const col = h => headers.indexOf(h);
+    const first = vals[idx[0]];
+    const keep = {};
+    ['Status', 'Loss Reason', 'Created By', 'Revision Of'].forEach(h => { if (col(h) >= 0) keep[h] = first[col(h)]; });
+    const backup = idx.map(i => vals[i].slice());
+    const position = idx[0] + 1;               // sheet row where this quotation starts
+
+    for (let j = idx.length - 1; j >= 0; j--) sh.deleteRow(idx[j] + 1);
+
+    let res;
+    try {
+      res = saveQuotationFull_(Object.assign({}, p, {no:no, revisionOf:keep['Revision Of'] || ''}));
+      if (!res || !res.ok) throw Error((res && res.error) || 'Could not save the quotation.');
+    } catch (err) {
+      /* remove anything half-saved, then put the original rows back exactly where they were */
+      const now = sh.getDataRange().getValues();
+      for (let i = now.length - 1; i >= 1; i--) if (String(now[i][kc]).trim() === no) sh.deleteRow(i + 1);
+      if (position <= sh.getLastRow()) sh.insertRowsBefore(position, backup.length);
+      sh.getRange(position, 1, backup.length, backup[0].length).setValues(backup);
+      throw err;
+    }
+
+    /* move the new rows back to the original position (saveQuotation appends at the end) */
+    const last = sh.getLastRow(), n = qtfxValidItems_(p).length;
+    if (n > 0 && last - n + 1 > position) sh.moveRows(sh.getRange(last - n + 1, 1, n, 1), position);
+
+    updateRowsWhere_('Quotations', 'Quotation No.', no, keep);
+    const enq = String(p.enquiryId || '').trim();
+    if (enq && String(keep['Status'] || '') === 'Lost') {
+      updateRowsWhere_('Enquiries', 'Enquiry ID', enq, {'Status':'Lost', 'Quotation No.':no, 'Loss Reason':keep['Loss Reason'] || ''});
+    }
+    try { if (typeof logAudit_ === 'function') logAudit_(user, 'updateQuotation', p, res); } catch (ignore) {}
+    return res;
+  } finally {
+    if (ownLock) lock.releaseLock();
+  }
+}
+
+/* Quotation History + item remarks */
+function quotationHistoryFull_() {
+  const res = getQuotationHistory_();
+  if (!res || !res.ok) return res;
+  const rows = objectsFromSheet_('Quotations');
+  const byNo = {};
+  rows.forEach(r => {
+    const no = String(r['Quotation No.'] || '').trim(); if (!no) return;
+    (byNo[no] = byNo[no] || []).push(String(r[QT_ITEM_REMARKS_HEADER] || ''));
+  });
+  (res.documents || []).forEach(d => {
+    const rem = byNo[d.no] || [];
+    (d.items || []).forEach((it, i) => { it.itemRemarks = rem[i] || ''; });
+  });
+  return res;
+}
+
+/* ============================================================
+   SFS ERP — USER ACTIVITY REPORT (Admin only, read-only)
+   Who made which document (from each sheet's "Created By")
+   + every save / edit / status change (from the "Audit Log" sheet).
+   Nothing is written or changed here.
+   ============================================================ */
+function getUserActivity_(p) {
+  p = p || {};
+  const year = Number(p.year) || 0;
+  const inYear = d => !year || (d && d.getFullYear() === year);
+  const docs = [];
+  const userOf = r => String(r['Created By'] || '').trim();
+
+  /* documents that have one row per item → one entry per document number */
+  const grouped = (sheet, type, noCol, partyCol, amountFn, qtyCol) => {
+    const map = {}, order = [];
+    objectsFromSheet_(sheet).forEach(r => {
+      const no = String(r[noCol] || '').trim(); if (!no) return;
+      if (!map[no]) {
+        const d = toDate_(r['Date']);
+        map[no] = {type:type, no:no, date:d || '', user:userOf(r), party:String(r[partyCol] || ''), amount:0, qty:0, _disc:num_(r['Discount %'])};
+        order.push(no);
+      }
+      if (amountFn) map[no].amount += amountFn(r);
+      if (qtyCol) map[no].qty += num_(r[qtyCol]);
+    });
+    order.forEach(no => {
+      const x = map[no];
+      if (x._disc) x.amount = x.amount - x.amount * x._disc / 100;
+      delete x._disc;
+      x.amount = round2_(x.amount);
+      if (inYear(x.date || null)) docs.push(x);
+    });
+  };
+  /* documents with one row each */
+  const single = (sheet, type, noCol, partyCol, amountCol, qtyCol) => {
+    objectsFromSheet_(sheet).forEach(r => {
+      const no = String(r[noCol] || '').trim(); if (!no) return;
+      const d = toDate_(r['Date']);
+      if (!inYear(d || null)) return;
+      docs.push({type:type, no:no, date:d || '', user:userOf(r), party:String(r[partyCol] || ''),
+        amount:amountCol ? round2_(num_(r[amountCol])) : 0, qty:qtyCol ? num_(r[qtyCol]) : 0});
+    });
+  };
+
+  grouped('Quotations', 'Quotation', 'Quotation No.', 'Customer Name', r => num_(r['Amount']) || num_(r['Quantity']) * num_(r['Rate / Unit']));
+  grouped('Delivery Challans', 'Delivery Challan', 'DC No.', 'Customer Name', null, 'Quantity');
+  grouped('Invoices', 'Invoice', 'Invoice No.', 'Customer Name', r => num_(r['Amount']) || num_(r['Quantity']) * num_(r['Rate / Unit']));
+  single('Payments', 'Payment Received', 'Payment ID', 'Customer Name', 'Amount');
+  single('Supplier Payments', 'Supplier Payment', 'Payment ID', 'Supplier Name', 'Amount');
+  single('Enquiries', 'Enquiry', 'Enquiry ID', 'Customer Name');
+  single('Inward', 'Inward', 'Inward ID', 'Supplier', null, 'Quantity');
+
+  /* audit trail */
+  const audit = [];
+  const ash = SpreadsheetApp.getActive().getSheetByName('Audit Log');
+  if (ash && ash.getLastRow() > 1) {
+    ash.getRange(2, 1, ash.getLastRow() - 1, 4).getValues().forEach(r => {
+      const t = r[0] instanceof Date ? r[0] : toDate_(r[0]);
+      if (!t || !inYear(t)) return;
+      const action = String(r[2] || '').trim();
+      if (!action || action === 'quotationHistory') return;          // viewing history is not work
+      audit.push({time:t, user:String(r[1] || '').trim(), action:action, details:String(r[3] || '')});
+    });
+  }
+  audit.sort((a, b) => b.time - a.time);
+
+  const names = userNameMap_();
+  const users = objectsFromSheet_('Users & Roles').map(u => ({
+    username:String(u['Username'] || '').trim(), name:String(u['Name'] || '').trim(),
+    role:String(u['Role'] || '').trim(), status:String(u['Status'] || 'Active').trim()
+  })).filter(u => u.username);
+
+  return {ok:true, year:year, users:users, names:names, docs:docs, audit:audit.slice(0, 5000), auditTotal:audit.length};
 }
