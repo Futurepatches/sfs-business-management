@@ -4325,11 +4325,12 @@ function db2Kpis(){
   if (db2Can('reports')) {
     if (sales) {
       const ms = sales.monthlySales || [], cur = Number((ms[m] || {}).amount) || 0, prev = m > 0 ? Number((ms[m - 1] || {}).amount) || 0 : 0;
-      const target = Number(sales.target) || 0, mt = target / 12, pct = mt > 0 ? Math.round(cur / mt * 100) : null;
+      const target = Number(sales.target) || 0, yearSales = Number(sales.totalSales) || 0;
+      const pct = target > 0 ? Math.round(yearSales / target * 100) : null;            /* ANNUAL: year-to-date sales vs annual target */
       const delta = prev > 0 ? Math.round((cur - prev) / prev * 100) : null;
-      const ring = pct === null ? '' : '<div class="db2-ring" style="--p:' + Math.min(100, Math.max(0, pct)) + '"><b>' + pct + '%</b></div>';
-      cards.push('<div class="db2-kpi db2-hero" onclick="db2Go(\'reports\')" title="Open Reports"><div><span>SALES — ' + esc(PS_MONTHS[m].toUpperCase()) + '</span><strong>' + db2Short(cur) + (mt > 0 ? ' <small>/ ' + db2Short(mt) + '</small>' : '') + '</strong>'
-        + '<em>Year: ' + db2Short(sales.totalSales) + (target > 0 ? ' of ' + db2Short(target) + ' target' : ' (no target set)') + (delta !== null ? ' · <b class="' + (delta >= 0 ? 'up' : 'dn') + '">' + (delta >= 0 ? '▲ ' : '▼ ') + Math.abs(delta) + '% vs ' + PS_MONTHS[m - 1] + '</b>' : '') + '</em></div>' + ring + '</div>');
+      const ring = pct === null ? '' : '<div class="db2-ring" style="--p:' + Math.min(100, Math.max(0, pct)) + '" title="' + pct + '% of the ' + esc(sales.year) + ' annual target"><b>' + pct + '%</b></div>';
+      cards.push('<div class="db2-kpi db2-hero" onclick="db2Go(\'reports\')" title="Open Reports"><div><span>ANNUAL SALES ' + esc(sales.year) + '</span><strong>' + db2Short(yearSales) + (target > 0 ? ' <small>/ ' + db2Short(target) + '</small>' : '') + '</strong>'
+        + '<em>' + (target > 0 ? db2Short(Math.max(0, target - yearSales)) + ' remaining' : 'No annual target set') + ' · ' + esc(PS_MONTHS[m]) + ': ' + db2Short(cur) + (delta !== null ? ' <b class="' + (delta >= 0 ? 'up' : 'dn') + '">' + (delta >= 0 ? '▲ ' : '▼ ') + Math.abs(delta) + '%</b>' : '') + '</em></div>' + ring + '</div>');
     } else cards.push('<div class="db2-kpi db2-hero"><div><span>SALES — ' + esc(PS_MONTHS[m].toUpperCase()) + '</span><strong>…</strong><em>Loading</em></div></div>');
   }
   if (db2Can('accounts')) {
