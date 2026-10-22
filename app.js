@@ -2228,13 +2228,13 @@ async function toggleUser(u, st){
 
 let ENQ_CACHE=[];
 async function renderEnquiries(){const r=await api('getEnquiries');if(!r.ok)return toast(r.error,true);ENQ_CACHE=r.documents||[];filterEnquiries();}
-function enquiryForm(){modal('New Enquiry','<div class="form-grid"><label>Date<input id="enqDate" type="date" value="'+todayStr()+'"></label><label>Customer Name<input id="enqCustomer"></label><label>Contact Person<input id="enqContact"></label><label>Phone<input id="enqPhone"></label><label class="wide">Requirement / Description<textarea id="enqRequirement" rows="4"></textarea></label></div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveEnquiry()">Save Enquiry</button></div>');}
-async function saveEnquiry(){const customerName=$('enqCustomer').value.trim();if(!customerName)return toast('Customer Name is required.',true);const r=await api('saveEnquiry',{date:$('enqDate').value,customerName:customerName,contactPerson:$('enqContact').value,phone:$('enqPhone').value,requirement:$('enqRequirement').value});if(!r.ok)return toast(r.error,true);closeModal();toast('Enquiry saved.');renderEnquiries();}
-function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rng=periodRange('enqPer'),est=($('enqStatus')||{}).value||'';const rows=ENQ_CACHE.filter(d=>(!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo,d.email,d.subject].some(v=>norm(v).includes(q)))&&inPeriod(d.date,rng)&&(!est||d.status===est));const eInfo=$('enqInfo');if(eInfo)eInfo.textContent='Showing '+rows.length+' of '+ENQ_CACHE.length+' enquiries';h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customerName)+enqSrcHtml(d)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+enqReqHtml(d)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+enqReplyHtml(d)+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
+/* enquiryForm() and saveEnquiry() now live in the ENQUIRY BOX section at the end of this file */
+/* (saveEnquiry moved) */
+function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rng=periodRange('enqPer'),est=($('enqStatus')||{}).value||'';const rows=ENQ_CACHE.filter(d=>(!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo,d.email,d.subject].some(v=>norm(v).includes(q)))&&inPeriod(d.date,rng)&&(!est||d.status===est));const eInfo=$('enqInfo');if(eInfo)eInfo.textContent='Showing '+rows.length+' of '+ENQ_CACHE.length+' enquiries';h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+enqCustHtml(d)+enqSrcHtml(d)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+enqReqHtml(d)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+enqEditBtn(d)+enqReplyHtml(d)+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
 
 /* ---------- Email enquiries: tag, long text, reply ---------- */
 function enqSrcHtml(d){
-  if (d.source !== 'Email') return '';
+  if (d.source !== 'Email') { const n = (d.attachments || []).length, src = d.source && d.source !== 'Manual' ? d.source : ''; return (src || n) ? '<div class="enq-src">' + (src ? '<span class="imp-tag">' + esc(src) + '</span>' : '') + (n ? ' <span class="muted small" title="Files attached">📎 ' + n + '</span>' : '') + '</div>' : ''; }
   return '<div class="enq-src"><span class="imp-tag new">✉ Email</span>' + (d.email ? ' <span class="muted small">' + esc(d.email) + '</span>' : '')
     + (d.attachments && d.attachments.length ? ' <span class="muted small" title="Original files attached">📎 ' + d.attachments.length + '</span>' : '')
     + (d.needsReview ? ' <span class="imp-tag enq-check" title="' + esc(d.aiNote || 'Please check this enquiry against the original mail') + '">⚠ Check</span>' : '') + '</div>';
@@ -2265,7 +2265,7 @@ function enqViewFull(en){
     + (d.items && d.items.length ? '<h4 style="margin:6px 0 8px">Requested items' + (d.customerRef ? ' — Ref ' + esc(d.customerRef) : '') + '</h4><div class="table-wrap"><table><thead><tr><th>#</th><th>Description</th><th class="right">Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody>'
         + d.items.map((it, i) => '<tr><td>' + esc(it.sn || i + 1) + '</td><td>' + esc(it.desc) + '</td><td class="right"><b>' + esc(it.qty) + '</b></td><td>' + esc(it.unit) + '</td><td class="muted small">' + esc(it.note) + '</td></tr>').join('') + '</tbody></table></div>' : '')
     + '<details style="margin-top:12px"' + (d.items && d.items.length ? '' : ' open') + '><summary style="cursor:pointer;font-weight:600">Original mail text</summary><div style="white-space:pre-wrap;max-height:40vh;overflow:auto;margin-top:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafbff">' + esc(d.requirement) + '</div></details>'
-    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button>' + (d.status === 'New' ? '<button class="btn primary" onclick="closeModal();makeQuotationFromEnquiry(\'' + encA(d.id) + '\')">Make Quotation</button>' : '') + '</div>');
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="enquiryForm(\'' + encA(d.id) + '\')">✎ Edit</button>' + (d.status === 'New' ? '<button class="btn primary" onclick="closeModal();makeQuotationFromEnquiry(\'' + encA(d.id) + '\')">Make Quotation</button>' : '') + '</div>');
 }
 window.enqViewFull = enqViewFull;
 
@@ -2527,7 +2527,7 @@ function renderQtEnqRef(en){
     + (en.subject ? '<div style="margin-top:4px"><b>' + esc(en.subject) + '</b></div>' : '')
     + (en.customerRef ? '<div class="muted small">Customer ref: <b>' + esc(en.customerRef) + '</b></div>' : '')
     + (en.needsReview || en.aiNote ? '<div class="imp-warn" style="margin:8px 0">' + (en.needsReview ? '<b>⚠ Please check against the original mail / files.</b> ' : '') + esc(en.aiNote || '') + '</div>' : '')
-    + (atts.length ? '<div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">' + atts.map(a => '<a class="btn small" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(a.url) + '">📎 ' + esc(a.name) + '</a>').join('') + '</div>' : '')
+    + (atts.length ? '<div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">' + atts.map(a => enqAttHtml(a)).join('') + '</div>' : '')
     + (items.length ? '<div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>#</th><th>Customer asked for</th><th class="right">Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody>'
         + items.map((it, i) => '<tr><td>' + esc(it.sn || i + 1) + '</td><td>' + esc(it.desc) + '</td><td class="right"><b>' + esc(it.qty) + '</b></td><td>' + esc(it.unit) + '</td><td class="muted small">' + esc(it.note) + '</td></tr>').join('') + '</tbody></table></div>' : '')
     + '<details style="margin-top:8px"' + (items.length ? '' : ' open') + '><summary style="cursor:pointer;font-weight:600">' + (items.length ? 'Original mail text' : 'What the customer wrote') + '</summary><div class="qt-enq-text">' + esc(en.requirement || '(no text)') + '</div></details>'
@@ -2541,7 +2541,7 @@ function qtEnqToLine(){
 }
 window.qtEnqToLine = qtEnqToLine;
 
-function startQuotationFromEnquiry(en, opts){ opts = opts || {}; if (showPage('quotations') === false) return;   /* user is asked about unsaved work first */
+function startQuotationFromEnquiry(en, opts){ opts = opts || {}; if (showPage('quotations', document.querySelector(".navbtn[onclick*=\"'quotations'\"]") || undefined) === false) return;   /* user is asked about unsaved work first */
   QT_EDIT_MODE = false; REVISION_QUOTATION = null; if($('qtsavebtn'))$('qtsavebtn').textContent='Save Quotation'; if($('qtno'))$('qtno').readOnly=false; setTimeout(()=>{
     const cn = /^\(/.test(String(en.customerName || '')) ? '' : (en.customerName || '');   /* "(customer not identified)" -> leave blank */
     $('qtenquiry').value=en.id||''; $('qtcustomer').value=cn; $('qtcontact').value=en.contactPerson||''; $('qtenquiryDate').value=en.date?toInputDate(en.date):todayStr();
@@ -4515,3 +4515,255 @@ document.addEventListener('keydown', function(e){
   if (qa) { e.preventDefault(); qa.go(); }
 });
 Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
+
+/* ============================================================
+   ENQUIRY BOX (free — no paid AI)
+   One box for every enquiry: drop / choose / paste (Ctrl+V) a photo,
+   screenshot or PDF, or paste the customer's text. Staff choose the
+   customer and type / correct the items. Items do NOT have to be our
+   own products (import / local items are fine).
+   - Text and text-PDFs: "Find items" suggests item lines (editable).
+   - Files are kept in Google Drive and shown again on the quotation.
+   - E-mail enquiries open in the same box via ✎ Edit.
+   ============================================================ */
+const ENQF = {files:[], editId:null, existing:[], pdfText:{}, items:[]};
+const ENQ_SOURCES = ['Phone', 'WhatsApp', 'Email', 'Walk-in', 'Website', 'Other'];
+const ENQ_OK_TYPES = /^(image\/(jpeg|jpg|png|webp|gif)|application\/pdf)$/i;
+
+function enqCustHtml(d){
+  const n = String(d.customerName || '').trim();
+  if (!n || /^\(/.test(n)) return '<a class="model-link" style="color:#c0392b;font-weight:700" onclick="enquiryForm(\'' + encA(d.id) + '\')">⚠ Customer not identified — choose</a>';
+  return esc(n);
+}
+function enqEditBtn(d){ return '<button class="btn small" style="margin-top:4px" onclick="enquiryForm(\'' + encA(d.id) + '\')">✎ Edit</button>'; }
+function enqDriveId(a){ if (a && a.id) return a.id; const m = String((a && a.url) || '').match(/\/d\/([\w-]{10,})|[?&]id=([\w-]{10,})/); return m ? (m[1] || m[2]) : ''; }
+function enqIsImage(a){ return /^image\//i.test(String(a.type || '')) || /\.(jpe?g|png|webp|gif)$/i.test(String(a.name || '')); }
+function enqAttHtml(a){
+  const id = enqDriveId(a);
+  if (enqIsImage(a) && id) return '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" title="' + esc(a.name) + '" class="enqf-thumb"><img src="https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w320" alt="' + esc(a.name) + '" loading="lazy" onerror="this.parentNode.classList.add(\'noimg\')"><span>' + esc(a.name) + '</span></a>';
+  return '<a class="btn small" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(a.url) + '">📎 ' + esc(a.name) + '</a>';
+}
+
+/* ---------- open the box (new, or ✎ edit an existing enquiry) ---------- */
+function enquiryForm(idEnc){
+  const id = idEnc ? decodeURIComponent(idEnc) : '';
+  const d = id ? (ENQ_CACHE || []).find(x => x.id === id) : null;
+  if (id && !d) return toast('Enquiry not found — press Refresh and try again.', true);
+  ENQF.files.forEach(f => { if (f.url) URL.revokeObjectURL(f.url); });
+  Object.assign(ENQF, {files:[], editId:d ? d.id : null, existing:d ? (d.attachments || []) : [], pdfText:{}, items:d && d.items ? d.items.map(x => ({desc:x.desc || '', qty:x.qty || '', unit:x.unit || 'Nos', note:x.note || ''})) : []});
+  const cn = d && !/^\(/.test(String(d.customerName || '')) ? d.customerName : '';
+  const src = d ? (d.source && d.source !== 'Manual' ? d.source : '') : 'Phone';
+  modal(d ? 'Edit Enquiry ' + d.id : 'New Enquiry', '<div class="enqf">'
+    + (d && d.needsReview ? '<div class="imp-warn" style="margin:0 0 10px"><b>⚠ Please check this enquiry.</b> ' + esc(d.aiNote || '') + ' Saving marks it as checked.</div>' : '')
+    + '<div class="form-grid">'
+    + '<label>Customer *<input id="enqfCust" list="clist" autocomplete="off" value="' + esc(cn) + '" placeholder="Choose from list or type a new name" onchange="enqfPickCustomer()"></label>'
+    + '<label>Date<input id="enqfDate" type="date" value="' + esc(d && d.date ? toInputDate(d.date) : todayStr()) + '"></label>'
+    + '<label>Contact person<input id="enqfContact" value="' + esc(d ? d.contactPerson || '' : '') + '"></label>'
+    + '<label>Phone<input id="enqfPhone" value="' + esc(d ? d.phone || '' : '') + '"></label>'
+    + '<label>Email<input id="enqfEmail" type="email" value="' + esc(d ? d.email || '' : '') + '"></label>'
+    + '<label>Came by<select id="enqfSource"' + (d && d.source === 'Email' ? ' disabled title="E-mail enquiry"' : '') + '>' + (d && d.source === 'Email' ? '<option>Email</option>' : '<option value="">—</option>' + ENQ_SOURCES.map(s => '<option' + (s === src ? ' selected' : '') + '>' + s + '</option>').join('')) + '</select></label>'
+    + '<label>Customer ref / RFQ #<input id="enqfRef" value="' + esc(d ? d.customerRef || '' : '') + '"></label>'
+    + '<label>Subject<input id="enqfSubject" value="' + esc(d ? d.subject || '' : '') + '" placeholder="optional"></label>'
+    + '</div>'
+    + '<div id="enqfDrop" class="enqf-drop" tabindex="0" onclick="if(event.target===this||event.target.classList.contains(\'enqf-hint\'))$(\'enqfFile\').click()">'
+    + '<div class="enqf-hint"><b>📥 Drop photo / PDF here</b>, <a class="model-link" onclick="$(\'enqfFile\').click()">choose files</a>, or press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste a screenshot or text</div>'
+    + '<div class="muted small enqf-hint">JPG, PNG, PDF · up to 10 MB each · WhatsApp: open the picture → Share / Copy, then paste here</div>'
+    + '<input id="enqfFile" type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="enqfAddFiles(this.files);this.value=\'\'">'
+    + '<div id="enqfFiles" class="enqf-files"></div></div>'
+    + '<label class="enqf-lbl">Customer\'s message / enquiry text<textarea id="enqfText" rows="5" placeholder="Paste the e-mail, WhatsApp message or write what the customer asked for…">' + esc(d ? d.requirement || '' : '') + '</textarea></label>'
+    + '<div class="enqf-items-head"><b>Items</b> <span class="muted small">— any item, our product or not. These lines go into the quotation.</span>'
+    + '<span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" type="button" onclick="enqfFindItems()">✨ Find items in text / PDF</button><button class="btn small" type="button" onclick="enqfAddItem()">+ Add item</button></span></div>'
+    + '<div class="table-wrap"><table class="enqf-items"><thead><tr><th style="width:34px">#</th><th>Description / Part no.</th><th style="width:80px">Qty</th><th style="width:80px">Unit</th><th style="width:26%">Remarks</th><th style="width:34px"></th></tr></thead><tbody id="enqfItems"></tbody></table></div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn" id="enqfSave1" onclick="enqfSave(false)">' + (d ? 'Save changes' : 'Save Enquiry') + '</button>'
+    + (!d || d.status === 'New' ? '<button class="btn primary" id="enqfSave2" onclick="enqfSave(true)">' + (d ? 'Save & Make Quotation' : 'Save & Make Quotation') + '</button>' : '')
+    + '</div></div>');
+  enqfRenderFiles(); enqfRenderItems();
+  const drop = $('enqfDrop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) enqfAddFiles(e.dataTransfer.files); else { const t = e.dataTransfer && e.dataTransfer.getData('text'); if (t) enqfAppendText(t); } });
+  setTimeout(() => { const c = $('enqfCust'); if (c && !c.value) c.focus(); }, 40);
+}
+
+function enqfPickCustomer(){
+  const c = findCust(($('enqfCust') || {}).value || ''); if (!c) return;
+  const fill = (id, v) => { const el = $(id); if (el && !el.value && v) el.value = v; };
+  fill('enqfContact', c['Contact Person']); fill('enqfPhone', c['Phone']); fill('enqfEmail', c['Email']);
+  $('enqfCust').value = c['Customer Name'];
+}
+function enqfAppendText(t){
+  const ta = $('enqfText'); if (!ta) return;
+  ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n\n' : '') + String(t).trim();
+}
+
+/* ---------- files ---------- */
+function enqfAddFiles(list){
+  const arr = Array.from(list || []); let bad = 0;
+  arr.forEach(f => {
+    const type = String(f.type || '').toLowerCase();
+    if (!ENQ_OK_TYPES.test(type)) { bad++; return; }
+    if (f.size > 25 * 1024 * 1024) { toast('Too large: ' + f.name, true); return; }
+    if (ENQF.files.length + ENQF.existing.length >= 20) { toast('At most 20 files per enquiry.', true); return; }
+    const isImg = /^image\//.test(type);
+    let name = f.name || ''; if (!name || /^image\.(png|jpe?g)$/i.test(name)) name = 'screenshot-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.' + (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const item = {file:f, name:name, type:type, url:isImg ? URL.createObjectURL(f) : '', note:''};
+    ENQF.files.push(item);
+    if (type === 'application/pdf') enqfReadPdf(item);
+  });
+  if (bad) toast(bad + ' file(s) skipped — only photos (JPG, PNG) and PDF can be added.', true);
+  enqfRenderFiles();
+}
+function enqfRemoveFile(i){ const f = ENQF.files[i]; if (f && f.url) URL.revokeObjectURL(f.url); ENQF.files.splice(i, 1); enqfRenderFiles(); }
+function enqfRenderFiles(){
+  const host = $('enqfFiles'); if (!host) return;
+  const old = ENQF.existing.map(a => '<div class="enqf-file saved">' + enqAttHtml(a) + '<small>saved</small></div>').join('');
+  const now = ENQF.files.map((f, i) => '<div class="enqf-file">' + (f.url ? '<img src="' + f.url + '" alt="">' : '<div class="enqf-pdf">PDF</div>')
+    + '<div class="enqf-fn" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' + (f.note ? '<small>' + esc(f.note) + '</small>' : '') + '<button type="button" title="Remove" onclick="enqfRemoveFile(' + i + ')">×</button></div>').join('');
+  host.innerHTML = old + now;
+  host.parentNode.classList.toggle('has-files', !!(old || now));
+}
+
+/* ---------- PDF text (free, in the browser, pdf.js) ---------- */
+let ENQ_PDFJS = null;
+function enqLoadPdfJs(){
+  if (ENQ_PDFJS) return ENQ_PDFJS;
+  ENQ_PDFJS = new Promise((res, rej) => {
+    if (window.pdfjsLib) return res(window.pdfjsLib);
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); } catch (e) { rej(e); } };
+    s.onerror = () => { ENQ_PDFJS = null; rej(new Error('pdf reader could not load')); };
+    document.head.appendChild(s);
+  });
+  return ENQ_PDFJS;
+}
+async function enqfReadPdf(item){
+  item.note = 'reading…'; enqfRenderFiles();
+  try {
+    const lib = await enqLoadPdfJs();
+    const pdf = await lib.getDocument({data:new Uint8Array(await item.file.arrayBuffer())}).promise;
+    const lines = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 15); p++) {
+      const tc = await (await pdf.getPage(p)).getTextContent();
+      const rows = {};
+      tc.items.forEach(t => { if (!String(t.str).trim()) return; const y = Math.round(t.transform[5] / 3); (rows[y] = rows[y] || []).push({x:t.transform[4], s:t.str}); });
+      Object.keys(rows).map(Number).sort((a, b) => b - a).forEach(y => lines.push(rows[y].sort((a, b) => a.x - b.x).map(r => r.s.trim()).join('   ')));
+    }
+    const text = lines.join('\n').trim();
+    ENQF.pdfText[item.name] = text;
+    item.note = text.length > 20 ? 'text found ✓' : 'scanned — type items';
+  } catch (e) { item.note = 'could not read'; }
+  enqfRenderFiles();
+}
+
+/* ---------- items ---------- */
+function enqfRenderItems(){
+  const h = $('enqfItems'); if (!h) return;
+  if (!ENQF.items.length) { h.innerHTML = '<tr><td colspan="6" class="muted small" style="text-align:center;padding:14px">No items yet — press “Find items” or “+ Add item”. You can also leave items empty and add them on the quotation.</td></tr>'; return; }
+  h.innerHTML = ENQF.items.map((it, i) => '<tr><td class="muted">' + (i + 1) + '</td>'
+    + '<td><input list="mlist" value="' + esc(it.desc) + '" placeholder="Description or part no. (any item)" oninput="ENQF.items[' + i + '].desc=this.value"></td>'
+    + '<td><input type="number" min="0" step="any" value="' + esc(it.qty) + '" oninput="ENQF.items[' + i + '].qty=this.value"></td>'
+    + '<td><input value="' + esc(it.unit || 'Nos') + '" oninput="ENQF.items[' + i + '].unit=this.value"></td>'
+    + '<td><input value="' + esc(it.note || '') + '" oninput="ENQF.items[' + i + '].note=this.value"></td>'
+    + '<td><button class="btn danger small" type="button" title="Remove" onclick="ENQF.items.splice(' + i + ',1);enqfRenderItems()">×</button></td></tr>').join('');
+}
+function enqfAddItem(){ ENQF.items.push({desc:'', qty:'', unit:'Nos', note:''}); enqfRenderItems(); const rows = document.querySelectorAll('#enqfItems input[list]'); if (rows.length) rows[rows.length - 1].focus(); }
+
+/* Simple, free item finder: lines such as "Solenoid valve 1/2 - 4 nos", "4 x FRL 1/2", "Coil 24VDC qty 4" or table rows */
+function enqParseItems(text){
+  const U = 'nos|no|pcs|pc|piece|pieces|set|sets|mtr|mtrs|meter|meters|metre|m|kg|kgs|ltr|ltrs|litre|liters|lit|unit|units|pair|pairs|roll|rolls|box|boxes|each|ea|lot|pkt|packet|feet|ft|length|lengths';
+  const cap = u => { u = String(u || 'Nos'); return u.charAt(0).toUpperCase() + u.slice(1).toLowerCase(); };
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach(raw => {
+    let line = raw.replace(/ /g, ' ').trim(); if (!line || line.length > 300) return;
+    if (/^(dear|hi|hello|regards|thanks|thank you|best|sir|madam|please|kindly|from|to|sent|subject|cc|date)\b/i.test(line) && !/\d+\s*(nos|pcs|qty)/i.test(line)) return;
+    const cells = line.split(/\t+| {3,}|\s*\|\s*/).map(x => x.trim()).filter(Boolean);
+    if (cells.length >= 3 && typeof qtItemFromCells === 'function') { const it = qtItemFromCells(cells); if (it && it.qty) { out.push({desc:it.desc, qty:it.qty, unit:it.unit || 'Nos', note:it.note || ''}); return; } }
+    line = line.replace(/^(?:\d{1,3}[.)\-:]|[-•*▪●])\s+/, '');
+    let m = line.match(new RegExp('^(.*?\\S)\\s*(?:[-–:,=(]|\\bqty\\b\\.?|\\bquantity\\b|\\bx\\b|×)?\\s*(\\d+(?:\\.\\d+)?)\\s*(' + U + ')\\.?\\)?\\s*$', 'i'));
+    if (m) { out.push({desc:m[1].replace(/[\s\-–:,=(x×]+$/i, '').trim(), qty:+m[2], unit:cap(m[3]), note:''}); return; }
+    m = line.match(new RegExp('^(?:qty\\.?\\s*)?(\\d+(?:\\.\\d+)?)\\s*(' + U + ')?\\.?\\s*(?:x|×|of|-|–|:)\\s*(.{3,})$', 'i'));
+    if (m) { out.push({desc:m[3].trim(), qty:+m[1], unit:cap(m[2]), note:''}); return; }
+    m = line.match(/^(.*\S)\s*[,(-]?\s*(?:qty|quantity)\s*[:=.-]?\s*(\d+(?:\.\d+)?)\s*\)?\s*$/i);
+    if (m) { out.push({desc:m[1].replace(/[\s\-–:,(]+$/, '').trim(), qty:+m[2], unit:'Nos', note:''}); return; }
+  });
+  return out.filter(x => x.desc && x.desc.length > 1 && x.qty > 0 && x.qty < 1e6);
+}
+function enqfFindItems(){
+  const pending = ENQF.files.filter(f => f.type === 'application/pdf' && f.note === 'reading…');
+  if (pending.length) return toast('Still reading the PDF — try again in a moment.');
+  const txt = [($('enqfText') || {}).value || ''].concat(Object.values(ENQF.pdfText)).join('\n');
+  const found = enqParseItems(txt);
+  if (!found.length) {
+    const imgs = ENQF.files.filter(f => /^image\//.test(f.type)).length;
+    return toast(imgs ? 'Photos cannot be read automatically in the free version — please type the items from the picture.' : 'No item lines with a quantity were found. Please add the items yourself.', true);
+  }
+  const key = it => norm(it.desc) + '|' + it.qty;
+  const have = new Set(ENQF.items.map(key));
+  ENQF.items = ENQF.items.filter(it => String(it.desc || '').trim() || it.qty);
+  let added = 0; found.forEach(it => { if (!have.has(key(it))) { ENQF.items.push(it); have.add(key(it)); added++; } });
+  enqfRenderItems();
+  toast(added ? added + ' item(s) found — please check them.' : 'Those items are already in the list.');
+}
+
+/* ---------- save ---------- */
+async function enqfFileData(f){
+  let blob = f.file, type = f.type === 'image/jpg' ? 'image/jpeg' : f.type, name = f.name;
+  if (/^image\/(jpeg|png|webp)$/.test(type) && blob.size > 1.2 * 1024 * 1024 && window.createImageBitmap) {
+    try {
+      const bmp = await createImageBitmap(blob), sc = Math.min(1, 2200 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const small = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+      if (small && small.size < blob.size) { blob = small; type = 'image/jpeg'; name = name.replace(/\.\w+$/, '') + '.jpg'; }
+    } catch (e) {}
+  }
+  if (blob.size > 10 * 1024 * 1024) throw new Error('File is larger than 10 MB: ' + f.name);
+  const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = () => rej(new Error('Could not read ' + f.name)); fr.readAsDataURL(blob); });
+  return {name:name, type:type, data:data};
+}
+async function enqfSave(thenQuote){
+  const cust = (($('enqfCust') || {}).value || '').trim();
+  if (!cust) { toast('Please choose the customer.', true); $('enqfCust').focus(); return; }
+  const items = ENQF.items.map(it => ({desc:String(it.desc || '').trim(), qty:it.qty, unit:String(it.unit || '').trim(), note:String(it.note || '').trim()})).filter(it => it.desc || Number(it.qty) > 0);
+  if (items.some(it => !it.desc)) return toast('An item has a quantity but no description.', true);
+  const text = (($('enqfText') || {}).value || '').trim();
+  if (!items.length && !text && !ENQF.files.length && !ENQF.existing.length) return toast('Add the customer\'s text, a file, or at least one item.', true);
+  const btns = ['enqfSave1', 'enqfSave2'].map(id => $(id)).filter(Boolean); btns.forEach(b => b.disabled = true);
+  try {
+    let files = [];
+    try { files = await Promise.all(ENQF.files.map(enqfFileData)); } catch (e) { return toast(e.message, true); }
+    const src = $('enqfSource');
+    const p = {customerName:cust, date:$('enqfDate').value, contactPerson:$('enqfContact').value, phone:$('enqfPhone').value, email:$('enqfEmail').value,
+      customerRef:$('enqfRef').value, subject:$('enqfSubject').value, requirement:text, items:items, files:files};
+    if (src && !src.disabled) p.source = src.value || 'Manual';
+    if (ENQF.editId) { p.id = ENQF.editId; p.reviewed = true; }
+    const r = await api(ENQF.editId ? 'updateEnquiry' : 'saveEnquiry', p);
+    if (!r || !r.ok) {
+      const unknown = r && /unknown action/i.test(r.error || '');
+      return toast(((r && r.error) || 'Could not save.') + (unknown ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+    }
+    const id = ENQF.editId || r.id;
+    ENQF.files.forEach(f => { if (f.url) URL.revokeObjectURL(f.url); }); ENQF.files = [];
+    closeModal();
+    toast((ENQF.editId ? 'Enquiry updated: ' : 'Enquiry saved: ') + id);
+    if (typeof renderEnquiries === 'function' && $('enqRows')) await renderEnquiries();
+    else { const e = await api('getEnquiries'); if (e && e.ok) ENQ_CACHE = e.documents || []; }
+    if (thenQuote) { const d = (ENQ_CACHE || []).find(x => x.id === id); if (d) startQuotationFromEnquiry(d); }
+  } finally { btns.forEach(b => b.disabled = false); }
+}
+/* the older name, still used by a few buttons */
+function saveEnquiry(){ return enqfSave(false); }
+
+/* paste anywhere while the box is open: pictures become files, text goes into the message */
+document.addEventListener('paste', function(e){
+  if (!$('enqfDrop') || $('modal').classList.contains('hidden')) return;
+  const cd = e.clipboardData; if (!cd) return;
+  const files = Array.from(cd.files || []).filter(f => ENQ_OK_TYPES.test(f.type || ''));
+  if (files.length) { e.preventDefault(); enqfAddFiles(files); return; }
+  const t = cd.getData('text');
+  const tag = (e.target && e.target.tagName) || '';
+  if (t && !/INPUT|TEXTAREA/.test(tag)) { e.preventDefault(); enqfAppendText(t); }
+});
+Object.assign(window, {enquiryForm, saveEnquiry, enqfSave, enqfPickCustomer, enqfAddFiles, enqfRemoveFile, enqfFindItems, enqfAddItem, enqParseItems, enqCustHtml, enqEditBtn, enqAttHtml});
