@@ -2571,7 +2571,7 @@ function addQuotationLine(){ QTL.push({model:'',desc:'',itemRemarks:'',make:'',q
 function removeQuotationLine(i){ QTL.splice(i,1); if(!QTL.length)QTL.push({model:'',make:'',qty:'',unit:'Pcs',rate:'',rateAuto:true,deliveryStatus:'Pending',history:null}); renderQuotationLines(); updateQuotationTotal(); }
 function quotationModelChanged(i){ const x=QTL[i],p=findProd(x.model); if(p){x.unit=p.Unit||'Pcs'; if(!x.make)x.make=p.Brand||''; const base=Number(p['Sale Price']||0); if(base>0){x.rate=quotationAdjustedRate(base);x.rateAuto=true;} } x.history=null; renderQuotationLines(); updateQuotationTotal(); loadQuotationItemHistory(i); }
 async function loadQuotationItemHistory(i){const x=QTL[i];if(!x||!x.model)return;const model=String(x.model||'').trim(),customer=String($('qtcustomer')?.value||'').trim(),c=findCust(customer);if(!customer||!c){x.history=null;renderQuotationLines();return;}const r=await api('quotationItemHistory',{customerId:c['Customer ID']||'',customer:customer,model:model});if(QTL[i]!==x||String(x.model||'').trim()!==model||String($('qtcustomer')?.value||'').trim()!==customer)return;x.history=r&&r.ok?r.history:null;renderQuotationLines();}
-function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=x.history?'<div class="muted small" style="margin-top:4px;color:#315b86">Previous sale: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+' · Rate '+money(x.history.rate)+'</div>':''; return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea></td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
+function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=x.history?'<div class="muted small" style="margin-top:4px;color:#315b86">Previous sale: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+' · Rate '+money(x.history.rate)+'</div>':''; return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
 function updateQuotationTotal(){ const gross=QTL.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0); const pct=Math.min(100,Math.max(0,Number($('qtdiscount')?.value||0))); const disc=gross*pct/100; if($('qttotal'))$('qttotal').textContent=pct>0?('SUB TOTAL: '+money(gross)+'   |   LESS '+pct+'% DISCOUNT: '+money(disc)+'   |   TOTAL: '+money(gross-disc)):('TOTAL: '+money(gross)); }
 async function saveQuotation(){
   if(window.SFS_QT_SAVING)return;
@@ -2631,7 +2631,7 @@ function editQuotation(en){
     if($('qtref'))$('qtref').value=d.ref||d.po||'';
     if($('qtrefDate'))$('qtrefDate').value=toInputDate(d.poDate);
     if($('qtpaymentTerms'))$('qtpaymentTerms').value=d.paymentTerms||'20 Days';
-    QTL=(d.items||[]).map(x=>({model:(x.model==='-'?'':(x.model||'')),desc:x.desc||'',itemRemarks:x.itemRemarks||'',make:x.make||'',qty:x.qty||'',unit:x.unit||'Pcs',rate:x.rate||'',rateAuto:false,deliveryStatus:x.deliveryStatus||'Pending',history:null}));
+    QTL=(d.items||[]).map(x=>({model:(x.model==='-'?'':(x.model||'')),desc:x.desc||'',itemRemarks:x.itemRemarks||'',make:x.make||'',qty:x.qty||'',unit:x.unit||'Pcs',rate:x.rate||'',rateAuto:false,deliveryStatus:x.deliveryStatus||'Pending',history:null,image:x.image||''}));
     renderQuotationLines(); updateQuotationTotal();
     QTL.forEach((x,i)=>{ if(x.model) loadQuotationItemHistory(i); });
     if($('qtsavebtn'))$('qtsavebtn').textContent='Update Quotation';
@@ -2664,7 +2664,8 @@ function printQuotation(d){
     const make = x.make || p.Brand || '';
     const desc = x.desc || '';
     const lead = x.leadTime || x.deliveryStatus || '';
-    return `<tr class="qt-item"><td class="c">${i+1}</td><td>${(x.model&&x.model!=='-')?'<div class="qt-model">'+esc(x.model)+'</div>':''}${desc?'<div class="qt-desc">'+esc(desc)+'</div>':''}${x.itemRemarks?'<div class="qt-item-remarks"><b>Remarks:</b> '+esc(x.itemRemarks)+'</div>':''}${make?'<div class="qt-make">Make : <b>'+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><div class="qt-sm">${esc(x.unit||'nos')}</div></td><td class="c"><b>${money(x.rate)}</b><div class="qt-sm">each</div></td><td class="c"><b>${money(lineAmt(x))}</b></td><td class="c qt-lead">${esc(String(lead).toUpperCase())}</td></tr>`;
+    const pic = qtImgSrc(x);
+    return `<tr class="qt-item"><td class="c">${i+1}</td><td>${pic?'<div class="qt-pic"><img src="'+esc(pic)+'" alt=""></div>':''}${(x.model&&x.model!=='-')?'<div class="qt-model">'+esc(x.model)+'</div>':''}${desc?'<div class="qt-desc">'+esc(desc)+'</div>':''}${x.itemRemarks?'<div class="qt-item-remarks"><b>Remarks:</b> '+esc(x.itemRemarks)+'</div>':''}${make?'<div class="qt-make">Make : <b>'+esc(make)+'</b></div>':''}</td><td class="c"><b>${esc(x.qty)}</b><div class="qt-sm">${esc(x.unit||'nos')}</div></td><td class="c"><b>${money(x.rate)}</b><div class="qt-sm">each</div></td><td class="c"><b>${money(lineAmt(x))}</b></td><td class="c qt-lead">${esc(String(lead).toUpperCase())}</td></tr>`;
   }).join('');
   const spacerH = Math.max(20, 62 - items.length*11);
   const row = (k,v,cls)=>`<tr><td class="k">${k}</td><td class="v ${cls||''}">${v||'&nbsp;'}</td></tr>`;
@@ -2705,6 +2706,9 @@ function printQuotation(d){
     .qt-items th.c,.qt-items td.c{text-align:center}
     .qt-items td{border-left:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid #e6eaf0;padding:8px;vertical-align:top;line-height:1.4}
     .qt-model{font-weight:bold;font-size:12px}
+    .qt-pic{float:right;margin:0 0 4px 10px;width:34mm;height:26mm;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:4px;background:#fff;overflow:hidden}
+    .qt-pic img{max-width:100%;max-height:100%;object-fit:contain}
+    .qt-item td:nth-child(2)::after{content:"";display:block;clear:both}
     .qt-desc{color:#333;margin-top:2px}.qt-item-remarks{font-size:10.5px;color:#5b6573;margin-top:4px;white-space:pre-wrap}.qt-item-remarks b{color:#1d2433}
     .qt-make{margin-top:5px;color:var(--mut)}.qt-make b{color:#0b7bbd}
     .qt-sm{font-size:9.5px;color:var(--mut);font-style:italic;margin-top:1px}
@@ -2930,7 +2934,10 @@ function printDoc(body, footerHtml, fileName){
     const restoreTitle = () => { document.title = prevTitle; window.removeEventListener('afterprint', restoreTitle); };
     window.addEventListener('afterprint', restoreTitle);
   }
-  setTimeout(() => window.print(), 100);
+  /* wait (max 6 s) until pictures and logos have loaded, so they appear on the printout / PDF */
+  const imgs = Array.from(document.querySelectorAll('#printArea img')).filter(im => !im.complete);
+  const ready = imgs.map(im => new Promise(r => { im.addEventListener('load', r, {once:true}); im.addEventListener('error', r, {once:true}); }));
+  Promise.race([Promise.all(ready), new Promise(r => setTimeout(r, 6000))]).then(() => setTimeout(() => window.print(), 100));
 }
 
 
@@ -4779,3 +4786,71 @@ document.addEventListener('paste', function(e){
   if (t && !/INPUT|TEXTAREA/.test(tag)) { e.preventDefault(); enqfAppendText(t); }
 });
 Object.assign(window, {enquiryForm, saveEnquiry, enqfSave, enqfPickCustomer, enqfAddFiles, enqfRemoveFile, enqfFindItems, enqfAddItem, enqParseItems, enqCustHtml, enqEditBtn, enqAttHtml});
+
+
+/* ============================================================
+   QUOTATION ITEM PICTURES (optional, one per item)
+   Paste (click the box, Ctrl+V), choose a file, or use the product's own photo.
+   No picture = nothing changes on the quotation.
+   ============================================================ */
+function qtDriveThumb(u){
+  const m = String(u || '').match(/[?&]id=([\w-]{10,})|\/d\/([\w-]{10,})/);
+  return m ? 'https://drive.google.com/thumbnail?id=' + (m[1] || m[2]) + '&sz=w1000' : String(u || '');
+}
+function qtImgSrc(x){ return x ? (x.imagePreview || (x.image ? qtDriveThumb(x.image) : '')) : ''; }
+function qtPhotoCell(x, i){
+  const src = qtImgSrc(x), p = findProd(x.model) || {};
+  if (src) return '<div class="qt-photo has"><img src="' + esc(src) + '" alt=""><button type="button" title="Remove picture" onclick="qtPhotoRemove(' + i + ')">×</button></div>';
+  return '<div class="qt-photo" tabindex="0" data-i="' + i + '" title="Click here and press Ctrl+V to paste a picture">'
+    + '<span>📷 Picture (optional): <a class="model-link" onclick="qtPhotoPick(' + i + ')">choose</a> or click here &amp; <kbd>Ctrl</kbd>+<kbd>V</kbd></span>'
+    + (p['Product Image'] ? ' <a class="model-link" onclick="qtPhotoUseProduct(' + i + ')">use product photo</a>' : '') + '</div>';
+}
+async function qtPhotoPrep(file){
+  let blob = file, type = String(file.type || '').toLowerCase();
+  if (!/^image\/(jpeg|jpg|png|webp|gif)$/.test(type)) throw new Error('Please use a JPG or PNG picture.');
+  if (window.createImageBitmap && type !== 'image/gif') {
+    try {
+      const bmp = await createImageBitmap(blob), sc = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+      if (sc < 1 || blob.size > 600 * 1024) {
+        const c = document.createElement('canvas'); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+        const small = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85)); if (small) { blob = small; type = 'image/jpeg'; }
+      }
+    } catch (e) {}
+  }
+  if (blob.size > 5 * 1024 * 1024) throw new Error('Picture is larger than 5 MB.');
+  const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = () => rej(new Error('Could not read the picture.')); fr.readAsDataURL(blob); });
+  return {name:(String(file.name || 'item').replace(/\.\w+$/, '') || 'item') + (type === 'image/png' ? '.png' : '.jpg'), type:type, data:data, preview:URL.createObjectURL(blob)};
+}
+async function qtPhotoSet(i, file){
+  const x = QTL[i]; if (!x) return;
+  try {
+    const r = await qtPhotoPrep(file);
+    if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
+    x.imageNew = {name:r.name, type:r.type, data:r.data}; x.imagePreview = r.preview; x.image = '';
+    renderQuotationLines();
+  } catch (e) { toast(e.message, true); }
+}
+function qtPhotoPick(i){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { if (inp.files && inp.files[0]) qtPhotoSet(i, inp.files[0]); };
+  inp.click();
+}
+function qtPhotoUseProduct(i){
+  const x = QTL[i], p = x && findProd(x.model); if (!p || !p['Product Image']) return;
+  if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
+  x.image = p['Product Image']; x.imageNew = null; x.imagePreview = ''; renderQuotationLines();
+}
+function qtPhotoRemove(i){
+  const x = QTL[i]; if (!x) return;
+  if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
+  x.image = ''; x.imageNew = null; x.imagePreview = ''; renderQuotationLines();
+}
+document.addEventListener('paste', function(e){
+  const box = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.qt-photo[data-i]') : null;
+  if (!box || !e.clipboardData) return;
+  const f = Array.from(e.clipboardData.files || []).find(x => /^image\//.test(x.type || ''));
+  if (!f) { toast('No picture found on the clipboard — copy a picture first.', true); return; }
+  e.preventDefault(); qtPhotoSet(Number(box.dataset.i), f);
+});
+Object.assign(window, {qtPhotoPick, qtPhotoUseProduct, qtPhotoRemove, qtPhotoSet, qtImgSrc});
