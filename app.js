@@ -1985,7 +1985,7 @@ async function renderReports(){
   if (!$('reports')) return;
   const period = rmv === '' ? 'Year ' + year : PS_MONTHS[Number(rmv)] + ' ' + year;
   $('reports').innerHTML =
-    `<div class="cards">
+    `${isAdmin() ? '<div id="uaSection"></div>' : ''}<div class="cards">
        <div class="card"><span>Invoice Lines — ${esc(period)}</span><strong>${sales.length}</strong></div>
        <div class="card"><span>Sales (excl. GST) — ${esc(period)}</span><strong>${money(sales.reduce((a,x)=>a+(+x.total||0),0))}</strong></div>
      </div>
@@ -2001,6 +2001,7 @@ async function renderReports(){
   filterMovements();
   if (rmv !== '') { PS.mode = 'month'; PS.month = Number(rmv); }
   renderProductSales(true);
+  if (isAdmin() && typeof loadUserActivity === 'function') loadUserActivity(year, rmv);
 }
 function filterMovements(){
   const h = $('mvRows'); if (!h) return;
@@ -4124,3 +4125,99 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
     data:function(){ return NB; }
   };
 })();
+
+
+/* ============================================================
+   USER ACTIVITY (Reports page, Admin only, read-only)
+   Who made which document + every save / edit / status change.
+   ============================================================ */
+const UA = {data:null, year:'', month:'', user:'', q:'', show:150};
+const UA_ACTIONS = {
+  saveQuotation:'Created quotation', updateQuotation:'Edited quotation', updateQuotationStatus:'Changed quotation status',
+  saveDC:'Created delivery challan', dc:'Created delivery challan', updateDC:'Edited delivery challan',
+  saveInvoice:'Created invoice', invoice:'Created invoice', updateInvoice:'Edited invoice',
+  savePayment:'Received payment', saveSupplierPayment:'Paid supplier',
+  saveInward:'Stock inward', inward:'Stock inward', saveImportCosting:'Saved import costing',
+  saveProduct:'Added product', product:'Added product', updateProduct:'Edited product', setProductStatus:'Changed product status',
+  saveCustomer:'Added customer', updateCustomer:'Edited customer', setCustomerStatus:'Changed customer status',
+  saveSupplier:'Added supplier', updateSupplier:'Edited supplier', setSupplierStatus:'Changed supplier status',
+  saveEnquiry:'Created enquiry', saveTarget:'Set sales target',
+  saveUser:'Added user', updateUser:'Edited user', disableUser:'Disabled user', changePassword:'Changed password',
+  refreshSource:'Refreshed source data', sync:'Refreshed source data'
+};
+const UA_TYPES = ['Quotation','Delivery Challan','Invoice','Payment Received','Enquiry','Inward','Supplier Payment'];
+
+function uaName(un){
+  const k = String(un || '').trim(); if (!k || k === '~none') return '(not recorded)'; if (k.toLowerCase() === 'email') return 'Email (automatic)';
+  const n = UA.data && UA.data.names ? UA.data.names[k.toLowerCase()] : '';
+  return n && n.toLowerCase() !== k.toLowerCase() ? n + ' (' + k + ')' : (n || k);
+}
+function uaInMonth(v){ if (UA.month === '') return true; const d = new Date(v); return !isNaN(d) && d.getMonth() === Number(UA.month); }
+function uaWhen(v){ const d = new Date(v); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
+async function loadUserActivity(year, month){
+  const host = $('uaSection'); if (!host) return;
+  UA.year = String(year || ''); UA.month = month === undefined ? '' : String(month);
+  host.innerHTML = '<div class="panel"><h3>User Activity</h3><div class="muted">Loading…</div></div>';
+  const r = await api('getUserActivity', {year:Number(year) || new Date().getFullYear()});
+  const h2 = $('uaSection'); if (!h2) return;
+  if (!r || !r.ok) {
+    const unknown = r && /unknown action/i.test(r.error || '');
+    h2.innerHTML = '<div class="panel"><h3>User Activity</h3><div style="color:#c0392b">' + esc((r && r.error) || 'Could not load.') + (unknown ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : '') + '</div></div>';
+    return;
+  }
+  UA.data = r; drawUserActivity();
+}
+
+function drawUserActivity(){
+  const host = $('uaSection'); if (!host || !UA.data) return;
+  const d = UA.data;
+  const docs = (d.docs || []).filter(x => uaInMonth(x.date));
+  const audit = (d.audit || []).filter(x => uaInMonth(x.time));
+  /* one row per user */
+  const by = {};
+  const row = un => { const k = String(un || '').trim().toLowerCase() || '(not recorded)'; return by[k] || (by[k] = {un:String(un || '').trim() || '~none', t:{}, amt:{}, actions:0, edits:0, last:null}); };
+  (d.users || []).forEach(u => row(u.username));
+  docs.forEach(x => { const g = row(x.user); g.t[x.type] = (g.t[x.type] || 0) + 1; g.amt[x.type] = (g.amt[x.type] || 0) + (Number(x.amount) || 0); const t = new Date(x.date); if (!isNaN(t) && (!g.last || t > g.last)) g.last = t; });
+  audit.forEach(x => { const g = row(x.user); g.actions++; if (/^(update|set|disable)/.test(x.action)) g.edits++; const t = new Date(x.time); if (!isNaN(t) && (!g.last || t > g.last)) g.last = t; });
+  const rows = Object.values(by).filter(g => g.un !== 'Email' || Object.keys(g.t).length);
+  rows.sort((a, b) => (b.actions + Object.values(b.t).reduce((s, n) => s + n, 0)) - (a.actions + Object.values(a.t).reduce((s, n) => s + n, 0)));
+  const cell = (g, type, withAmt) => { const n = g.t[type] || 0; if (!n) return '<td class="muted">—</td>'; return '<td><b>' + n + '</b>' + (withAmt && g.amt[type] ? '<div class="muted small">' + money(g.amt[type]) + '</div>' : '') + '</td>'; };
+  const period = (UA.month === '' ? 'Year ' : PS_MONTHS[Number(UA.month)] + ' ') + UA.year;
+
+  const userOpts = rows.map(g => '<option value="' + esc(g.un) + '"' + (g.un === UA.user ? ' selected' : '') + '>' + esc(uaName(g.un)) + '</option>').join('');
+  const selU = UA.user.toLowerCase(), q = norm(UA.q);
+  const userKey = u => String(u || '').trim().toLowerCase() || '~none';
+  /* a saved document is already listed with its amount, so hide its duplicate "Created …" audit line */
+  const docNos = new Set(docs.map(x => String(x.no)));
+  const dupSave = x => /^(save|invoice$|dc$|inward$|product$)/.test(x.action) && /(?:^|;\s*)id=([^;]+)/.test(x.details || '') && docNos.has(String(x.details).match(/(?:^|;\s*)id=([^;]+)/)[1].trim());
+  /* combined timeline: documents + audit entries */
+  let tl = audit.filter(x => !dupSave(x)).map(x => ({t:new Date(x.time), user:x.user, what:UA_ACTIONS[x.action] || x.action, det:String(x.details || '').replace(/;\s*/g, ' · '), kind:'a'}))
+    .concat(docs.map(x => ({t:new Date(x.date), user:x.user, what:x.type + ' ' + x.no, det:[x.party, x.amount ? money(x.amount) : '', x.qty ? x.qty + ' qty' : ''].filter(Boolean).join(' · '), kind:'d'})));
+  tl = tl.filter(x => (!selU || userKey(x.user) === selU) && (!q || norm(x.what + ' ' + x.det + ' ' + uaName(x.user)).includes(q)));
+  tl.sort((a, b) => (b.t - a.t) || (a.kind === 'a' ? -1 : 1));
+  const shown = tl.slice(0, UA.show);
+
+  host.innerHTML = '<div class="panel"><div class="panel-head"><div><h3 style="margin:0">User Activity — ' + esc(period) + '</h3>'
+    + '<div class="muted small">Who made what (from each document\'s “Created By”) and every save / edit / status change (Audit Log). Only Admin can see this.</div></div></div>'
+    + '<div class="table-wrap"><table><thead><tr><th>User</th><th>Quotations</th><th>Delivery Challans</th><th>Invoices</th><th>Payments Recv.</th><th>Enquiries</th><th>Inward</th><th>Supplier Pay.</th><th>Edits / Changes</th><th>All Actions</th><th>Last Active</th></tr></thead><tbody>'
+    + (rows.length ? rows.map(g => '<tr style="cursor:pointer" title="Show this user\'s activity" onclick="uaPickUser(\'' + encA(g.un) + '\')"><td><b>' + esc(uaName(g.un)) + '</b></td>'
+        + cell(g, 'Quotation', true) + cell(g, 'Delivery Challan') + cell(g, 'Invoice', true) + cell(g, 'Payment Received', true) + cell(g, 'Enquiry') + cell(g, 'Inward') + cell(g, 'Supplier Payment', true)
+        + '<td>' + (g.edits ? '<b>' + g.edits + '</b>' : '<span class="muted">—</span>') + '</td><td>' + (g.actions ? '<b>' + g.actions + '</b>' : '<span class="muted">—</span>') + '</td>'
+        + '<td>' + (g.last ? esc(fmtDate(g.last)) : '<span class="muted">No activity</span>') + '</td></tr>').join('') : '<tr><td colspan="11" class="muted">No activity in this period.</td></tr>')
+    + '</tbody></table></div>'
+    + '<h4 style="margin:18px 0 8px">Activity Log</h4>'
+    + '<div class="toolbar" style="flex-wrap:wrap"><select id="uaUser" onchange="uaPickUser(encodeURIComponent(this.value))"><option value="">All users</option>' + userOpts + '</select>'
+    + '<input id="uaQ" type="search" placeholder="Search customer, document #, action…" value="' + esc(UA.q) + '" oninput="uaSearch(this.value)" style="flex:1;min-width:220px">'
+    + '<span class="muted small">Showing ' + shown.length + ' of ' + tl.length + '</span></div>'
+    + '<div class="table-wrap" style="max-height:480px;overflow:auto"><table><thead><tr><th>When</th><th>User</th><th>What</th><th>Details</th></tr></thead><tbody>'
+    + (shown.length ? shown.map(x => '<tr><td style="white-space:nowrap">' + esc(x.kind === 'a' ? uaWhen(x.t) : fmtDate(x.t)) + '</td><td>' + esc(uaName(x.user)) + '</td><td><b>' + esc(x.what) + '</b></td><td class="muted">' + esc(x.det) + '</td></tr>').join('') : '<tr><td colspan="4" class="muted">Nothing found.</td></tr>')
+    + '</tbody></table></div>'
+    + (tl.length > shown.length ? '<div style="margin-top:8px"><button class="btn small" onclick="UA.show+=300;drawUserActivity()">Show more</button></div>' : '')
+    + ((d.audit || []).length ? '' : '<div class="muted small" style="margin-top:8px">The Audit Log has no entries for this year yet — edits and status changes appear here from now on.</div>')
+    + '</div>';
+  const qi = $('uaQ'); if (qi && UA._focus) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); UA._focus = false; }
+}
+function uaPickUser(enc){ UA.user = decodeURIComponent(enc || ''); UA.show = 150; drawUserActivity(); const s = $('uaUser'); if (s) s.scrollIntoView({block:'nearest'}); }
+function uaSearch(v){ UA.q = v; UA.show = 150; UA._focus = true; drawUserActivity(); }
+window.loadUserActivity = loadUserActivity; window.drawUserActivity = drawUserActivity; window.uaPickUser = uaPickUser; window.uaSearch = uaSearch;
