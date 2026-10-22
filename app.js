@@ -663,8 +663,9 @@ function renderDashInventory(){
     </div>
 `);
 }
-function renderDashboard(){
-  $('dash').innerHTML = `<div class="toolbar" style="flex-wrap:wrap"><b class="muted">Filter inventory cards:</b><select id="dfCat" onchange="dashFilter()"></select><select id="dfBrand" onchange="dashFilter()"></select><button class="btn ghost small" onclick="clearFilters(['dfCat','dfBrand'],dashFilter)">Clear</button></div>
+/* The previous dashboard — now shown inside "Detailed views" on the new dashboard (nothing removed) */
+function renderDashboardClassic(){
+  ($('dashClassic') || $('dash')).innerHTML = `<div class="toolbar" style="flex-wrap:wrap"><b class="muted">Filter inventory cards:</b><select id="dfCat" onchange="dashFilter()"></select><select id="dfBrand" onchange="dashFilter()"></select><button class="btn ghost small" onclick="clearFilters(['dfCat','dfBrand'],dashFilter)">Clear</button></div>
     <div id="dashCards"></div>
     <div id="paymentDueSection"></div>
     <div id="dashLow"></div>
@@ -4221,3 +4222,296 @@ function drawUserActivity(){
 function uaPickUser(enc){ UA.user = decodeURIComponent(enc || ''); UA.show = 150; drawUserActivity(); const s = $('uaUser'); if (s) s.scrollIntoView({block:'nearest'}); }
 function uaSearch(v){ UA.q = v; UA.show = 150; UA._focus = true; drawUserActivity(); }
 window.loadUserActivity = loadUserActivity; window.drawUserActivity = drawUserActivity; window.uaPickUser = uaPickUser; window.uaSearch = uaSearch;
+
+/* ============================================================
+   NEW DASHBOARD (Oct 2026)
+   Quick actions • KPI cards • Sales vs Target • Today's to-do •
+   Overdue clients • Pipeline • Top customers • Team activity (Admin) •
+   Search (Ctrl+K).  Read-only: it only reads data the ERP already serves.
+   The previous dashboard is kept under "Detailed views" (loads on demand).
+   ============================================================ */
+const DB2 = {data:{}, seq:0, pipe:'month'};
+
+function db2Short(n){
+  n = Number(n) || 0; const a = Math.abs(n), s = n < 0 ? '-' : '';
+  if (a >= 1e7) return s + (a / 1e7).toFixed(a >= 1e8 ? 1 : 2).replace(/\.?0+$/, '') + ' Cr';
+  if (a >= 1e5) return s + (a / 1e5).toFixed(a >= 1e6 ? 1 : 2).replace(/\.?0+$/, '') + ' Lac';
+  return s + Math.round(a).toLocaleString('en-US');
+}
+function db2Day(v){ const d = new Date(v); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function db2Can(m){ try { return hasMod(m); } catch (e) { return false; } }
+function db2Go(page, after){
+  const btn = document.querySelector('.navbtn[onclick*="\'' + page + '\'"]');
+  if (showPage(page, btn || undefined) === false) return;
+  if (after) setTimeout(after, 0);
+}
+function db2OpenDoc(page, field, noEnc){
+  db2Go(page, () => { const el = $(field); if (el) { el.value = decodeURIComponent(noEnc); el.dispatchEvent(new Event('input', {bubbles:true})); } });
+}
+function db2SetFilter(id, value, fn){ const el = $(id); if (el) { el.value = value; if (typeof fn === 'function') fn(); } }
+
+function renderDashboard(){
+  const host = $('dash'); if (!host) return;
+  const seq = ++DB2.seq; DB2.data = {};
+  const now = new Date(), h = now.getHours();
+  const hello = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const first = String((S.user && (S.user.name || S.user.username)) || '').split(' ')[0];
+  const qa = [
+    {k:'Q', label:'New Quotation', icon:'＋', color:'#2563eb', mod:'sales', go:() => db2Go('quotations')},
+    {k:'E', label:'New Enquiry', icon:'✉', color:'#7c3aed', mod:'enquiries', go:() => db2Go('enquiries', () => { if (typeof enquiryForm === 'function') enquiryForm(); })},
+    {k:'D', label:'Delivery Challan', icon:'⛟', color:'#0891b2', mod:'sales', go:() => db2Go('dc')},
+    {k:'I', label:'New Invoice', icon:'▤', color:'#1f3b63', mod:'sales', go:() => db2Go('invoices')},
+    {k:'P', label:'Receive Payment', icon:'Rs', color:'#16a34a', mod:'accounts', go:() => db2Go('accounts')},
+    {k:'W', label:'Stock Inward', icon:'⬇', color:'#ea580c', mod:'products', go:() => db2Go('inward')}
+  ].filter(x => db2Can(x.mod));
+  window.DB2_QA = qa;
+
+  host.innerHTML = '<div class="db2 no-dirty-track">'   /* dashboard has nothing to save: never trigger the unsaved-changes prompt */
+    + '<div class="db2-top"><div><h2>' + esc(hello) + (first ? ', ' + esc(first) : '') + '</h2><p>' + esc(now.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'})) + ' · Here\'s what needs you today</p></div>'
+    + '<button class="db2-search" type="button" onclick="db2OpenSearch()"><span>🔍 Search customer, part no., invoice, quotation…</span><kbd>Ctrl K</kbd></button></div>'
+    + (qa.length ? '<div class="db2-qa">' + qa.map((x, i) => '<button type="button" onclick="DB2_QA[' + i + '].go()" title="Shortcut: ' + x.k + '"><i style="background:' + x.color + '">' + x.icon + '</i><span>' + esc(x.label) + '<small>' + x.k + '</small></span></button>').join('') + '</div>' : '')
+    + '<div class="db2-kpis" id="db2Kpis"></div>'
+    + '<div class="db2-grid"><div class="db2-col">'
+    + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
+    + '<div class="db2-two">'
+    + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
+    + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading…</div></div>' : '')
+    + '</div></div><div class="db2-col">'
+    + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
+    + (db2Can('accounts') ? '<div class="db2-card" id="db2Over"><div class="muted">Loading…</div></div>' : '')
+    + (isAdmin() ? '<div class="db2-card" id="db2Act"><div class="muted">Loading team activity…</div></div>' : '')
+    + '</div></div>'
+    + '<details class="db2-more" id="db2More" ontoggle="db2MoreToggle(this)"><summary>Detailed views — payments table, sales target, low stock, stock by category, pipeline</summary><div id="dashClassic"></div></details>'
+    + '</div>';
+
+  db2Kpis();   /* stock card can show at once */
+  const yr = now.getFullYear();
+  const jobs = [];
+  const take = (key, p) => jobs.push(p.then(r => { if (seq !== DB2.seq) return; DB2.data[key] = r && r.ok ? r : null; db2Paint(); }).catch(() => {}));
+  if (db2Can('reports')) take('sales', api('getSalesSummary', {year:yr}));
+  if (db2Can('accounts')) take('out', api('getOutstanding', {}));
+  if (db2Can('sales')) {
+    take('qt', api('quotationHistory'));
+    take('dcs', api('getReports', {mode:'docs', type:'DC'}));
+    take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
+  }
+  if (db2Can('enquiries') || db2Can('sales')) take('enq', api('getEnquiries'));
+  if (isAdmin()) take('act', api('getUserActivity', {year:yr}));
+  Promise.all(jobs).then(() => { if (seq === DB2.seq) { DB2.done = true; db2Paint(); } });
+}
+
+function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.loaded = '1'; renderDashboardClassic(); } }
+
+function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Act(); }
+
+/* ---------- derived data ---------- */
+function db2Overdue(){
+  const r = DB2.data.out; if (!r) return null;
+  const canon = pdCanonName();
+  return (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
+    const cust = canon(x.customer), t = paymentTermsOf(cust), di = dueInfo(x.date, t.days);
+    return {no:x.no, customer:cust, terms:t.days, out:Number(x.outstanding) || 0, daysOver:di ? di.daysOver : null};
+  });
+}
+function db2Invoiced(){
+  const r = DB2.data.invs; return new Set(r ? (r.documents || []).map(x => String(x.dc || '').trim()).filter(Boolean) : []);
+}
+
+/* ---------- KPI cards ---------- */
+function db2Kpis(){
+  const host = $('db2Kpis'); if (!host) return;
+  const now = new Date(), m = now.getMonth(), cards = [];
+  const sales = DB2.data.sales;
+  if (db2Can('reports')) {
+    if (sales) {
+      const ms = sales.monthlySales || [], cur = Number((ms[m] || {}).amount) || 0, prev = m > 0 ? Number((ms[m - 1] || {}).amount) || 0 : 0;
+      const target = Number(sales.target) || 0, mt = target / 12, pct = mt > 0 ? Math.round(cur / mt * 100) : null;
+      const delta = prev > 0 ? Math.round((cur - prev) / prev * 100) : null;
+      const ring = pct === null ? '' : '<div class="db2-ring" style="--p:' + Math.min(100, Math.max(0, pct)) + '"><b>' + pct + '%</b></div>';
+      cards.push('<div class="db2-kpi db2-hero" onclick="db2Go(\'reports\')" title="Open Reports"><div><span>SALES — ' + esc(PS_MONTHS[m].toUpperCase()) + '</span><strong>' + db2Short(cur) + (mt > 0 ? ' <small>/ ' + db2Short(mt) + '</small>' : '') + '</strong>'
+        + '<em>Year: ' + db2Short(sales.totalSales) + (target > 0 ? ' of ' + db2Short(target) + ' target' : ' (no target set)') + (delta !== null ? ' · <b class="' + (delta >= 0 ? 'up' : 'dn') + '">' + (delta >= 0 ? '▲ ' : '▼ ') + Math.abs(delta) + '% vs ' + PS_MONTHS[m - 1] + '</b>' : '') + '</em></div>' + ring + '</div>');
+    } else cards.push('<div class="db2-kpi db2-hero"><div><span>SALES — ' + esc(PS_MONTHS[m].toUpperCase()) + '</span><strong>…</strong><em>Loading</em></div></div>');
+  }
+  if (db2Can('accounts')) {
+    const od = db2Overdue();
+    if (od) {
+      const tot = od.reduce((a, x) => a + x.out, 0), ov = od.filter(x => x.daysOver > 0), ovAmt = ov.reduce((a, x) => a + x.out, 0), ovC = new Set(ov.map(x => x.customer)).size;
+      cards.push('<div class="db2-kpi" onclick="db2Go(\'accounts\')" title="Open Accounts"><span>OUTSTANDING</span><strong>' + db2Short(tot) + '</strong><em>' + (ovAmt > 0 ? '<b class="dn">' + db2Short(ovAmt) + ' overdue</b> · ' + ovC + ' client' + (ovC === 1 ? '' : 's') : '<b class="up">Nothing overdue</b>') + '</em></div>');
+    } else cards.push('<div class="db2-kpi"><span>OUTSTANDING</span><strong>…</strong><em>Loading</em></div>');
+  }
+  if (db2Can('sales')) {
+    const q = DB2.data.qt;
+    if (q) {
+      const docs = q.documents || [], inM = docs.filter(d => { const x = db2Day(d.date); return x && x.getMonth() === m && x.getFullYear() === now.getFullYear(); });
+      const won = inM.filter(d => d.status === 'Won').length, lost = inM.filter(d => d.status === 'Lost').length, pend = docs.filter(d => (d.status || 'Pending') === 'Pending').length;
+      const rate = won + lost ? Math.round(won / (won + lost) * 100) + '%' : '—';
+      cards.push('<div class="db2-kpi" onclick="db2Go(\'qthistory\')" title="Open Quotation History"><span>QUOTATIONS (' + esc(PS_MONTHS[m].toUpperCase()) + ')</span><strong>' + inM.length + ' <small>· ' + db2Short(inM.reduce((a, d) => a + (+d.subtotal || 0), 0)) + '</small></strong><em>Win rate <b class="up">' + rate + '</b> · ' + pend + ' pending</em></div>');
+    } else cards.push('<div class="db2-kpi"><span>QUOTATIONS</span><strong>…</strong><em>Loading</em></div>');
+  }
+  const P = (S.products || []).filter(p => (p.Status || 'Active') === 'Active');
+  if (P.length) {
+    const val = P.reduce((a, p) => a + Math.max(0, Number(p.currentStock) || 0) * (Number(p['Sale Price']) || 0), 0);
+    const low = P.filter(p => Number(p.currentStock) <= reorderOf(p)).length, outN = P.filter(p => Number(p.currentStock) <= 0).length;
+    cards.push('<div class="db2-kpi" onclick="db2Go(\'products\')" title="Open Products"><span>' + (val > 0 ? 'STOCK VALUE <small>(sale price)</small>' : 'STOCK') + '</span><strong>' + (val > 0 ? db2Short(val) : P.reduce((a, p) => a + Math.max(0, Number(p.currentStock) || 0), 0).toLocaleString() + ' <small>units</small>') + '</strong><em>' + (low ? '<b class="dn">' + low + ' low</b>' : '<b class="up">No low stock</b>') + ' · ' + outN + ' out of stock</em></div>');
+  }
+  host.style.gridTemplateColumns = cards.length ? (db2Can('reports') ? '1.35fr ' : '') + 'repeat(' + (cards.length - (db2Can('reports') ? 1 : 0)) + ',1fr)' : '';
+  host.innerHTML = cards.join('');
+}
+
+/* ---------- Sales vs Target chart ---------- */
+function db2Chart(){
+  const host = $('db2Chart'); if (!host) return;
+  const s = DB2.data.sales;
+  if (!s) { if (DB2.done) host.innerHTML = '<h3>Sales vs Target</h3><div class="muted">Sales data could not be loaded.</div>'; return; }
+  const ms = (s.monthlySales || []).map(x => Number(x.amount) || 0), mt = (Number(s.target) || 0) / 12, m = new Date().getMonth();
+  const max = Math.max(mt, ...ms, 1) * 1.08;
+  host.innerHTML = '<h3>Sales vs Target — ' + esc(s.year) + ' <a onclick="db2Go(\'reports\')">Open Reports →</a></h3>'
+    + '<div class="db2-bars">' + ms.map((v, i) => '<div class="db2-bar' + (i === m ? ' cur' : '') + (i > m ? ' fut' : '') + '" style="height:' + Math.max(i > m ? 2 : 1.5, v / max * 100) + '%" title="' + PS_MONTHS[i] + ': Rs ' + money(v) + '"><span>' + (v > 0 ? db2Short(v) : '') + '</span></div>').join('')
+    + (mt > 0 ? '<div class="db2-tline" style="bottom:' + (mt / max * 100) + '%"><span>Monthly target ' + db2Short(mt) + '</span></div>' : '') + '</div>'
+    + '<div class="db2-months">' + PS_MONTHS.map(x => '<span>' + x + '</span>').join('') + '</div>'
+    + (mt > 0 ? '' : '<div class="muted small" style="margin-top:6px">No annual target set — open “Detailed views” below → Sales Target → Edit Target.</div>');
+}
+
+/* ---------- Today's to-do ---------- */
+function db2Todo(){
+  const host = $('db2Todo'); if (!host) return;
+  const rows = [], pend = [];
+  const add = (cls, icon, text, badge, onclick) => rows.push('<button type="button" class="db2-todo-row" onclick="' + onclick + '"><i class="' + cls + '">' + icon + '</i><span>' + text + '</span><b class="' + cls + '">' + badge + '</b></button>');
+  if (db2Can('accounts')) {
+    const od = db2Overdue();
+    if (od) { const ov = od.filter(x => x.daysOver > 0); if (ov.length) add('t-red', 'Rs', 'Overdue payments to follow up', ov.length + ' · ' + db2Short(ov.reduce((a, x) => a + x.out, 0)), "db2Go('accounts')"); } else pend.push(1);
+  }
+  if (db2Can('enquiries') || db2Can('sales')) {
+    const e = DB2.data.enq;
+    if (e) { const n = (e.documents || []).filter(d => (d.status || 'New') === 'New').length; if (n) add('t-violet', '✉', 'Enquiries waiting for quotation', n, "db2Go('enquiries',()=>db2SetFilter('enqStatus','New',window.filterEnquiries))"); } else if (!DB2.done) pend.push(1);
+  }
+  if (db2Can('sales')) {
+    const q = DB2.data.qt, today = db2Day(new Date());
+    if (q) { const n = (q.documents || []).filter(d => (d.status || 'Pending') === 'Pending' && db2Day(d.date) && (today - db2Day(d.date)) / 864e5 > 7).length; if (n) add('t-amber', '⏳', 'Quotations pending more than 7 days (follow up)', n, "db2Go('qthistory',()=>db2SetFilter('qtSt','Pending',window.filterQTHistory))"); } else pend.push(1);
+    const dcs = DB2.data.dcs;
+    if (dcs && DB2.data.invs) { const inv = db2Invoiced(); const n = (dcs.documents || []).filter(d => !inv.has(String(d.no).trim())).length; if (n) add('t-blue', '⛟', 'Delivery challans not invoiced yet', n, "db2Go('dchistory',()=>db2SetFilter('dchInv','no',window.filterDCHistory))"); } else if (!DB2.done) pend.push(1);
+  }
+  const P = (S.products || []).filter(p => (p.Status || 'Active') === 'Active');
+  const outN = P.filter(p => Number(p.currentStock) <= 0).length, lowN = P.filter(p => Number(p.currentStock) > 0 && Number(p.currentStock) <= reorderOf(p)).length;
+  if (outN) add('t-red', '!', 'Out of stock items', outN, 'openLowStock()');
+  if (lowN) add('t-amber', '↓', 'Low stock items (reorder)', lowN, 'openLowStock()');
+  host.innerHTML = '<h3>Today\'s to-do <span class="muted small">' + (rows.length ? rows.length + ' item' + (rows.length === 1 ? '' : 's') : '') + '</span></h3>'
+    + (rows.length ? '<div class="db2-todo">' + rows.join('') + '</div>' : (pend.length && !DB2.done ? '<div class="muted">Checking…</div>' : '<div class="db2-ok">✓ All clear — nothing needs attention right now.</div>'));
+}
+
+/* ---------- Overdue clients ---------- */
+function db2Over(){
+  const host = $('db2Over'); if (!host) return;
+  const od = db2Overdue(); if (!od) { if (DB2.done) host.innerHTML = '<h3>Overdue clients</h3><div class="muted">Could not load.</div>'; return; }
+  const by = {};
+  od.forEach(x => { const g = by[x.customer] || (by[x.customer] = {c:x.customer, over:0, out:0, max:-1e9, inv:[], terms:x.terms}); g.out += x.out; if (x.daysOver > 0) g.over += x.out; g.max = Math.max(g.max, x.daysOver === null ? -1e9 : x.daysOver); g.inv.push(x.no); });
+  const list = Object.values(by).filter(g => g.max >= -7).sort((a, b) => b.max - a.max || b.out - a.out).slice(0, 5);
+  const badge = d => d > 0 ? '<span class="db2-pill t-red">' + d + ' day' + (d === 1 ? '' : 's') + ' late</span>' : d === 0 ? '<span class="db2-pill t-amber">due today</span>' : '<span class="db2-pill t-amber">due in ' + (-d) + ' day' + (d === -1 ? '' : 's') + '</span>';
+  host.innerHTML = '<h3>Overdue &amp; due this week <a onclick="db2Go(\'accounts\')">All →</a></h3>'
+    + (list.length ? '<table class="db2-tbl">' + list.map(g => '<tr><td><b>' + esc(g.c) + '</b><div class="muted small">' + esc(g.inv.slice(0, 3).join(', ')) + (g.inv.length > 3 ? ' +' + (g.inv.length - 3) : '') + ' · ' + g.terms + ' days terms</div></td><td class="r"><b class="' + (g.max > 0 ? 'dn' : '') + '">' + money(g.max > 0 ? g.over : g.out) + '</b><div>' + badge(g.max) + '</div></td></tr>').join('') + '</table>'
+      : '<div class="db2-ok">✓ No client is overdue or due this week.</div>');
+}
+
+/* ---------- Pipeline ---------- */
+function db2PipeSet(v){ DB2.pipe = v; db2Pipe(); }
+function db2Pipe(){
+  const host = $('db2Pipe'); if (!host) return;
+  const q = DB2.data.qt, e = DB2.data.enq;
+  if (!q && !e) { if (DB2.done) host.innerHTML = '<h3>Enquiry → Order pipeline</h3><div class="muted">Could not load.</div>'; return; }
+  const now = new Date(), from = DB2.pipe === 'month' ? new Date(now.getFullYear(), now.getMonth(), 1) : DB2.pipe === 'q' ? new Date(now.getFullYear(), now.getMonth() - 2, 1) : new Date(now.getFullYear(), 0, 1);
+  const inP = v => { const d = db2Day(v); return d && d >= from; };
+  const enq = e ? (e.documents || []).filter(d => inP(d.date)) : [];
+  const qts = q ? (q.documents || []).filter(d => inP(d.date)) : [];
+  const won = qts.filter(d => d.status === 'Won'), lost = qts.filter(d => d.status === 'Lost'), pend = qts.filter(d => (d.status || 'Pending') === 'Pending');
+  const steps = [];
+  if (e) steps.push({n:enq.length, t:enq.length + ' Enquiries', c:'#94a3b8'});
+  steps.push({n:qts.length, t:qts.length + ' Quoted · ' + db2Short(qts.reduce((a, d) => a + (+d.subtotal || 0), 0)), c:'#3b6fb6'});
+  steps.push({n:won.length, t:won.length + ' Won · ' + db2Short(won.reduce((a, d) => a + (+d.subtotal || 0), 0)), c:'#16a34a'});
+  steps.push({n:pend.length, t:pend.length + ' Pending', c:'#d97706'});
+  steps.push({n:lost.length, t:lost.length + ' Lost', c:'#c8102e'});
+  const max = Math.max(1, ...steps.map(s => s.n));
+  const reasons = {}; lost.forEach(d => { const r = String(d.lossReason || '').trim(); if (r) reasons[r] = (reasons[r] || 0) + 1; });
+  const topR = Object.entries(reasons).sort((a, b) => b[1] - a[1])[0];
+  host.innerHTML = '<h3>Enquiry → Order pipeline <select onchange="db2PipeSet(this.value)" class="db2-sel"><option value="month"' + (DB2.pipe === 'month' ? ' selected' : '') + '>This month</option><option value="q"' + (DB2.pipe === 'q' ? ' selected' : '') + '>Last 3 months</option><option value="y"' + (DB2.pipe === 'y' ? ' selected' : '') + '>This year</option></select></h3>'
+    + '<div class="db2-funnel">' + steps.map(s => '<div><i style="width:' + Math.max(1.5, s.n / max * 55) + '%;background:' + s.c + '"></i><span>' + esc(s.t) + '</span></div>').join('') + '</div>'
+    + '<div class="muted small" style="margin-top:6px">' + (won.length + lost.length ? 'Win rate <b>' + Math.round(won.length / (won.length + lost.length) * 100) + '%</b>' : 'No decided quotations yet') + (topR ? ' · Top loss reason: <b>' + esc(topR[0]) + '</b> (' + topR[1] + ')' : '') + '</div>';
+}
+
+/* ---------- Top customers ---------- */
+function db2Top(){
+  const host = $('db2Top'); if (!host) return;
+  const s = DB2.data.sales; if (!s) { if (DB2.done) host.innerHTML = '<h3>Top customers</h3><div class="muted">Could not load.</div>'; return; }
+  const list = (s.customerSales || []).slice(0, 5), max = Math.max(1, ...list.map(x => +x.amount || 0));
+  host.innerHTML = '<h3>Top customers <span class="muted small">' + esc(s.year) + '</span></h3>'
+    + (list.length ? '<div class="db2-topc">' + list.map(x => '<div><span>' + esc(x.customer) + '</span><b>' + db2Short(x.amount) + '</b><i style="width:' + ((+x.amount || 0) / max * 100) + '%"></i></div>').join('') + '</div>' : '<div class="muted">No invoice sales yet this year.</div>');
+}
+
+/* ---------- Team activity (Admin) ---------- */
+function db2Details(raw){
+  const kv = {}; String(raw || '').split(/;\s*/).forEach(p => { const i = p.indexOf('='); if (i > 0) kv[p.slice(0, i).trim()] = p.slice(i + 1).trim(); });
+  const parts = [];
+  const doc = kv.id || kv.no || kv.invoiceNo || kv.dc; if (doc) parts.push(doc);
+  if (kv.customer || kv.supplier || kv.name) parts.push(kv.customer || kv.supplier || kv.name);
+  if (kv.model) parts.push(kv.model);
+  if (kv.status) parts.push('→ ' + kv.status);
+  if (kv.amount && !isNaN(Number(kv.amount))) parts.push('Rs ' + money(kv.amount));
+  if (kv.items) parts.push(kv.items + ' item' + (kv.items === '1' ? '' : 's'));
+  return parts.length ? parts.join(' · ') : String(raw || '').replace(/;\s*/g, ' · ');
+}
+function db2Act(){
+  const host = $('db2Act'); if (!host) return;
+  const r = DB2.data.act;
+  if (!r) { if (DB2.done) host.innerHTML = '<h3>Team activity</h3><div class="muted">Not available yet — paste the new Code.gs in Apps Script and deploy a New version.</div>'; return; }
+  const names = r.names || {}, nm = u => { const k = String(u || '').trim(); if (!k) return 'Someone'; if (k.toLowerCase() === 'email') return 'Email (automatic)'; return names[k.toLowerCase()] || k; };
+  const ini = u => nm(u).split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+  const docNos = new Set((r.docs || []).map(x => String(x.no)));
+  const audit = (r.audit || []).filter(x => !(/^(save|invoice$|dc$|inward$|product$)/.test(x.action) && /id=([^;]+)/.test(x.details || '') && docNos.has(String(x.details).match(/id=([^;]+)/)[1].trim())))
+    .map(x => ({t:new Date(x.time), u:x.user, w:(typeof UA_ACTIONS !== 'undefined' && UA_ACTIONS[x.action]) || x.action, d:db2Details(x.details), exact:true}));
+  const docs = (r.docs || []).map(x => ({t:new Date(x.date), u:x.user, w:'created ' + x.type + ' ' + x.no, d:[x.party, x.amount ? db2Short(x.amount) : ''].filter(Boolean).join(' · ')}));
+  const list = audit.concat(docs).filter(x => !isNaN(x.t)).sort((a, b) => b.t - a.t).slice(0, 6);
+  const when = x => { const d = db2Day(x.t), t = db2Day(new Date()), diff = Math.round((t - d) / 864e5); const day = diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : fmtDate(x.t); return x.exact ? day + ' ' + x.t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : day; };
+  host.innerHTML = '<h3>Team activity <a onclick="db2Go(\'reports\')">Full report →</a></h3>'
+    + (list.length ? '<div class="db2-act">' + list.map(x => '<div><span class="db2-av">' + esc(ini(x.u)) + '</span><div><b>' + esc(nm(x.u)) + '</b> ' + esc(x.w.charAt(0).toLowerCase() + x.w.slice(1)) + (x.d ? ' <span class="muted">· ' + esc(x.d) + '</span>' : '') + '<div class="muted small">' + esc(when(x)) + '</div></div></div>').join('') + '</div>' : '<div class="muted">No activity recorded this year yet.</div>');
+}
+
+/* ---------- Search (Ctrl+K) ---------- */
+async function db2OpenSearch(){
+  modal('Search', '<input id="db2Q" type="search" placeholder="Type a customer, part no., invoice #, quotation #, DC #…" autocomplete="off" style="width:100%;font-size:15px;padding:12px 14px" oninput="db2Search(this.value)"><div id="db2Res" class="db2-res"><div class="muted small" style="padding:10px 2px">Start typing — results appear as you type.</div></div>');
+  setTimeout(() => { const i = $('db2Q'); if (i) i.focus(); }, 30);
+  if (db2Can('sales') && (!DB2.data.qt || !DB2.data.invs || !DB2.data.dcs)) {
+    const [q, iv, dc] = await Promise.all([api('quotationHistory'), api('getReports', {mode:'docs', type:'INVOICE'}), api('getReports', {mode:'docs', type:'DC'})]);
+    if (q && q.ok) DB2.data.qt = q; if (iv && iv.ok) DB2.data.invs = iv; if (dc && dc.ok) DB2.data.dcs = dc;
+    const i = $('db2Q'); if (i && i.value) db2Search(i.value);
+  }
+}
+function db2Search(v){
+  const box = $('db2Res'); if (!box) return;
+  const q = norm(v); if (q.length < 2) { box.innerHTML = '<div class="muted small" style="padding:10px 2px">Type at least 2 letters.</div>'; return; }
+  const out = [], hit = (...xs) => xs.some(x => norm(x).includes(q));
+  const add = (group, title, sub, act) => out.push({group, title, sub, act});
+  (S.customers || []).filter(c => hit(c['Customer Name'], c['Contact Person'], c.Phone, c['Customer ID'])).slice(0, 6)
+    .forEach(c => add('Customers', c['Customer Name'], [c['Contact Person'], c.Phone].filter(Boolean).join(' · '), "closeModal();ledger('Customer','" + encA(c['Customer Name']) + "')"));
+  (S.products || []).filter(p => hit(p['Model / Part No.'], p.Description, p.Brand)).slice(0, 8)
+    .forEach(p => add('Products', p['Model / Part No.'], [p.Description, p.Brand, 'Stock ' + (p.currentStock ?? '')].filter(Boolean).join(' · '), "closeModal();productDetail('" + encA(p['Model / Part No.']) + "')"));
+  const docs = (key, group, page, field, label) => { const r = DB2.data[key]; if (!r) return; (r.documents || []).filter(d => hit(d.no, d.customer, d.po, d.ref)).slice(0, 6)
+    .forEach(d => add(group, label + ' ' + d.no, [d.customer, fmtDate(d.date), d.subtotal ? money(d.subtotal) : ''].filter(Boolean).join(' · '), "closeModal();db2OpenDoc('" + page + "','" + field + "','" + encA(d.no) + "')")); };
+  docs('qt', 'Quotations', 'qthistory', 'qts', 'Quotation');
+  docs('invs', 'Invoices', 'ivhistory', 'ivhSearch', 'Invoice');
+  docs('dcs', 'Delivery Challans', 'dchistory', 'dchSearch', 'DC');
+  if (!out.length) { box.innerHTML = '<div class="muted small" style="padding:10px 2px">Nothing found for “' + esc(v) + '”.</div>'; return; }
+  let g = '', html = '';
+  out.forEach(x => { if (x.group !== g) { g = x.group; html += '<div class="db2-res-g">' + esc(g) + '</div>'; } html += '<button type="button" class="db2-res-i" onclick="' + esc(x.act) + '"><b>' + esc(x.title) + '</b><span>' + esc(x.sub) + '</span></button>'; });
+  box.innerHTML = html;
+}
+
+/* Keyboard: Ctrl+K = search (anywhere). Q/E/D/I/P/W = quick actions (on the dashboard, when not typing). */
+document.addEventListener('keydown', function(e){
+  if (typeof S === 'undefined' || !S.user) return;
+  const tag = (e.target && e.target.tagName) || '', typing = /INPUT|TEXTAREA|SELECT/.test(tag) || (e.target && e.target.isContentEditable);
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && String(e.key).toLowerCase() === 'k') { e.preventDefault(); db2OpenSearch(); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!document.querySelector('#dash .db2') || !$('modal').classList.contains('hidden')) return;
+  const k = String(e.key).toUpperCase(), qa = (window.DB2_QA || []).find(x => x.k === k);
+  if (qa) { e.preventDefault(); qa.go(); }
+});
+Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
