@@ -903,6 +903,7 @@ function renderProducts(){
 function productDetail(em){
   const m = decodeURIComponent(em), p = S.products.find(x => x['Model / Part No.'] === m);
   if (!p) return;
+  setTimeout(() => loadSourceRecords(m, 'pdSrc', false), 0);
   const status = p.Status||'Active';
   const low = Number(p.currentStock) <= reorderOf(p);
 
@@ -920,9 +921,11 @@ function productDetail(em){
          <div class="kv"><b>Status</b>${esc(status)}</div>
        </div>
      </div>
+     <div id="pdSrc" class="pd-src muted small">Checking where this stock comes from…</div>
      <div class="actions">
        <button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>
        <button class="btn" onclick="showProductHistory('${encA(m)}')">Product History</button>
+       ${isAdmin()?`<button class="btn" onclick="setStockForm('${encA(m)}')">⚖ Set Stock</button>`:''}
        ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encA(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`);
 }
@@ -933,7 +936,9 @@ async function showProductHistory(em){
   const r = await api('stockMovement', {model:m});
   if (!r.ok) { $('modalBody').innerHTML = '<p class="muted">'+esc(r.error||'Could not load history.')+'</p>'; return; }
 
-  const rows = (r.movements||[]).slice(1); // row 0 is the header row
+  const allRows = (r.movements||[]).slice(1); // row 0 is the header row
+  const adjRows = allRows.filter(x => String(x[7]||'') === 'Stock Adjustment').sort((a,b)=>new Date(b[1])-new Date(a[1]));
+  const rows = allRows.filter(x => String(x[7]||'') !== 'Stock Adjustment');
   const inRows = rows.filter(x => String(x[2]||'').toUpperCase()==='IN').sort((a,b)=>new Date(b[1])-new Date(a[1]));
   const outRows = rows.filter(x => String(x[2]||'').toUpperCase()==='OUT').sort((a,b)=>new Date(b[1])-new Date(a[1]));
   const totalIn = inRows.reduce((a,x)=>a+(Number(x[5])||0),0);
@@ -945,7 +950,10 @@ async function showProductHistory(em){
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Supplier</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${inRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No purchase history yet.</td></tr>'}</tbody></table></div>
     <h4 style="margin:16px 0 8px">Sales (OUT) — Total: ${totalOut}</h4>
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Customer</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${outRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No sales history yet.</td></tr>'}</tbody></table></div>
+    ${adjRows.length ? `<h4 style="margin:16px 0 8px">Stock Adjustments (set by Admin)</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Change</th><th>Reason</th><th>Ref #</th><th>By</th></tr></thead><tbody>${adjRows.map(x => `<tr><td>${fmtDate(x[1])}</td><td><b style="color:${Number(x[5])<0?'#c0392b':'#15803d'}">${Number(x[5])>0?'+':''}${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[8])}</td><td>${esc(x[9])}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <div id="srcRecs" style="margin-top:16px"><div class="muted">Loading the old inventory sheet record…</div></div>
   `;
+  loadSourceRecords(m, 'srcRecs', true);
 }
 
 function editProductForm(em){
@@ -5007,3 +5015,58 @@ async function cgRemove(enc){
   await refresh(); customerGroupsManager();
 }
 Object.assign(window, {customerGroupsManager, cgApply, cgRemove});
+
+
+/* ============================================================
+   STOCK TOOLS — where the stock comes from, old sheet record, Set Stock (Admin)
+   Stock in the ERP = old live-inventory sheet (column G, copied at "Refresh Source")
+                    + ERP entries (Inward / Import +, DC −, Stock Adjustment ±)
+   ============================================================ */
+async function loadSourceRecords(model, hostId, full){
+  const host = $(hostId); if (!host) return;
+  const r = await api('getSourceRecords', {model:model});
+  const h = $(hostId); if (!h) return;
+  if (!r || !r.ok) { h.innerHTML = '<span class="muted small">' + esc((r && r.error) || 'Could not load the old sheet record.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : '') + '</span>'; return; }
+  const u = r.used || {}, fmt = n => (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString();
+  const near = (r.sheets || []).reduce((a, s) => a + (s.rows || []).filter(x => !x.exact).length, 0);
+  const line = '<b>Stock ' + fmt(u.erpStock) + '</b> = old inventory sheet <b>' + fmt(u.sourceQty) + '</b>' + (u.sourceRows > 1 ? ' <span class="pd-warn">(' + u.sourceRows + ' rows added together)</span>' : u.sourceRows === 0 ? ' <span class="pd-warn">(not in the old sheet)</span>' : '')
+    + ' + ERP entries <b>' + (Number(u.erpMoves) > 0 ? '+' : '') + fmt(u.erpMoves) + '</b>'
+    + (near ? ' · <span class="pd-warn">⚠ ' + near + ' row(s) in the old sheet have this model written differently</span>' : '');
+  if (!full) { h.innerHTML = line + ' · <a class="model-link" onclick="showProductHistory(\'' + encA(model) + '\')">see record</a>'; return; }
+  h.innerHTML = '<h4 style="margin:0 0 6px">Old inventory sheet (as last copied by “Refresh Source”)</h4><div class="muted small" style="margin-bottom:8px">' + line + '</div>'
+    + (r.sheets || []).map(sh => {
+        const nm = sh.sheet.replace('Source ', '');
+        if (sh.missing) return '<div class="muted small" style="margin:6px 0">' + esc(nm) + ': not copied yet.</div>';
+        if (!sh.rows.length) return '<div class="muted small" style="margin:6px 0">' + esc(nm) + ': no rows for this model.</div>';
+        return '<div style="margin:10px 0 4px"><b>' + esc(nm) + '</b> <span class="muted small">' + sh.rows.length + ' row(s)' + (sh.more ? ' (+' + sh.more + ' more)' : '') + '</span></div>'
+          + '<div class="table-wrap"><table class="src-tbl"><thead><tr><th>Row</th>' + sh.headers.map(x => '<th>' + esc(x || '—') + '</th>').join('') + '</tr></thead><tbody>'
+          + sh.rows.map(x => '<tr' + (x.exact ? '' : ' class="src-near" title="Model written differently in the old sheet"') + '><td class="muted">' + x.row + (x.exact ? '' : ' ⚠') + '</td>' + x.cells.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('')
+          + '</tbody></table></div>';
+      }).join('');
+}
+
+function setStockForm(em){
+  const m = decodeURIComponent(em), p = S.products.find(x => x['Model / Part No.'] === m); if (!p) return;
+  modal('Set Stock — ' + m, '<div class="form-grid">'
+    + '<label>Stock in ERP now<input value="' + esc(p.currentStock) + '" readonly></label>'
+    + '<label>Correct quantity (physical) *<input id="ssQty" type="number" min="0" step="any" placeholder="e.g. 12"></label>'
+    + '<label>Reason<select id="ssWhy"><option>Physical count</option><option>Damaged / scrapped</option><option>Lost / missing</option><option>Found in store</option><option>Data correction</option><option>Other</option></select></label>'
+    + '<label>Note <small>(optional)</small><input id="ssNote" placeholder="e.g. counted by Ali, rack R-12"></label></div>'
+    + '<div class="imp-warn" style="margin-top:10px">The ERP will add one <b>Stock Adjustment</b> entry for the difference. Nothing else is changed, and the entry shows in Product History.</div>'
+    + '<div class="actions"><button class="btn" onclick="productDetail(\'' + encA(m) + '\')">Back</button><button class="btn primary" id="ssSave" onclick="saveSetStock(\'' + encA(m) + '\')">Set Stock</button></div>');
+  setTimeout(() => { const q = $('ssQty'); if (q) q.focus(); }, 30);
+}
+async function saveSetStock(em){
+  const m = decodeURIComponent(em), q = ($('ssQty') || {}).value;
+  if (q === '' || q == null) return toast('Enter the correct quantity.', true);
+  if (Number(q) < 0) return toast('Quantity cannot be negative.', true);
+  const reason = [($('ssWhy') || {}).value, (($('ssNote') || {}).value || '').trim()].filter(Boolean).join(' — ');
+  const b = $('ssSave'); if (b) b.disabled = true;
+  const r = await api('adjustStock', {model:m, qty:q, reason:reason});
+  if (b) b.disabled = false;
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not set stock.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  toast(r.changed ? 'Stock of ' + m + ' set to ' + r.after + ' (' + (r.changed > 0 ? '+' : '') + r.changed + ').' : (r.message || 'No change.'));
+  await refresh();
+  productDetail(encodeURIComponent(m));
+}
+Object.assign(window, {loadSourceRecords, setStockForm, saveSetStock});
