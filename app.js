@@ -926,6 +926,7 @@ function productDetail(em){
        <button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>
        <button class="btn" onclick="showProductHistory('${encA(m)}')">Product History</button>
        ${isAdmin()?`<button class="btn" onclick="setStockForm('${encA(m)}')">⚖ Set Stock</button>`:''}
+       <button class="btn" onclick="printProductCard('${encA(m)}')">🖨 Product Card (PDF)</button>
        ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encA(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`);
 }
@@ -946,6 +947,7 @@ async function showProductHistory(em){
   const fmtRow = x => `<tr><td>${fmtDate(x[1])}</td><td><b>${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[7])}</td><td>${esc(x[8])}</td></tr>`;
 
   $('modalBody').innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin:-4px 0 8px"><button class="btn small primary" onclick="printProductCard('${encA(m)}')">🖨 Product Card (PDF)</button></div>
     <h4 style="margin:0 0 8px">Purchases / Imports (IN) — Total: ${totalIn}</h4>
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Supplier</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${inRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No purchase history yet.</td></tr>'}</tbody></table></div>
     <h4 style="margin:16px 0 8px">Sales (OUT) — Total: ${totalOut}</h4>
@@ -5070,3 +5072,75 @@ async function saveSetStock(em){
   productDetail(encodeURIComponent(m));
 }
 Object.assign(window, {loadSourceRecords, setStockForm, saveSetStock});
+
+
+/* ============================================================
+   PRODUCT CARD — one product's details + full stock record as a printable / PDF page
+   (Print → "Save as PDF" to keep or send it.)
+   ============================================================ */
+async function printProductCard(em){
+  const m = decodeURIComponent(em), p = (S.products || []).find(x => x['Model / Part No.'] === m);
+  if (!p) return toast('Product not found.', true);
+  toast('Preparing the product card…');
+  const [mv, src] = await Promise.all([api('stockMovement', {model:m}), api('getSourceRecords', {model:m})]);
+  const rows = mv && mv.ok ? (mv.movements || []).slice(1) : [];
+  const byDate = (a, b) => new Date(a[1]) - new Date(b[1]);
+  const adj = rows.filter(x => String(x[7] || '') === 'Stock Adjustment').sort(byDate);
+  const ins = rows.filter(x => String(x[7] || '') !== 'Stock Adjustment' && String(x[2] || '').toUpperCase() === 'IN').sort(byDate);
+  const outs = rows.filter(x => String(x[7] || '') !== 'Stock Adjustment' && String(x[2] || '').toUpperCase() === 'OUT').sort(byDate);
+  const sum = l => l.reduce((a, x) => a + (Number(x[5]) || 0), 0);
+  const n = v => (Math.round((Number(v) || 0) * 1000) / 1000).toLocaleString();
+  const u = src && src.ok ? (src.used || {}) : null;
+  const img = p['Product Image'] ? qtDriveThumb(p['Product Image']) : '';
+  const showCost = hasMod('imports') && p['Cost Price'] !== '' && p['Cost Price'] != null;
+  const kv = (k, v) => v === '' || v == null ? '' : '<tr><td class="k">' + k + '</td><td class="v">' + v + '</td></tr>';
+  const table = (title, list, cols, cells, empty) => '<h3 class="pc-h">' + title + '</h3><table class="pc-t"><thead><tr>' + cols.map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>'
+    + (list.length ? list.map(x => '<tr>' + cells(x).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + cols.length + '" class="pc-empty">' + empty + '</td></tr>') + '</tbody></table>';
+  const css = `<style>
+    .pc{color:#1d2433;font-size:11.5px}
+    .pc-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #d5dbe3;padding-bottom:6px;margin-bottom:12px}
+    .pc-title{font-size:13px;font-weight:bold;letter-spacing:2px;color:#64748b}
+    .pc-sub{font-size:9.5px;color:#64748b}
+    .print-company{display:none!important}   /* plain card: no company letterhead / footer */
+    .pc-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:10px}
+    .pc-img{width:40mm;height:34mm;border:1px solid #d5dbe3;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;background:#fff}
+    .pc-img img{max-width:100%;max-height:100%;object-fit:contain}.pc-noimg{color:#94a3b8;font-size:10px}
+    .pc-model{font-size:18px;font-weight:bold;color:#1f3b63}.pc-desc{font-size:12px;margin:2px 0 8px}
+    .pc-kv{border-collapse:collapse;width:auto!important}.pc-kv tr{background:none!important}.pc-kv td{padding:2px 18px 2px 0;font-size:11px;border:none!important;background:none!important}.pc-kv .k{color:#64748b;font-weight:bold}
+    .pc-box{display:flex;gap:8px;margin:8px 0 4px}
+    .pc-box div{flex:1;border:1px solid #d5dbe3;border-radius:6px;padding:6px 8px;text-align:center}
+    .pc-box span{display:block;font-size:9px;color:#64748b;font-weight:bold;letter-spacing:.5px}.pc-box b{font-size:15px}
+    .pc-box .hl{background:#1f3b63;color:#fff;border-color:#1f3b63}.pc-box .hl span{color:#cbd5e1}
+    .pc-note{font-size:10px;color:#64748b;margin:2px 0 6px}.pc-warn{color:#b45309;font-weight:bold}
+    .pc-h{font-size:12.5px;color:#1f3b63;margin:12px 0 4px;border-bottom:1px solid #e3e8f0;padding-bottom:2px}
+    .pc-t{width:100%;border-collapse:collapse;font-size:10.5px}
+    .pc-t th{background:#f1f5f9;text-align:left;padding:4px 6px;border:1px solid #d5dbe3;font-size:9.5px}
+    .pc-t td{padding:4px 6px;border:1px solid #e3e8f0;vertical-align:top}
+    .pc-t tr{page-break-inside:avoid}.pc-empty{color:#94a3b8;text-align:center}
+    .pc-near td{background:#fff7e6}
+    .pc-foot{margin-top:12px;font-size:9.5px;color:#64748b}
+  </style>`;
+  let body = css + '<div class="pc">'
+    + '<div class="pc-top"><div class="pc-title">PRODUCT CARD</div><div class="pc-sub">Printed ' + esc(new Date().toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})) + (S.user ? ' · by ' + esc(S.user.name || S.user.username) : '') + '</div></div>'
+    + '<div class="pc-head"><div class="pc-img">' + (img ? '<img src="' + esc(img) + '" alt="">' : '<span class="pc-noimg">No picture</span>') + '</div><div style="flex:1">'
+    + '<div class="pc-model">' + esc(m) + '</div><div class="pc-desc">' + esc(p.Description || '') + '</div>'
+    + '<table class="pc-kv">' + kv('Category', esc(p.Category || '')) + kv('Brand', esc(p.Brand || '')) + kv('Location', esc(p.Location || '')) + kv('Unit', esc(p.Unit || '')) + kv('Sale price', p['Sale Price'] ? money(p['Sale Price']) : '') + (showCost ? kv('Cost price', money(p['Cost Price'])) : '') + kv('Reorder level', reorderOf(p)) + kv('Status', esc(p.Status || 'Active')) + '</table></div></div>'
+    + '<div class="pc-box"><div class="hl"><span>STOCK IN ERP</span><b>' + n(p.currentStock) + '</b></div>'
+    + (u ? '<div><span>OLD SHEET</span><b>' + n(u.sourceQty) + '</b></div>' : '')
+    + '<div><span>IN (ERP)</span><b>+' + n(sum(ins)) + '</b></div><div><span>OUT (ERP)</span><b>' + n(sum(outs)) + '</b></div>'
+    + '<div><span>ADJUSTMENTS</span><b>' + (sum(adj) > 0 ? '+' : '') + n(sum(adj)) + '</b></div></div>'
+    + '<div class="pc-note">Stock = old inventory sheet (as last copied) + ERP entries (IN, OUT, adjustments).'
+    + (u && u.sourceRows > 1 ? ' <span class="pc-warn">Model is ' + u.sourceRows + ' times in the old sheet (added together).</span>' : '')
+    + (u && u.sourceRows === 0 ? ' <span class="pc-warn">Model is not in the old sheet.</span>' : '') + '</div>'
+    + table('Purchases / Imports (IN) — total ' + n(sum(ins)), ins, ['Date', 'Qty', 'Supplier / From', 'Ref type', 'Ref #'], x => [fmtDate(x[1]), '<b>' + n(x[5]) + '</b>', esc(x[6]), esc(x[7]), esc(x[8])], 'No purchases recorded in the ERP.')
+    + table('Sales / Deliveries (OUT) — total ' + n(sum(outs)), outs, ['Date', 'Qty', 'Customer / To', 'Ref type', 'Ref #'], x => [fmtDate(x[1]), '<b>' + n(x[5]) + '</b>', esc(x[6]), esc(x[7]), esc(x[8])], 'No deliveries recorded in the ERP.')
+    + (adj.length ? table('Stock adjustments', adj, ['Date', 'Change', 'Reason', 'Ref #', 'By'], x => [fmtDate(x[1]), '<b>' + (Number(x[5]) > 0 ? '+' : '') + n(x[5]) + '</b>', esc(x[6]), esc(x[8]), esc(x[9])], '') : '');
+  if (src && src.ok) (src.sheets || []).forEach(sh => {
+    if (sh.missing || !sh.rows || !sh.rows.length) return;
+    body += '<h3 class="pc-h">Old inventory sheet — ' + esc(sh.sheet.replace('Source ', '')) + ' (' + sh.rows.length + ' row' + (sh.rows.length === 1 ? '' : 's') + ')</h3><table class="pc-t"><thead><tr><th>Row</th>' + sh.headers.map(h => '<th>' + esc(h || '—') + '</th>').join('') + '</tr></thead><tbody>'
+      + sh.rows.map(x => '<tr' + (x.exact ? '' : ' class="pc-near"') + '><td>' + x.row + (x.exact ? '' : ' ⚠') + '</td>' + x.cells.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+  });
+  body += '<div class="pc-foot">⚠ = model written differently in the old sheet. This card shows the record held in the ERP on the printing date.</div></div>';
+  printDoc(body, '<span></span>', docFileName('Product Card ' + m, '', 'Product Card'));
+}
+window.printProductCard = printProductCard;
