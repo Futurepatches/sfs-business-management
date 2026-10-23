@@ -408,7 +408,7 @@ const pages = {
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div id="qtEnqRef"></div><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description / Item Remarks</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button id="qtsavebtn" class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
-  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option>Pending</option><option>Won</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap"><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry, customer, contact, phone, requirement..." oninput="filterEnquiries()" style="flex:1;min-width:280px"></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqStatus" onchange="filterEnquiries()"><option value="">All statuses</option><option>New</option><option>Quoted</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Enquiry #</th><th>Date</th><th>Customer</th><th>Contact</th><th>Phone</th><th>Requirement</th><th>Status</th><th>Quotation</th><th>Action</th></tr></thead><tbody id="enqRows"><tr><td colspan="9">Loading...</td></tr></tbody></table></div></div>`,
+  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option>Pending</option><option>Won</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap enq-page"><div id="enqKpis" class="enq-kpis"></div><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry #, customer, contact, phone, item, e-mail…" oninput="filterEnquiries()" style="flex:1;min-width:260px"></div><div class="toolbar enq-bar" style="flex-wrap:wrap"><div id="enqTabs" class="enq-tabs"></div><select id="enqStatus" onchange="filterEnquiries()" style="display:none"><option value="">All</option><option>New</option><option>Quoted</option><option>Lost</option><option>Closed</option></select>${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqAssign" onchange="filterEnquiries()"><option value="">Assigned: everyone</option><option value="~me">Assigned to me</option><option value="~none">Unassigned</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus','enqAssign'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table class="enq-tbl"><thead><tr><th style="width:120px">Enquiry</th><th style="width:22%">Customer</th><th>Requirement</th><th style="width:130px">Assigned</th><th style="width:120px">Status</th><th style="width:190px"></th></tr></thead><tbody id="enqRows"><tr><td colspan="6">Loading...</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
 <div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="toolbar" style="flex-wrap:wrap"><select id="custOutCust" onchange="filterCustOut()"><option value="">All Customers</option></select><select id="custOutSt" onchange="filterCustOut()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select>${periodSelectHtml('custOutPer','filterCustOut()')}<button class="btn ghost small" onclick="clearFilters(['custOutSearch','custOutCust','custOutSt','custOutPer'],filterCustOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('custPayPer','filterCustPay()')}<select id="custPayCust" onchange="filterCustPay()"><option value="">All Customers</option></select><select id="custPayMeth" onchange="filterCustPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['custPaySearch','custPayPer','custPayCust','custPayMeth'],filterCustPay)">Clear all filters</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
@@ -2273,10 +2273,21 @@ async function toggleUser(u, st){
 }
 
 let ENQ_CACHE=[];
-async function renderEnquiries(){const r=await api('getEnquiries');if(!r.ok)return toast(r.error,true);ENQ_CACHE=r.documents||[];filterEnquiries();}
+async function renderEnquiries(){const [r]=await Promise.all([api('getEnquiries'),enqLoadUsers()]);if(!r.ok)return toast(r.error,true);ENQ_CACHE=(r.documents||[]).map(d=>{if(!d.status)d.status='New';return d;});filterEnquiries();}
 /* enquiryForm() and saveEnquiry() now live in the ENQUIRY BOX section at the end of this file */
 /* (saveEnquiry moved) */
-function filterEnquiries(){const h=$('enqRows');if(!h)return;const q=norm($('enqSearch')?.value||'');const rng=periodRange('enqPer'),est=($('enqStatus')||{}).value||'';const rows=ENQ_CACHE.filter(d=>(!q||[d.id,d.customerName,d.contactPerson,d.phone,d.requirement,d.status,d.quotationNo,d.email,d.subject].some(v=>norm(v).includes(q)))&&inPeriod(d.date,rng)&&(!est||d.status===est));const eInfo=$('enqInfo');if(eInfo)eInfo.textContent='Showing '+rows.length+' of '+ENQ_CACHE.length+' enquiries';h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.id)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+enqCustHtml(d)+enqSrcHtml(d)+'</td><td>'+esc(d.contactPerson)+'</td><td>'+esc(d.phone)+'</td><td>'+enqReqHtml(d)+'</td><td>'+statusBadge(d.status)+'</td><td>'+(d.quotationNo?'<a class="model-link" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">'+esc(d.quotationNo)+'</a>':'—')+'</td><td>'+(d.status==='New'?'<button class="btn small primary" onclick="makeQuotationFromEnquiry(\''+encA(d.id)+'\')">Make Quotation</button>':d.status==='Quoted'?'<button class="btn small" onclick="viewEnquiryQuotation(\''+encA(d.quotationNo)+'\')">View Quotation</button>':d.status==='Lost'?'<span class="muted">'+esc(d.lossReason||'')+'</span>':'—')+enqEditBtn(d)+enqReplyHtml(d)+'</td></tr>').join('')||'<tr><td colspan="9">No enquiries found.</td></tr>';}
+function filterEnquiries(){
+  const h = $('enqRows'); if (!h) return;
+  const q = norm($('enqSearch')?.value || ''), rng = periodRange('enqPer'), est = ($('enqStatus') || {}).value || '', asg = ($('enqAssign') || {}).value || '';
+  const me = String((S.user && S.user.username) || '').toLowerCase();
+  const base = ENQ_CACHE.filter(d => (!q || [d.id, d.customerName, d.contactPerson, d.phone, d.requirement, d.status, d.quotationNo, d.email, d.subject, enqUserName(d.assignedTo)].concat((d.items || []).map(x => x.desc)).some(v => norm(v).includes(q)))
+    && inPeriod(d.date, rng)
+    && (!asg || (asg === '~none' ? !d.assignedTo : asg === '~me' ? String(d.assignedTo || '').toLowerCase() === me : String(d.assignedTo || '').toLowerCase() === asg.toLowerCase())));
+  enqRenderTabs(base, est); enqRenderKpis();
+  const rows = base.filter(d => !est || d.status === est);
+  const eInfo = $('enqInfo'); if (eInfo) eInfo.textContent = 'Showing ' + rows.length + ' of ' + ENQ_CACHE.length + ' enquiries';
+  h.innerHTML = rows.map(enqRowHtml).join('') || '<tr><td colspan="6" class="empty">No enquiries found.</td></tr>';
+}
 
 /* ---------- Email enquiries: tag, long text, reply ---------- */
 function enqSrcHtml(d){
@@ -2340,7 +2351,11 @@ async function openMailDrawer(encId){
   if (!en) return toast('Enquiry not found. Press Refresh and try again.', true);
   const r = await api('getEnquiryMail', {mailId:en.mailId});
   if (!r || !r.ok) return toast((r && r.error) || 'Could not load the mail.', true);
-  if (!r.found) return toast('The complete mail was not stored for this enquiry (it came before this feature). Use “Original mail text” instead.', true);
+  if (!r.found) {   /* older e-mail enquiries: only the text + attachments were saved -> show those instead of an error */
+    enqViewFull(encId);
+    const b = $('modalBody'); if (b) b.insertAdjacentHTML('afterbegin', '<div class="muted small" style="margin:-4px 0 10px;padding:8px 10px;border:1px solid #e3e8f0;border-radius:8px;background:#f8fafd">ℹ This enquiry came before complete e-mails were saved, so its mail text and attachments are shown here.</div>');
+    return;
+  }
   MAIL_CUR = {enquiry:en, mail:r.mail, plain:false};
   closeMailDrawer(true);
   const d = document.createElement('div'); d.id = 'mailDrawer'; d.className = 'mail-drawer';
@@ -5224,3 +5239,111 @@ async function dcStockFix(i){
   await refresh(); dcStockCheck();
 }
 Object.assign(window, {dcStockCheck, dcStockFix, srcSheetHtml});
+
+
+/* ============================================================
+   ENQUIRIES PAGE — tabs, cards, age, assign, follow-up notes, close / reopen
+   ============================================================ */
+let ENQ_USERS = null;
+async function enqLoadUsers(){
+  if (ENQ_USERS) return ENQ_USERS;
+  const r = await api('enquiryAssignees');
+  ENQ_USERS = r && r.ok ? (r.users || []) : [];
+  const sel = $('enqAssign');
+  if (sel && ENQ_USERS.length && !sel.querySelector('option[data-u]')) ENQ_USERS.forEach(u => { const o = document.createElement('option'); o.value = u.username; o.textContent = 'Assigned: ' + u.name; o.dataset.u = '1'; sel.appendChild(o); });
+  return ENQ_USERS;
+}
+function enqUserName(un){ if (!un) return ''; const u = (ENQ_USERS || []).find(x => x.username.toLowerCase() === String(un).toLowerCase()); return u ? u.name : un; }
+function enqAgeDays(d){ const t = db2Day(d.date), n = db2Day(new Date()); return t && n ? Math.max(0, Math.round((n - t) / 864e5)) : null; }
+function enqRenderTabs(list, cur){
+  const host = $('enqTabs'); if (!host) return;
+  const c = st => list.filter(d => d.status === st).length;
+  const tabs = [['New', 'Needs quotation', c('New')], ['Quoted', 'Quoted', c('Quoted')], ['Lost', 'Lost', c('Lost')], ['Closed', 'Closed', c('Closed')], ['', 'All', list.length]];
+  host.innerHTML = tabs.map(t => '<button type="button" class="' + (cur === t[0] ? 'on' : '') + '" onclick="enqTab(\'' + t[0] + '\')">' + t[1] + '<i>' + t[2] + '</i></button>').join('');
+}
+function enqTab(st){ const s = $('enqStatus'); if (s) s.value = st; filterEnquiries(); }
+function enqRenderKpis(){
+  const host = $('enqKpis'); if (!host) return;
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth(), today = db2Day(now);
+  const inMonth = v => { const d = db2Day(v); return d && d.getFullYear() === y && d.getMonth() === m; };
+  const waiting = ENQ_CACHE.filter(d => d.status === 'New'), old = waiting.filter(d => (enqAgeDays(d) || 0) >= 7).length;
+  const todayN = ENQ_CACHE.filter(d => { const t = db2Day(d.date); return t && +t === +today; });
+  const mine = waiting.filter(d => String(d.assignedTo || '').toLowerCase() === String((S.user && S.user.username) || '').toLowerCase()).length;
+  const unas = waiting.filter(d => !d.assignedTo).length;
+  const monthN = ENQ_CACHE.filter(d => inMonth(d.date)), quotedM = monthN.filter(d => d.status === 'Quoted' || d.status === 'Lost').length, closedM = monthN.filter(d => d.status === 'Closed').length;
+  const card = (label, val, sub, onclick) => '<div class="enq-kpi"' + (onclick ? ' onclick="' + onclick + '"' : '') + '><span>' + label + '</span><b>' + val + '</b><em>' + sub + '</em></div>';
+  host.innerHTML = card('WAITING FOR QUOTATION', waiting.length, old ? '<b class="dn">' + old + ' over 7 days</b>' : (waiting.length ? 'all within a week' : 'nothing waiting'), "enqTab('New')")
+    + card('NEW TODAY', todayN.length, todayN.filter(d => d.source === 'Email').length + ' from e-mail', '')
+    + card('ASSIGNED TO ME', mine, unas + ' unassigned', "db2SetFilter('enqAssign','~me',filterEnquiries)")
+    + card(PS_MONTHS[m].toUpperCase() + ' — QUOTED', quotedM + ' <small>of ' + monthN.length + '</small>', closedM + ' closed without quotation', '');
+}
+function enqRowHtml(d){
+  const id = encA(d.id), age = enqAgeDays(d);
+  const ageB = d.status !== 'New' || age === null ? '' : '<span class="enq-age ' + (age >= 7 ? 'red' : age >= 2 ? 'amb' : 'grn') + '">' + (age === 0 ? 'New today' : age + ' day' + (age === 1 ? '' : 's') + ' waiting') + '</span>';
+  const contact = [d.contactPerson, d.phone].filter(Boolean).map(esc).join(' · ');
+  const notes = d.notes || [], last = notes[notes.length - 1];
+  const note = last ? '<div class="enq-note" title="' + esc(notes.length + ' note(s)') + '">📝 ' + esc(last.text) + ' <span>· ' + esc(enqUserName(last.by)) + ', ' + esc(fmtDate(last.at)) + (notes.length > 1 ? ' · ' + notes.length + ' notes' : '') + '</span></div>' : '';
+  const st = d.status || 'New';
+  const pill = st === 'New' ? '<span class="enq-pill amb">New</span>'
+    : st === 'Quoted' ? '<span class="enq-pill blu">Quoted</span>' + (d.quotationNo ? '<div><a class="model-link" onclick="viewEnquiryQuotation(\'' + encA(d.quotationNo) + '\')">' + esc(d.quotationNo) + '</a></div>' : '')
+    : st === 'Lost' ? '<span class="enq-pill red">Lost</span>' + (d.quotationNo ? '<div class="muted small">' + esc(d.quotationNo) + '</div>' : '') + (d.lossReason ? '<div class="muted small">' + esc(d.lossReason) + '</div>' : '')
+    : st === 'Closed' ? '<span class="enq-pill gry">Closed</span>' + (d.closeReason ? '<div class="muted small">' + esc(d.closeReason) + '</div>' : '')
+    : '<span class="enq-pill gry">' + esc(st) + '</span>';
+  const main = st === 'New' ? '<button class="btn small primary" onclick="makeQuotationFromEnquiry(\'' + id + '\')">Make Quotation</button>'
+    : st === 'Quoted' && d.quotationNo ? '<button class="btn small" onclick="viewEnquiryQuotation(\'' + encA(d.quotationNo) + '\')">View Quotation</button>' : '';
+  return '<tr class="enq-row st-' + esc(st.toLowerCase()) + '"><td><b>' + esc(d.id) + '</b><div class="muted small">' + fmtDate(d.date) + '</div>' + ageB + '</td>'
+    + '<td>' + enqCustHtml(d) + (contact ? '<div class="muted small">' + contact + '</div>' : '') + enqSrcHtml(d) + '</td>'
+    + '<td>' + enqReqHtml(d) + note + '</td>'
+    + '<td>' + (d.assignedTo ? '<span class="enq-who"><i>' + esc(enqUserName(d.assignedTo).split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase()) + '</i>' + esc(enqUserName(d.assignedTo)) + '</span>' : '<a class="model-link muted" onclick="enqAssignForm(\'' + id + '\')">— Assign</a>') + '</td>'
+    + '<td>' + pill + '</td>'
+    + '<td class="enq-act">' + main + '<button class="btn small enq-dots" title="More" onclick="enqMenu(event,\'' + id + '\')">⋯</button></td></tr>';
+}
+function enqMenuClose(){ const m = document.getElementById('enqMenu'); if (m) m.remove(); }
+function enqMenu(ev, idEnc){
+  ev.stopPropagation(); enqMenuClose();
+  const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d) return;
+  const items = [['✎ Edit enquiry', "enquiryForm('" + idEnc + "')"], ['👤 Assign to…', "enqAssignForm('" + idEnc + "')"], ['📝 Follow-up note' + ((d.notes || []).length ? ' (' + d.notes.length + ')' : ''), "enqNoteForm('" + idEnc + "')"], ['👁 View details', "enqViewFull('" + idEnc + "')"]];
+  if (d.source === 'Email' && d.mailId) items.push(['📧 Open e-mail', "openMailDrawer('" + idEnc + "')"]);
+  if (d.email) items.push(['✉ Reply by e-mail', "enqReply('" + idEnc + "')"]);
+  if (d.status === 'New') items.push(['—'], ['✕ Close — no quotation needed', "enqCloseForm('" + idEnc + "')", 'red']);
+  if (d.status === 'Closed') items.push(['—'], ['↺ Reopen', "enqReopen('" + idEnc + "')"]);
+  const m = document.createElement('div'); m.id = 'enqMenu'; m.className = 'enq-menu';
+  m.innerHTML = items.map(x => x[0] === '—' ? '<hr>' : '<button type="button" class="' + (x[2] || '') + '" onclick="enqMenuClose();' + x[1] + '">' + x[0] + '</button>').join('');
+  document.body.appendChild(m);
+  const r = ev.currentTarget.getBoundingClientRect();
+  const top = Math.min(window.innerHeight - m.offsetHeight - 10, r.bottom + 4), left = Math.max(10, r.right - m.offsetWidth);
+  m.style.top = (top + window.scrollY) + 'px'; m.style.left = (left + window.scrollX) + 'px';
+}
+document.addEventListener('click', e => { if (!e.target.closest || !e.target.closest('#enqMenu')) enqMenuClose(); });
+window.addEventListener('scroll', enqMenuClose, true);
+function enqReply(idEnc){
+  const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d || !d.email) return;
+  location.href = 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + (d.subject || 'Your enquiry') + ' [' + d.id + ']');
+}
+async function enqDo(idEnc, op, extra, okMsg){
+  const r = await api('enquiryAction', Object.assign({id:decodeURIComponent(idEnc), op:op}, extra || {}));
+  if (!r || !r.ok) { toast(((r && r.error) || 'Could not save.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true); return false; }
+  closeModal(); toast(okMsg); await renderEnquiries(); return true;
+}
+async function enqAssignForm(idEnc){
+  const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d) return;
+  await enqLoadUsers();
+  modal('Assign ' + d.id, '<div class="form-grid"><label class="wide">Assign to<select id="enqAsTo"><option value="">— Unassigned —</option>' + (ENQ_USERS || []).map(u => '<option value="' + esc(u.username) + '"' + (String(d.assignedTo || '').toLowerCase() === u.username.toLowerCase() ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '</select></label></div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="enqDo(\'' + idEnc + '\',\'assign\',{to:$(\'enqAsTo\').value},\'Assignment saved.\')">Save</button></div>');
+}
+function enqNoteForm(idEnc){
+  const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d) return;
+  const notes = (d.notes || []).slice().reverse();
+  modal('Follow-up — ' + d.id + ' · ' + (d.customerName || ''), '<label class="enqf-lbl">New note<textarea id="enqNote" rows="3" placeholder="e.g. Called Mr. Asif — wants 2 options, call again Monday"></textarea></label>'
+    + '<div class="actions" style="margin-top:8px"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="enqDo(\'' + idEnc + '\',\'note\',{text:$(\'enqNote\').value},\'Note added.\')">Add note</button></div>'
+    + (notes.length ? '<h4 style="margin:14px 0 6px">Earlier notes</h4>' + notes.map(n => '<div class="enq-note-row"><div>' + esc(n.text) + '</div><span>' + esc(enqUserName(n.by)) + ' · ' + esc(new Date(n.at).toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})) + '</span></div>').join('') : ''));
+  setTimeout(() => { const t = $('enqNote'); if (t) t.focus(); }, 30);
+}
+function enqCloseForm(idEnc){
+  const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d) return;
+  modal('Close ' + d.id + ' without a quotation', '<div class="form-grid"><label>Reason<select id="enqCloseWhy"><option>Regret — item not available</option><option>Customer cancelled / no reply</option><option>Duplicate enquiry</option><option>Spam / not relevant</option><option>Information only — no quote needed</option><option>Price given on phone</option><option>Other</option></select></label><label>Note <small>(optional)</small><input id="enqCloseNote" placeholder="details"></label></div>'
+    + '<div class="muted small" style="margin-top:8px">A closed enquiry leaves the “Needs quotation” list and the dashboard to-do. It can be reopened any time.</div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" onclick="enqDo(\'' + idEnc + '\',\'close\',{reason:[$(\'enqCloseWhy\').value,$(\'enqCloseNote\').value.trim()].filter(Boolean).join(\' — \')},\'Enquiry closed.\')">Close enquiry</button></div>');
+}
+function enqReopen(idEnc){ if (confirm('Reopen ' + decodeURIComponent(idEnc) + '?')) enqDo(idEnc, 'reopen', {}, 'Enquiry reopened.'); }
+Object.assign(window, {enqTab, enqMenu, enqMenuClose, enqAssignForm, enqNoteForm, enqCloseForm, enqReopen, enqDo, enqReply});
