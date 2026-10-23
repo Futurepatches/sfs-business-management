@@ -399,7 +399,7 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button><button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button>${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   imports:()=>impPageHtml(),
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
@@ -933,28 +933,23 @@ function productDetail(em){
 
 async function showProductHistory(em){
   const m = decodeURIComponent(em);
-  modal('Product History — '+m, '<p class="muted">Loading…</p>');
+  modal('Product History — ' + m, '<p class="muted">Loading…</p>');
   const r = await api('stockMovement', {model:m});
-  if (!r.ok) { $('modalBody').innerHTML = '<p class="muted">'+esc(r.error||'Could not load history.')+'</p>'; return; }
-
-  const allRows = (r.movements||[]).slice(1); // row 0 is the header row
-  const adjRows = allRows.filter(x => String(x[7]||'') === 'Stock Adjustment').sort((a,b)=>new Date(b[1])-new Date(a[1]));
-  const rows = allRows.filter(x => String(x[7]||'') !== 'Stock Adjustment');
-  const inRows = rows.filter(x => String(x[2]||'').toUpperCase()==='IN').sort((a,b)=>new Date(b[1])-new Date(a[1]));
-  const outRows = rows.filter(x => String(x[2]||'').toUpperCase()==='OUT').sort((a,b)=>new Date(b[1])-new Date(a[1]));
-  const totalIn = inRows.reduce((a,x)=>a+(Number(x[5])||0),0);
-  const totalOut = outRows.reduce((a,x)=>a+(Number(x[5])||0),0);
-  const fmtRow = x => `<tr><td>${fmtDate(x[1])}</td><td><b>${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[7])}</td><td>${esc(x[8])}</td></tr>`;
-
-  $('modalBody').innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin:-4px 0 8px"><button class="btn small primary" onclick="printProductCard('${encA(m)}')">🖨 Product Card (PDF)</button></div>
-    <h4 style="margin:0 0 8px">Purchases / Imports (IN) — Total: ${totalIn}</h4>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Supplier</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${inRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No purchase history yet.</td></tr>'}</tbody></table></div>
-    <h4 style="margin:16px 0 8px">Sales (OUT) — Total: ${totalOut}</h4>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Customer</th><th>Ref Type</th><th>Ref #</th></tr></thead><tbody>${outRows.map(fmtRow).join('')||'<tr><td colspan="5" class="empty">No sales history yet.</td></tr>'}</tbody></table></div>
-    ${adjRows.length ? `<h4 style="margin:16px 0 8px">Stock Adjustments (set by Admin)</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Change</th><th>Reason</th><th>Ref #</th><th>By</th></tr></thead><tbody>${adjRows.map(x => `<tr><td>${fmtDate(x[1])}</td><td><b style="color:${Number(x[5])<0?'#c0392b':'#15803d'}">${Number(x[5])>0?'+':''}${x[5]}</b></td><td>${esc(x[6])}</td><td>${esc(x[8])}</td><td>${esc(x[9])}</td></tr>`).join('')}</tbody></table></div>` : ''}
-    <div id="srcRecs" style="margin-top:16px"><div class="muted">Loading the old inventory sheet record…</div></div>
-  `;
+  if (!r.ok) { $('modalBody').innerHTML = '<p class="muted">' + esc(r.error || 'Could not load history.') + '</p>'; return; }
+  const G = pcGroups((r.movements || []).slice(1));   // row 0 is the header row
+  const n = v => (Math.round((Number(v) || 0) * 1000) / 1000).toLocaleString();
+  const rev = l => l.slice().reverse();               // newest first on screen
+  const sumIn = G.ins.reduce((a, x) => a + (Number(x[5]) || 0), 0), sumOut = G.dcs.reduce((a, g) => a + g.qty, 0);
+  $('modalBody').innerHTML = '<div style="display:flex;justify-content:flex-end;margin:-4px 0 8px"><button class="btn small primary" onclick="printProductCard(\'' + encA(m) + '\')">🖨 Product Card (PDF)</button></div>'
+    + '<h4 style="margin:0 0 8px">Purchases / Imports — total +' + n(sumIn) + '</h4>'
+    + '<div class="table-wrap"><table><thead><tr><th>Date</th><th>From</th><th>Ref</th><th class="right">Qty</th></tr></thead><tbody>'
+    + (G.ins.length ? rev(G.ins).map(x => '<tr><td>' + fmtDate(x[1]) + '</td><td>' + esc(x[6]) + '</td><td>' + esc([x[7], x[8]].filter(Boolean).join(' ')) + '</td><td class="right"><b>+' + n(x[5]) + '</b></td></tr>').join('') : '<tr><td colspan="4" class="empty">No purchase history yet.</td></tr>') + '</tbody></table></div>'
+    + '<h4 style="margin:16px 0 8px">Deliveries — total ' + n(-sumOut) + ' <span class="muted small">(one line per DC, edits already counted)</span></h4>'
+    + '<div class="table-wrap"><table><thead><tr><th>Date</th><th>DC #</th><th>Customer</th><th class="right">Qty</th></tr></thead><tbody>'
+    + (G.dcs.length ? G.dcs.slice().reverse().map(g => '<tr><td>' + fmtDate(g.date) + '</td><td><b>' + esc(g.no) + '</b>' + (g.edits ? ' <span class="muted small">(edited ' + g.edits + '×)</span>' : '') + '</td><td>' + esc(g.party) + '</td><td class="right"><b>' + n(-g.qty) + '</b></td></tr>').join('') : '<tr><td colspan="4" class="empty">No deliveries yet.</td></tr>') + '</tbody></table></div>'
+    + (G.adj.length ? '<h4 style="margin:16px 0 8px">Adjustments &amp; corrections</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Reason</th><th>Ref</th><th>By</th><th class="right">Change</th></tr></thead><tbody>'
+        + rev(G.adj).map(x => '<tr><td>' + fmtDate(x[1]) + '</td><td>' + esc(x[6]) + '</td><td>' + esc([x[7], x[8]].filter(Boolean).join(' ')) + '</td><td>' + esc(x[9]) + '</td><td class="right"><b style="color:' + (Number(x[5]) < 0 ? '#c0392b' : '#15803d') + '">' + (Number(x[5]) > 0 ? '+' : '') + n(x[5]) + '</b></td></tr>').join('') + '</tbody></table></div>' : '')
+    + '<div id="srcRecs" style="margin-top:16px"><div class="muted">Loading the old inventory sheet record…</div></div>';
   loadSourceRecords(m, 'srcRecs', true);
 }
 
@@ -5034,17 +5029,10 @@ async function loadSourceRecords(model, hostId, full){
   const line = '<b>Stock ' + fmt(u.erpStock) + '</b> = old inventory sheet <b>' + fmt(u.sourceQty) + '</b>' + (u.sourceRows > 1 ? ' <span class="pd-warn">(' + u.sourceRows + ' rows added together)</span>' : u.sourceRows === 0 ? ' <span class="pd-warn">(not in the old sheet)</span>' : '')
     + ' + ERP entries <b>' + (Number(u.erpMoves) > 0 ? '+' : '') + fmt(u.erpMoves) + '</b>'
     + (near ? ' · <span class="pd-warn">⚠ ' + near + ' row(s) in the old sheet have this model written differently</span>' : '');
-  if (!full) { h.innerHTML = line + ' · <a class="model-link" onclick="showProductHistory(\'' + encA(model) + '\')">see record</a>'; return; }
-  h.innerHTML = '<h4 style="margin:0 0 6px">Old inventory sheet (as last copied by “Refresh Source”)</h4><div class="muted small" style="margin-bottom:8px">' + line + '</div>'
-    + (r.sheets || []).map(sh => {
-        const nm = sh.sheet.replace('Source ', '');
-        if (sh.missing) return '<div class="muted small" style="margin:6px 0">' + esc(nm) + ': not copied yet.</div>';
-        if (!sh.rows.length) return '<div class="muted small" style="margin:6px 0">' + esc(nm) + ': no rows for this model.</div>';
-        return '<div style="margin:10px 0 4px"><b>' + esc(nm) + '</b> <span class="muted small">' + sh.rows.length + ' row(s)' + (sh.more ? ' (+' + sh.more + ' more)' : '') + '</span></div>'
-          + '<div class="table-wrap"><table class="src-tbl"><thead><tr><th>Row</th>' + sh.headers.map(x => '<th>' + esc(x || '—') + '</th>').join('') + '</tr></thead><tbody>'
-          + sh.rows.map(x => '<tr' + (x.exact ? '' : ' class="src-near" title="Model written differently in the old sheet"') + '><td class="muted">' + x.row + (x.exact ? '' : ' ⚠') + '</td>' + x.cells.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('')
-          + '</tbody></table></div>';
-      }).join('');
+  if (!full) { h.innerHTML = line + ((r.dcIssues || []).length ? ' · <span class="pd-warn">⚠ ' + r.dcIssues.length + ' DC(s) cut the stock wrongly</span>' : '') + ' · <a class="model-link" onclick="showProductHistory(\'' + encA(model) + '\')">see record</a>'; return; }
+  const iss = (r.dcIssues || []).map(x => '<div class="pd-warn" style="margin:4px 0">⚠ DC ' + esc(x.dc) + ': DC says ' + fmt(x.onDc) + ', stock cut ' + fmt(x.deducted) + (isAdmin() ? ' — <a class="model-link" onclick="dcStockCheck()">correct in DC Stock Check</a>' : ' — ask an Admin to correct') + '</div>').join('');
+  h.innerHTML = '<h4 style="margin:0 0 6px">Old inventory sheet (as last copied by “Refresh Source”)</h4><div class="muted small" style="margin-bottom:8px">' + line + '</div>' + iss
+    + (r.sheets || []).map(sh => srcSheetHtml(sh, 'src')).join('');
 }
 
 function setStockForm(em){
@@ -5078,69 +5066,161 @@ Object.assign(window, {loadSourceRecords, setStockForm, saveSetStock});
    PRODUCT CARD — one product's details + full stock record as a printable / PDF page
    (Print → "Save as PDF" to keep or send it.)
    ============================================================ */
+/* Old-sheet rows are very wide (repeating "DATE / QTY" or "DC/DATE / DESCRIPTION / QTY" columns).
+   Split them into: fixed fields (shown as label: value) + repeating entries (shown as a small list). */
+function srcSplit(sh){
+  const H = (sh.headers || []).map(h => String(h || '').trim());
+  const isDate = h => /date/i.test(h);
+  const dateIdx = H.map((h, i) => isDate(h) ? i : -1).filter(i => i >= 0);
+  let start = -1, len = 0;
+  if (dateIdx.length >= 2) { start = dateIdx[0]; len = dateIdx[1] - dateIdx[0]; }
+  const skip = /^(model|model \/ part no\.?|description|image|additional spec|size|—)$/i;
+  return (sh.rows || []).map(r => {
+    const c = r.cells || [];
+    const fixed = [], entries = [];
+    H.forEach((h, i) => {
+      if (start >= 0 && i >= start) return;
+      const v = String(c[i] == null ? '' : c[i]).trim();
+      if (!v || skip.test(h) || /^https?:\/\//i.test(v)) return;
+      fixed.push([h || 'Col ' + (i + 1), v]);
+    });
+    if (start >= 0 && len > 0) for (let k = start; k < H.length; k += len) {
+      const vals = H.slice(k, k + len).map((h, j) => [h, String(c[k + j] == null ? '' : c[k + j]).trim()]);
+      if (vals.some(x => x[1])) entries.push(vals);
+    }
+    return {row:r.row, exact:r.exact, fixed:fixed, entries:entries, entryHeads:start >= 0 ? H.slice(start, start + len) : []};
+  });
+}
+function srcSheetHtml(sh, cls){
+  const nm = String(sh.sheet || '').replace('Source ', '');
+  if (sh.missing) return '<div class="' + cls + '-none">' + esc(nm) + ': not copied yet.</div>';
+  if (!sh.rows || !sh.rows.length) return '<div class="' + cls + '-none">' + esc(nm) + ': no rows for this model.</div>';
+  return sh.rows.length && srcSplit(sh).map(x => '<div class="' + cls + '-blk' + (x.exact ? '' : ' near') + '"><div class="' + cls + '-blkh"><b>' + esc(nm) + '</b> <span>row ' + x.row + (x.exact ? '' : ' · ⚠ model written differently') + '</span></div>'
+      + (x.fixed.length ? '<div class="' + cls + '-kv">' + x.fixed.map(f => '<span><i>' + esc(f[0]) + '</i> ' + esc(f[1]) + '</span>').join('') + '</div>' : '')
+      + (x.entries.length ? '<table class="' + cls + '-t"><thead><tr>' + x.entryHeads.map(h => '<th>' + esc(h || '—') + '</th>').join('') + '</tr></thead><tbody>' + x.entries.map(e => '<tr>' + e.map(v => '<td>' + esc(v[1]) + '</td>').join('') + '</tr>').join('') + '</tbody></table>' : '')
+      + '</div>').join('');
+}
+/* group the ERP movements: purchases, deliveries per DC (net), adjustments / corrections */
+function pcGroups(rows){
+  const DCF = {'DC':1, 'DC Edit':1, 'DC Edit Reversal':1, 'DC Edit Reversal Undo':1};
+  const ins = [], adj = [], dc = {};
+  rows.forEach(x => {
+    const ref = String(x[7] || '');
+    if (DCF[ref]) {
+      const no = String(x[8] || '').trim() || '(no #)';
+      const g = dc[no] || (dc[no] = {no:no, date:x[1], party:'', qty:0, edits:0});
+      g.qty += Number(x[5]) || 0;
+      if (ref === 'DC Edit') g.edits++;
+      if ((ref === 'DC' || ref === 'DC Edit') && x[6]) g.party = x[6];
+      if (new Date(x[1]) < new Date(g.date)) g.date = x[1];
+    } else if (ref === 'Stock Adjustment' || ref === 'DC Correction') adj.push(x);
+    else if (String(x[2] || '').toUpperCase() === 'IN') ins.push(x);
+    else adj.push(x);
+  });
+  const by = (a, b) => new Date(a[1]) - new Date(b[1]);
+  return {ins:ins.sort(by), adj:adj.sort(by), dcs:Object.values(dc).sort((a, b) => new Date(a.date) - new Date(b.date))};
+}
 async function printProductCard(em){
   const m = decodeURIComponent(em), p = (S.products || []).find(x => x['Model / Part No.'] === m);
   if (!p) return toast('Product not found.', true);
   toast('Preparing the product card…');
   const [mv, src] = await Promise.all([api('stockMovement', {model:m}), api('getSourceRecords', {model:m})]);
   const rows = mv && mv.ok ? (mv.movements || []).slice(1) : [];
-  const byDate = (a, b) => new Date(a[1]) - new Date(b[1]);
-  const adj = rows.filter(x => String(x[7] || '') === 'Stock Adjustment').sort(byDate);
-  const ins = rows.filter(x => String(x[7] || '') !== 'Stock Adjustment' && String(x[2] || '').toUpperCase() === 'IN').sort(byDate);
-  const outs = rows.filter(x => String(x[7] || '') !== 'Stock Adjustment' && String(x[2] || '').toUpperCase() === 'OUT').sort(byDate);
-  const sum = l => l.reduce((a, x) => a + (Number(x[5]) || 0), 0);
+  const G = pcGroups(rows), u = src && src.ok ? (src.used || {}) : null, issues = src && src.ok ? (src.dcIssues || []) : [];
   const n = v => (Math.round((Number(v) || 0) * 1000) / 1000).toLocaleString();
-  const u = src && src.ok ? (src.used || {}) : null;
+  const sumIn = G.ins.reduce((a, x) => a + (Number(x[5]) || 0), 0), sumOut = G.dcs.reduce((a, g) => a + g.qty, 0), sumAdj = G.adj.reduce((a, x) => a + (Number(x[5]) || 0), 0);
   const img = p['Product Image'] ? qtDriveThumb(p['Product Image']) : '';
-  const showCost = hasMod('imports') && p['Cost Price'] !== '' && p['Cost Price'] != null;
-  const kv = (k, v) => v === '' || v == null ? '' : '<tr><td class="k">' + k + '</td><td class="v">' + v + '</td></tr>';
-  const table = (title, list, cols, cells, empty) => '<h3 class="pc-h">' + title + '</h3><table class="pc-t"><thead><tr>' + cols.map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>'
-    + (list.length ? list.map(x => '<tr>' + cells(x).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + cols.length + '" class="pc-empty">' + empty + '</td></tr>') + '</tbody></table>';
+  const status = String(p.Status || 'Active'), statusOk = /^(active|inactive)$/i.test(status);
+  const cost = Number(p['Cost Price']) || 0;
+  const field = (k, v) => v === '' || v == null ? '' : '<div><i>' + k + '</i><b>' + v + '</b></div>';
+  const warn = [];
+  if (u && u.sourceRows > 1) warn.push('This model is <b>' + u.sourceRows + ' times</b> in the old sheet — their quantities are added together.');
+  if (u && u.sourceRows === 0) warn.push('This model is <b>not in the old sheet</b> — stock comes only from ERP entries.');
+  const near = src && src.ok ? (src.sheets || []).reduce((a, s) => a + (s.rows || []).filter(x => !x.exact).length, 0) : 0;
+  if (near) warn.push(near + ' row(s) in the old sheet have this model <b>written differently</b> (marked ⚠).');
+  issues.forEach(x => warn.push('DC <b>' + esc(x.dc) + '</b>: the DC says <b>' + n(x.onDc) + '</b>, but stock was cut by <b>' + n(x.deducted) + '</b> (' + (x.diff < 0 ? n(-x.diff) + ' too much' : n(x.diff) + ' too little') + '). An Admin can correct it in Products → DC Stock Check.'));
+  if (!statusOk) warn.push('Status shows “' + esc(status) + '” — please check this product in the Products sheet (Status should be Active / Inactive).');
+  const issueDc = new Set(issues.map(x => x.dc));
   const css = `<style>
-    .pc{color:#1d2433;font-size:11.5px}
-    .pc-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #d5dbe3;padding-bottom:6px;margin-bottom:12px}
-    .pc-title{font-size:13px;font-weight:bold;letter-spacing:2px;color:#64748b}
-    .pc-sub{font-size:9.5px;color:#64748b}
-    .print-company{display:none!important}   /* plain card: no company letterhead / footer */
-    .pc-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:10px}
-    .pc-img{width:40mm;height:34mm;border:1px solid #d5dbe3;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;background:#fff}
-    .pc-img img{max-width:100%;max-height:100%;object-fit:contain}.pc-noimg{color:#94a3b8;font-size:10px}
-    .pc-model{font-size:18px;font-weight:bold;color:#1f3b63}.pc-desc{font-size:12px;margin:2px 0 8px}
-    .pc-kv{border-collapse:collapse;width:auto!important}.pc-kv tr{background:none!important}.pc-kv td{padding:2px 18px 2px 0;font-size:11px;border:none!important;background:none!important}.pc-kv .k{color:#64748b;font-weight:bold}
-    .pc-box{display:flex;gap:8px;margin:8px 0 4px}
-    .pc-box div{flex:1;border:1px solid #d5dbe3;border-radius:6px;padding:6px 8px;text-align:center}
-    .pc-box span{display:block;font-size:9px;color:#64748b;font-weight:bold;letter-spacing:.5px}.pc-box b{font-size:15px}
+    .print-company{display:none!important}
+    .pc{color:#1d2433;font-size:11px;line-height:1.4}
+    .pc-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #cfd8e3;padding-bottom:5px;margin-bottom:12px}
+    .pc-title{font-size:12px;font-weight:bold;letter-spacing:2px;color:#64748b}.pc-sub{font-size:9px;color:#64748b}
+    .pc-head{display:flex;gap:14px;align-items:flex-start}
+    .pc-img{width:34mm;height:28mm;border:1px solid #d5dbe3;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;background:#fff;color:#94a3b8;font-size:9px}
+    .pc-img img{max-width:100%;max-height:100%;object-fit:contain}
+    .pc-model{font-size:17px;font-weight:bold;color:#1f3b63}.pc-desc{font-size:11.5px;margin:1px 0 8px}
+    .pc-f{display:grid;grid-template-columns:repeat(4,auto);gap:4px 18px;justify-content:start}
+    .pc-f div{display:flex;flex-direction:column}.pc-f i{font-style:normal;font-size:8.5px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}.pc-f b{font-size:11px}
+    .pc-box{display:flex;gap:6px;margin:12px 0 6px}
+    .pc-box div{flex:1;border:1px solid #d5dbe3;border-radius:6px;padding:5px 6px;text-align:center}
+    .pc-box span{display:block;font-size:8.5px;color:#64748b;font-weight:bold;letter-spacing:.4px}.pc-box b{font-size:14px}
     .pc-box .hl{background:#1f3b63;color:#fff;border-color:#1f3b63}.pc-box .hl span{color:#cbd5e1}
-    .pc-note{font-size:10px;color:#64748b;margin:2px 0 6px}.pc-warn{color:#b45309;font-weight:bold}
-    .pc-h{font-size:12.5px;color:#1f3b63;margin:12px 0 4px;border-bottom:1px solid #e3e8f0;padding-bottom:2px}
-    .pc-t{width:100%;border-collapse:collapse;font-size:10.5px}
-    .pc-t th{background:#f1f5f9;text-align:left;padding:4px 6px;border:1px solid #d5dbe3;font-size:9.5px}
-    .pc-t td{padding:4px 6px;border:1px solid #e3e8f0;vertical-align:top}
-    .pc-t tr{page-break-inside:avoid}.pc-empty{color:#94a3b8;text-align:center}
-    .pc-near td{background:#fff7e6}
-    .pc-foot{margin-top:12px;font-size:9.5px;color:#64748b}
+    .pc-eq{font-size:9.5px;color:#64748b;margin-bottom:6px}
+    .pc-warn{border:1px solid #f5d08a;background:#fff8e6;border-radius:6px;padding:6px 9px;margin:6px 0 4px;font-size:10px;color:#7c4a03}
+    .pc-warn div{margin:2px 0}
+    .pc-h{font-size:11.5px;color:#1f3b63;margin:12px 0 4px;font-weight:bold}
+    .pc-h span{font-weight:normal;color:#64748b;font-size:10px}
+    .pc-t{width:100%;border-collapse:collapse;font-size:10px;table-layout:auto}
+    .pc-t th{background:#f1f5f9;text-align:left;padding:3px 6px;border-bottom:1px solid #cfd8e3;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px;color:#475569}
+    .pc-t td{padding:3px 6px;border-bottom:1px solid #eef2f7;vertical-align:top}
+    .pc-t td.r,.pc-t th.r{text-align:right}.pc-t tr{page-break-inside:avoid}
+    .pc-t tr.bad td{background:#fff1f1}
+    .pc-none{color:#94a3b8;font-size:10px;margin:2px 0}
+    .src-blk{border:1px solid #e3e8f0;border-radius:6px;padding:5px 8px;margin:5px 0;page-break-inside:avoid}
+    .src-blk.near{background:#fff8e6}
+    .src-blkh{font-size:10px}.src-blkh span{color:#64748b}
+    .src-kv{display:flex;flex-wrap:wrap;gap:3px 14px;margin:3px 0;font-size:10px}.src-kv i{font-style:normal;color:#64748b}
+    .src-t{border-collapse:collapse;font-size:9.5px;margin-top:3px;width:auto!important}.src-t th{text-align:left;color:#64748b;font-weight:600;font-size:8.5px!important;letter-spacing:0!important;background:none!important;padding:1px 16px 1px 0!important;border-bottom:1px solid #e3e8f0}.src-t td{padding:1px 16px 1px 0!important;font-size:9.5px!important;border:none!important}
+    .src-none{color:#94a3b8;font-size:10px;margin:2px 0}
+    .pc-foot{margin-top:10px;font-size:8.5px;color:#94a3b8}
   </style>`;
-  let body = css + '<div class="pc">'
-    + '<div class="pc-top"><div class="pc-title">PRODUCT CARD</div><div class="pc-sub">Printed ' + esc(new Date().toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})) + (S.user ? ' · by ' + esc(S.user.name || S.user.username) : '') + '</div></div>'
-    + '<div class="pc-head"><div class="pc-img">' + (img ? '<img src="' + esc(img) + '" alt="">' : '<span class="pc-noimg">No picture</span>') + '</div><div style="flex:1">'
+  const body = css + '<div class="pc">'
+    + '<div class="pc-top"><div class="pc-title">PRODUCT CARD</div><div class="pc-sub">Printed ' + esc(new Date().toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})) + (S.user ? ' · ' + esc(S.user.name || S.user.username) : '') + '</div></div>'
+    + '<div class="pc-head"><div class="pc-img">' + (img ? '<img src="' + esc(img) + '" alt="" onerror="this.parentNode.textContent=\'No picture\'">' : 'No picture') + '</div><div style="flex:1;min-width:0">'
     + '<div class="pc-model">' + esc(m) + '</div><div class="pc-desc">' + esc(p.Description || '') + '</div>'
-    + '<table class="pc-kv">' + kv('Category', esc(p.Category || '')) + kv('Brand', esc(p.Brand || '')) + kv('Location', esc(p.Location || '')) + kv('Unit', esc(p.Unit || '')) + kv('Sale price', p['Sale Price'] ? money(p['Sale Price']) : '') + (showCost ? kv('Cost price', money(p['Cost Price'])) : '') + kv('Reorder level', reorderOf(p)) + kv('Status', esc(p.Status || 'Active')) + '</table></div></div>'
-    + '<div class="pc-box"><div class="hl"><span>STOCK IN ERP</span><b>' + n(p.currentStock) + '</b></div>'
+    + '<div class="pc-f">' + field('Category', esc(p.Category || '')) + field('Brand', esc(p.Brand || '')) + field('Location', esc(p.Location || '')) + field('Unit', esc(p.Unit || ''))
+    + field('Sale price', Number(p['Sale Price']) ? money(p['Sale Price']) : '') + (hasMod('imports') && cost ? field('Cost price', money(cost)) : '') + field('Reorder level', esc(reorderOf(p))) + field('Status', esc(statusOk ? status : status + ' ⚠')) + '</div></div></div>'
+    + '<div class="pc-box"><div class="hl"><span>STOCK NOW</span><b>' + n(p.currentStock) + '</b></div>'
     + (u ? '<div><span>OLD SHEET</span><b>' + n(u.sourceQty) + '</b></div>' : '')
-    + '<div><span>IN (ERP)</span><b>+' + n(sum(ins)) + '</b></div><div><span>OUT (ERP)</span><b>' + n(sum(outs)) + '</b></div>'
-    + '<div><span>ADJUSTMENTS</span><b>' + (sum(adj) > 0 ? '+' : '') + n(sum(adj)) + '</b></div></div>'
-    + '<div class="pc-note">Stock = old inventory sheet (as last copied) + ERP entries (IN, OUT, adjustments).'
-    + (u && u.sourceRows > 1 ? ' <span class="pc-warn">Model is ' + u.sourceRows + ' times in the old sheet (added together).</span>' : '')
-    + (u && u.sourceRows === 0 ? ' <span class="pc-warn">Model is not in the old sheet.</span>' : '') + '</div>'
-    + table('Purchases / Imports (IN) — total ' + n(sum(ins)), ins, ['Date', 'Qty', 'Supplier / From', 'Ref type', 'Ref #'], x => [fmtDate(x[1]), '<b>' + n(x[5]) + '</b>', esc(x[6]), esc(x[7]), esc(x[8])], 'No purchases recorded in the ERP.')
-    + table('Sales / Deliveries (OUT) — total ' + n(sum(outs)), outs, ['Date', 'Qty', 'Customer / To', 'Ref type', 'Ref #'], x => [fmtDate(x[1]), '<b>' + n(x[5]) + '</b>', esc(x[6]), esc(x[7]), esc(x[8])], 'No deliveries recorded in the ERP.')
-    + (adj.length ? table('Stock adjustments', adj, ['Date', 'Change', 'Reason', 'Ref #', 'By'], x => [fmtDate(x[1]), '<b>' + (Number(x[5]) > 0 ? '+' : '') + n(x[5]) + '</b>', esc(x[6]), esc(x[8]), esc(x[9])], '') : '');
-  if (src && src.ok) (src.sheets || []).forEach(sh => {
-    if (sh.missing || !sh.rows || !sh.rows.length) return;
-    body += '<h3 class="pc-h">Old inventory sheet — ' + esc(sh.sheet.replace('Source ', '')) + ' (' + sh.rows.length + ' row' + (sh.rows.length === 1 ? '' : 's') + ')</h3><table class="pc-t"><thead><tr><th>Row</th>' + sh.headers.map(h => '<th>' + esc(h || '—') + '</th>').join('') + '</tr></thead><tbody>'
-      + sh.rows.map(x => '<tr' + (x.exact ? '' : ' class="pc-near"') + '><td>' + x.row + (x.exact ? '' : ' ⚠') + '</td>' + x.cells.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
-  });
-  body += '<div class="pc-foot">⚠ = model written differently in the old sheet. This card shows the record held in the ERP on the printing date.</div></div>';
+    + '<div><span>PURCHASED</span><b>+' + n(sumIn) + '</b></div><div><span>DELIVERED</span><b>' + n(sumOut) + '</b></div>'
+    + '<div><span>ADJUSTED</span><b>' + (sumAdj > 0 ? '+' : '') + n(sumAdj) + '</b></div></div>'
+    + '<div class="pc-eq">Stock now = old sheet + purchased + delivered (−) + adjusted.</div>'
+    + (warn.length ? '<div class="pc-warn"><b>Please check</b>' + warn.map(w => '<div>• ' + w + '</div>').join('') + '</div>' : '')
+    + '<div class="pc-h">Purchases / Imports <span>(ERP)</span></div>'
+    + (G.ins.length ? '<table class="pc-t"><thead><tr><th>Date</th><th>From</th><th>Ref</th><th class="r">Qty</th></tr></thead><tbody>' + G.ins.map(x => '<tr><td>' + fmtDate(x[1]) + '</td><td>' + esc(x[6]) + '</td><td>' + esc([x[7], x[8]].filter(Boolean).join(' ')) + '</td><td class="r"><b>+' + n(x[5]) + '</b></td></tr>').join('') + '</tbody></table>' : '<div class="pc-none">No purchases recorded in the ERP.</div>')
+    + '<div class="pc-h">Deliveries <span>(one line per DC — edits already counted)</span></div>'
+    + (G.dcs.length ? '<table class="pc-t"><thead><tr><th>Date</th><th>DC #</th><th>Customer</th><th class="r">Qty</th></tr></thead><tbody>' + G.dcs.map(g => '<tr' + (issueDc.has(g.no) ? ' class="bad"' : '') + '><td>' + fmtDate(g.date) + '</td><td>' + esc(g.no) + (g.edits ? ' <span style="color:#64748b">(edited ' + g.edits + '×)</span>' : '') + (issueDc.has(g.no) ? ' ⚠' : '') + '</td><td>' + esc(g.party) + '</td><td class="r"><b>' + n(-g.qty) + '</b></td></tr>').join('') + '</tbody></table>' : '<div class="pc-none">No deliveries recorded in the ERP.</div>')
+    + (G.adj.length ? '<div class="pc-h">Adjustments &amp; corrections</div><table class="pc-t"><thead><tr><th>Date</th><th>Reason</th><th>Ref</th><th>By</th><th class="r">Change</th></tr></thead><tbody>' + G.adj.map(x => '<tr><td>' + fmtDate(x[1]) + '</td><td>' + esc(x[6]) + '</td><td>' + esc([x[7], x[8]].filter(Boolean).join(' ')) + '</td><td>' + esc(x[9]) + '</td><td class="r"><b>' + (Number(x[5]) > 0 ? '+' : '') + n(x[5]) + '</b></td></tr>').join('') + '</tbody></table>' : '')
+    + (src && src.ok ? '<div class="pc-h">Old inventory sheet <span>(as last copied by “Refresh Source”)</span></div>' + (src.sheets || []).map(sh => srcSheetHtml(sh, 'src')).join('') : '')
+    + '<div class="pc-foot">This card shows the record held in the ERP on the printing date.</div></div>';
   printDoc(body, '<span></span>', docFileName('Product Card ' + m, '', 'Product Card'));
 }
 window.printProductCard = printProductCard;
+
+
+/* ---------- DC STOCK CHECK (Admin) ---------- */
+async function dcStockCheck(){
+  modal('DC Stock Check', '<div class="muted">Checking every delivery challan against the stock entries…</div>');
+  const r = await api('dcStockCheck', {});
+  if (!r || !r.ok) { $('modalBody').innerHTML = '<div style="color:#c0392b">' + esc((r && r.error) || 'Could not check.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : '') + '</div>'; return; }
+  const n = v => (Math.round((Number(v) || 0) * 1000) / 1000).toLocaleString();
+  window.DCCHK = r.problems || [];
+  $('modalBody').innerHTML = '<p class="muted" style="margin-top:0">Checked <b>' + r.checked + '</b> DC lines. For each DC the stock that was cut should equal the quantity on the DC. '
+    + (DCCHK.length ? '<b style="color:#c0392b">' + DCCHK.length + ' do not match.</b> “Correct” adds one <b>DC Correction</b> entry for the difference (shown in Product History).' : '<b style="color:#15803d">Everything matches ✓</b>') + '</p>'
+    + (DCCHK.length ? '<div class="table-wrap"><table><thead><tr><th>DC #</th><th>Model</th><th>Customer</th><th class="right">On DC</th><th class="right">Stock cut</th><th class="right">Difference</th><th></th></tr></thead><tbody>'
+      + DCCHK.map((x, i) => '<tr><td><b>' + esc(x.dc) + '</b>' + (x.inDcSheet ? '' : ' <span class="muted small">(DC not found)</span>') + '</td><td>' + esc(x.model) + '</td><td>' + esc(x.customer) + '</td><td class="right">' + n(x.onDc) + '</td><td class="right">' + n(x.deducted) + '</td><td class="right"><b style="color:#c0392b">' + (x.diff < 0 ? n(-x.diff) + ' too much' : n(x.diff) + ' too little') + '</b></td><td><button class="btn small primary" id="dcfix' + i + '" onclick="dcStockFix(' + i + ')">Correct</button></td></tr>').join('')
+      + '</tbody></table></div>' : '')
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>';
+}
+async function dcStockFix(i){
+  const x = (window.DCCHK || [])[i]; if (!x) return;
+  const what = x.diff < 0 ? 'give back ' + Math.abs(x.diff) : 'cut ' + x.diff + ' more';
+  if (!confirm('DC ' + x.dc + ' / ' + x.model + ': ' + what + ' so the stock matches the DC (' + x.onDc + ')?')) return;
+  const b = $('dcfix' + i); if (b) b.disabled = true;
+  const r = await api('fixDcStock', {dc:x.dc, model:x.model});
+  if (!r || !r.ok) { if (b) b.disabled = false; return toast((r && r.error) || 'Could not correct.', true); }
+  toast(r.changed ? 'Corrected ' + x.dc + ' / ' + x.model + ' (' + (r.changed > 0 ? '+' : '') + r.changed + ').' : (r.message || 'Already correct.'));
+  await refresh(); dcStockCheck();
+}
+Object.assign(window, {dcStockCheck, dcStockFix, srcSheetHtml});
