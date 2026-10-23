@@ -29,7 +29,8 @@ const ALL_MODULES = [
   {id:'parties',  label:'Parties (Customers / Suppliers)'},
   {id:'reports',  label:'Reports'},
   {id:'enquiries',label:'Enquiries'},
-  {id:'imports', label:'Imports (confidential costing)'}
+  {id:'imports', label:'Imports (confidential costing)'},
+  {id:'stockvalue', label:'Stock Value (special permission — dashboard)'}
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -4291,10 +4292,9 @@ function renderDashboard(){
     + '<div class="db2-kpis" id="db2Kpis"></div>'
     + '<div class="db2-grid"><div class="db2-col">'
     + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
-    + '<div class="db2-two">'
+    + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading top customers…</div></div>' : '')
     + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
-    + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading…</div></div>' : '')
-    + '</div></div><div class="db2-col">'
+    + '</div><div class="db2-col">'
     + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
     + (db2Can('accounts') ? '<div class="db2-card" id="db2Over"><div class="muted">Loading…</div></div>' : '')
     + (isAdmin() ? '<div class="db2-card" id="db2Act"><div class="muted">Loading team activity…</div></div>' : '')
@@ -4368,7 +4368,10 @@ function db2Kpis(){
     } else cards.push('<div class="db2-kpi"><span>QUOTATIONS</span><strong>…</strong><em>Loading</em></div>');
   }
   const P = (S.products || []).filter(p => (p.Status || 'Active') === 'Active');
-  if (P.length) {
+  if (P.length && !(isAdmin() || db2Can('stockvalue'))) {   /* stock value is only for Admin and users given the special permission */
+    const low = P.filter(p => Number(p.currentStock) <= reorderOf(p)).length, outN = P.filter(p => Number(p.currentStock) <= 0).length;
+    cards.push('<div class="db2-kpi" onclick="openLowStock()" title="Open Low Stock"><span>STOCK STATUS</span><strong>' + low + ' <small>low</small></strong><em>' + (outN ? '<b class="dn">' + outN + ' out of stock</b>' : '<b class="up">Nothing out of stock</b>') + '</em></div>');
+  } else if (P.length) {
     const val = P.reduce((a, p) => a + Math.max(0, Number(p.currentStock) || 0) * (Number(p['Sale Price']) || 0), 0);
     const low = P.filter(p => Number(p.currentStock) <= reorderOf(p)).length, outN = P.filter(p => Number(p.currentStock) <= 0).length;
     cards.push('<div class="db2-kpi" onclick="db2Go(\'products\')" title="Open Products"><span>' + (val > 0 ? 'STOCK VALUE <small>(sale price)</small>' : 'STOCK') + '</span><strong>' + (val > 0 ? db2Short(val) : P.reduce((a, p) => a + Math.max(0, Number(p.currentStock) || 0), 0).toLocaleString() + ' <small>units</small>') + '</strong><em>' + (low ? '<b class="dn">' + low + ' low</b>' : '<b class="up">No low stock</b>') + ' · ' + outN + ' out of stock</em></div>');
@@ -4457,12 +4460,35 @@ function db2Pipe(){
 }
 
 /* ---------- Top customers ---------- */
+function db2TopYear(y){
+  DB2.topYear = Number(y);
+  const cy = new Date().getFullYear();
+  if (DB2.topYear === cy || (DB2.topCache && DB2.topCache[DB2.topYear])) { db2Top(); return; }
+  const host = $('db2Top'); if (host) host.querySelector('.db2-tbars') && (host.querySelector('.db2-tbars').style.opacity = '.4');
+  api('getSalesSummary', {year:DB2.topYear}).then(r => { DB2.topCache = DB2.topCache || {}; if (r && r.ok) DB2.topCache[DB2.topYear] = r; db2Top(); });
+}
 function db2Top(){
   const host = $('db2Top'); if (!host) return;
-  const s = DB2.data.sales; if (!s) { if (DB2.done) host.innerHTML = '<h3>Top customers</h3><div class="muted">Could not load.</div>'; return; }
-  const list = (s.customerSales || []).slice(0, 5), max = Math.max(1, ...list.map(x => +x.amount || 0));
-  host.innerHTML = '<h3>Top customers <span class="muted small">' + esc(s.year) + '</span></h3>'
-    + (list.length ? '<div class="db2-topc">' + list.map(x => '<div><span>' + esc(x.customer) + '</span><b>' + db2Short(x.amount) + '</b><i style="width:' + ((+x.amount || 0) / max * 100) + '%"></i></div>').join('') + '</div>' : '<div class="muted">No invoice sales yet this year.</div>');
+  const cy = new Date().getFullYear(), y = DB2.topYear || cy;
+  const s = y === cy ? DB2.data.sales : (DB2.topCache || {})[y];
+  const sel = '<select class="db2-sel" onchange="db2TopYear(this.value)">' + [cy, cy - 1, cy - 2].map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>';
+  if (!s) { if (DB2.done || y !== cy) host.innerHTML = '<h3>Top 10 customers ' + sel + '</h3><div class="muted">' + (y !== cy ? 'Loading…' : 'Could not load.') + '</div>'; return; }
+  const all = (s.customerSales || []).filter(x => (+x.amount || 0) > 0);
+  const total = all.reduce((a, x) => a + (+x.amount || 0), 0) || Number(s.totalSales) || 0;
+  const list = all.slice(0, 10), max = Math.max(1, ...list.map(x => +x.amount || 0));
+  const top10 = list.reduce((a, x) => a + (+x.amount || 0), 0);
+  const canOpen = db2Can('parties') || db2Can('accounts');
+  host.innerHTML = '<h3><span>Top 10 customers <span class="muted small">by sales (excl. GST)</span></span>' + sel + '</h3>'
+    + (list.length ? '<div class="db2-tbars">' + list.map((x, i) => {
+        const amt = +x.amount || 0, w = Math.max(1.5, amt / max * 100), share = total ? Math.round(amt / total * 1000) / 10 : 0;
+        return '<div class="db2-tbar' + (canOpen ? ' click' : '') + '"' + (canOpen ? ' onclick="ledger(\'Customer\',\'' + encA(x.customer) + '\')" title="Open ledger of ' + esc(x.customer) + '"' : ' title="' + esc(x.customer) + '"') + '>'
+          + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+          + '<span class="db2-tbar-name">' + esc(x.customer) + '</span>'
+          + '<span class="db2-tbar-track"><i style="width:' + w + '%"></i></span>'
+          + '<span class="db2-tbar-val"><b>' + db2Short(amt) + '</b><small>' + share + '%</small></span></div>';
+      }).join('') + '</div>'
+      + '<div class="muted small" style="margin-top:8px">Top 10 = <b>' + db2Short(top10) + '</b>' + (total ? ' (' + Math.round(top10 / total * 100) + '% of ' + y + ' sales)' : '') + ' · ' + all.length + ' customers bought in ' + y + '</div>'
+      : '<div class="muted">No invoice sales in ' + y + '.</div>');
 }
 
 /* ---------- Team activity (Admin) ---------- */
@@ -4533,7 +4559,7 @@ document.addEventListener('keydown', function(e){
   const k = String(e.key).toUpperCase(), qa = (window.DB2_QA || []).find(x => x.k === k);
   if (qa) { e.preventDefault(); qa.go(); }
 });
-Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
+Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
 
 /* ============================================================
    ENQUIRY BOX (free — no paid AI)
