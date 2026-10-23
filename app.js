@@ -82,6 +82,7 @@ function nav(){
     {id:'ivhistory', label:'Invoice History', mod:'sales', section:'Sales'},
     {id:'quotations', label:'New Quotation', mod:'sales', section:'Sales'},
     {id:'qthistory', label:'Quotation History', mod:'sales', section:'Sales'},
+    {id:'inbox',     label:'Inbox',     mod:'enquiries', section:'Sales'},
     {id:'enquiries', label:'Enquiries', mod:'enquiries', section:'Sales'},
     {id:'accounts',  label:'Accounts / Payments', mod:'accounts', section:'Accounts'},
     {id:'customers', label:'Customers',   mod:'parties',  section:'Parties'},
@@ -111,6 +112,7 @@ function nav(){
     ivhistory:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
     quotations:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M14 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>',
     enquiries:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>',
+    inbox:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
     qthistory:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
     accounts:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
     customers:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
@@ -125,7 +127,7 @@ function nav(){
     sec.items.map(it =>
       `<button class="navbtn" onclick="showPage('${it.id}',this)">
          <span class="nav-icon">${icons[it.id]||''}</span>
-         <span class="nav-label">${it.label}</span>
+         <span class="nav-label">${it.label}</span>${it.id === 'inbox' ? '<span class="nav-count" id="ibxNavCount"></span>' : ''}
        </button>`
     ).join('')
   ).join('');
@@ -386,6 +388,7 @@ function showPage(p, btn){
   if (p === 'quotations') renderQuotation();
   if (p === 'qthistory')  loadQTHistory();
   if (p === 'enquiries')  renderEnquiries();
+  if (p === 'inbox')      renderInbox();
   if (p === 'imports')    renderImports();
   if (p === 'ivhistory')  renderIVHistory();
   if (p === 'accounts')   renderAccounts();
@@ -408,7 +411,8 @@ const pages = {
   ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div id="qtEnqRef"></div><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description / Item Remarks</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button id="qtsavebtn" class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
-  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option>Pending</option><option>Won</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  enquiries:()=>`<div class="wrap enq-page"><div id="enqKpis" class="enq-kpis"></div><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry #, customer, contact, phone, item, e-mail…" oninput="filterEnquiries()" style="flex:1;min-width:260px"></div><div class="toolbar enq-bar" style="flex-wrap:wrap"><div id="enqTabs" class="enq-tabs"></div><select id="enqStatus" onchange="filterEnquiries()" style="display:none"><option value="">All</option><option>New</option><option>Quoted</option><option>Lost</option><option>Closed</option></select>${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqAssign" onchange="filterEnquiries()"><option value="">Assigned: everyone</option><option value="~me">Assigned to me</option><option value="~none">Unassigned</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus','enqAssign'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table class="enq-tbl"><thead><tr><th style="width:120px">Enquiry</th><th style="width:22%">Customer</th><th>Requirement</th><th style="width:130px">Assigned</th><th style="width:120px">Status</th><th style="width:190px"></th></tr></thead><tbody id="enqRows"><tr><td colspan="6">Loading...</td></tr></tbody></table></div></div>`,
+  qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search quotation # / customer / Ref #" oninput="filterQTHistory()"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option>Pending</option><option>Won</option><option>Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  inbox:()=>`<div class="wrap ibx-page"><div class="toolbar no-dirty-track"><div id="ibxTabs" class="enq-tabs"></div><input id="ibxSearch" placeholder="Search sender, subject, attachment, enquiry #…" oninput="ibxRenderList()" style="flex:1;min-width:220px"></div><div class="ibx" id="ibx"><div class="ibx-list" id="ibxList"><div class="muted" style="padding:16px">Loading…</div></div><div class="ibx-read" id="ibxRead"><div class="ibx-empty">✉<div>Select a mail to read it</div></div></div></div></div>`,
+  enquiries:()=>`<div class="wrap enq-page"><div id="enqKpis" class="enq-kpis"></div><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry #, customer, contact, phone, item, e-mail…" oninput="filterEnquiries()" style="flex:1;min-width:260px"></div><div class="toolbar enq-bar" style="flex-wrap:wrap"><div id="enqTabs" class="enq-tabs"></div><select id="enqStatus" onchange="filterEnquiries()" style="display:none"><option value="">All</option><option>New</option><option>Quoted</option><option>Lost</option><option>Closed</option></select>${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqAssign" onchange="filterEnquiries()"><option value="">Assigned: everyone</option><option value="~me">Assigned to me</option><option value="~none">Unassigned</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus','enqAssign'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table class="enq-tbl"><thead><tr><th style="width:120px">Enquiry</th><th style="width:22%">Customer</th><th>Requirement</th><th style="width:130px">Assigned</th><th style="width:120px">Status</th><th style="width:190px"></th></tr></thead><tbody id="enqRows"><tr><td colspan="6">Loading...</td></tr></tbody></table></div></div>`,
   accounts:()=>`<div class="wrap">
 <div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="toolbar" style="flex-wrap:wrap"><select id="custOutCust" onchange="filterCustOut()"><option value="">All Customers</option></select><select id="custOutSt" onchange="filterCustOut()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select>${periodSelectHtml('custOutPer','filterCustOut()')}<button class="btn ghost small" onclick="clearFilters(['custOutSearch','custOutCust','custOutSt','custOutPer'],filterCustOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('custPayPer','filterCustPay()')}<select id="custPayCust" onchange="filterCustPay()"><option value="">All Customers</option></select><select id="custPayMeth" onchange="filterCustPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['custPaySearch','custPayPer','custPayCust','custPayMeth'],filterCustPay)">Clear all filters</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
@@ -2308,7 +2312,7 @@ function enqReqHtml(d){
   return sub + '<span class="enq-text">' + esc(t.slice(0, 160)) + '…</span> <a class="model-link" onclick="enqViewFull(\'' + encA(d.id) + '\')">read full mail</a>';
 }
 function enqReplyHtml(d){
-  const openBtn = d.source === 'Email' && d.mailId ? ' <button class="btn small" style="margin-top:4px" title="Open the complete e-mail" onclick="openMailDrawer(\'' + encA(d.id) + '\')">📧 Open email</button>' : '';
+  const openBtn = d.source === 'Email' && (d.mailId || d.inboxId) ? ' <button class="btn small" style="margin-top:4px" title="Open the complete e-mail" onclick="openMailDrawer(\'' + encA(d.id) + '\')">📧 Open email</button>' : '';
   if (!d.email) return openBtn;
   const subj = 'Re: ' + (d.subject || 'Your enquiry') + ' [' + d.id + ']';
   return openBtn + ' <a class="btn small" style="text-decoration:none;margin-top:4px" href="mailto:' + esc(d.email) + '?subject=' + encodeURIComponent(subj) + '">✉ Reply</a>';
@@ -2349,7 +2353,11 @@ function mailFrameDoc_(m, plain){
 async function openMailDrawer(encId){
   const en = (typeof ENQ_CACHE !== 'undefined' ? ENQ_CACHE : []).find(x => x.id === decodeURIComponent(encId));
   if (!en) return toast('Enquiry not found. Press Refresh and try again.', true);
-  const r = await api('getEnquiryMail', {mailId:en.mailId});
+  let r;
+  if (en.inboxId) {   /* enquiry made from the ERP Inbox: the complete mail is there */
+    const x = await api('getInboxMail', {id:en.inboxId});
+    r = x && x.ok ? {ok:true, found:true, mail:{subject:x.mail.subject, fromName:x.mail.fromName, fromEmail:x.mail.fromEmail, date:x.mail.date, html:x.html, text:x.text}} : x;
+  } else r = await api('getEnquiryMail', {mailId:en.mailId});
   if (!r || !r.ok) return toast((r && r.error) || 'Could not load the mail.', true);
   if (!r.found) {   /* older e-mail enquiries: only the text + attachments were saved -> show those instead of an error */
     enqViewFull(encId);
@@ -2584,7 +2592,7 @@ function renderQtEnqRef(en){
   const items = en.items || [], atts = en.attachments || [];
   host.innerHTML = '<div class="qt-enq">'
     + '<div class="qt-enq-head"><b>📨 Customer\'s enquiry ' + esc(en.id) + '</b> <span class="muted small">' + esc(fmtDate(en.date)) + (en.email ? ' • ' + esc(en.email) : '') + (en.phone ? ' • ' + esc(en.phone) : '') + '</span>'
-    + (en.source === 'Email' && en.mailId ? ' <button class="btn small primary" onclick="openMailDrawer(\'' + encA(en.id) + '\')">📧 Open complete email</button>' : '') + '</div>'
+    + (en.source === 'Email' && (en.mailId || en.inboxId) ? ' <button class="btn small primary" onclick="openMailDrawer(\'' + encA(en.id) + '\')">📧 Open complete email</button>' : '') + '</div>'
     + (en.subject ? '<div style="margin-top:4px"><b>' + esc(en.subject) + '</b></div>' : '')
     + (en.customerRef ? '<div class="muted small">Customer ref: <b>' + esc(en.customerRef) + '</b></div>' : '')
     + (en.needsReview || en.aiNote ? '<div class="imp-warn" style="margin:8px 0">' + (en.needsReview ? '<b>⚠ Please check against the original mail / files.</b> ' : '') + esc(en.aiNote || '') + '</div>' : '')
@@ -4364,6 +4372,7 @@ function renderDashboard(){
     take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
   }
   if (db2Can('enquiries') || db2Can('sales')) take('enq', api('getEnquiries'));
+  if (db2Can('enquiries')) take('ibx', api('getInbox', {countOnly:true}));
   if (isAdmin()) take('act', api('getUserActivity', {year:yr}));
   Promise.all(jobs).then(() => { if (seq === DB2.seq) { DB2.done = true; db2Paint(); } });
 }
@@ -4457,6 +4466,7 @@ function db2Todo(){
     const e = DB2.data.enq;
     if (e) { const n = (e.documents || []).filter(d => (d.status || 'New') === 'New').length; if (n) add('t-violet', '✉', 'Enquiries waiting for quotation', n, "db2Go('enquiries',()=>db2SetFilter('enqStatus','New',window.filterEnquiries))"); } else if (!DB2.done) pend.push(1);
   }
+  if (db2Can('enquiries') && DB2.data.ibx && DB2.data.ibx.unread) add('t-violet', '📥', 'Unread e-mails in the Inbox', DB2.data.ibx.unread, "db2Go('inbox')");
   if (db2Can('sales')) {
     const q = DB2.data.qt, today = db2Day(new Date());
     if (q) { const n = (q.documents || []).filter(d => (d.status || 'Pending') === 'Pending' && db2Day(d.date) && (today - db2Day(d.date)) / 864e5 > 7).length; if (n) add('t-amber', '⏳', 'Quotations pending more than 7 days (follow up)', n, "db2Go('qthistory',()=>db2SetFilter('qtSt','Pending',window.filterQTHistory))"); } else pend.push(1);
@@ -4669,7 +4679,7 @@ function enquiryForm(idEnc){
   const d = id ? (ENQ_CACHE || []).find(x => x.id === id) : null;
   if (id && !d) return toast('Enquiry not found — press Refresh and try again.', true);
   ENQF.files.forEach(f => { if (f.url) URL.revokeObjectURL(f.url); });
-  Object.assign(ENQF, {files:[], editId:d ? d.id : null, existing:d ? (d.attachments || []) : [], pdfText:{}, items:d && d.items ? d.items.map(x => ({desc:x.desc || '', qty:x.qty || '', unit:x.unit || 'Nos', note:x.note || ''})) : []});
+  Object.assign(ENQF, {inbox:null, files:[], editId:d ? d.id : null, existing:d ? (d.attachments || []) : [], pdfText:{}, items:d && d.items ? d.items.map(x => ({desc:x.desc || '', qty:x.qty || '', unit:x.unit || 'Nos', note:x.note || ''})) : []});
   const cn = d && !/^\(/.test(String(d.customerName || '')) ? d.customerName : '';
   const src = d ? (d.source && d.source !== 'Manual' ? d.source : '') : 'Phone';
   modal(d ? 'Edit Enquiry ' + d.id : 'New Enquiry', '<div class="enqf">'
@@ -4796,6 +4806,7 @@ function enqParseItems(text){
   const out = [];
   String(text || '').split(/\r?\n/).forEach(raw => {
     let line = raw.replace(/ /g, ' ').trim(); if (!line || line.length > 300) return;
+    if (/^[\d\s+().\-\/]{7,}$/.test(line)) return;   /* a phone number / date line, not an item */
     if (/^(dear|hi|hello|regards|thanks|thank you|best|sir|madam|please|kindly|from|to|sent|subject|cc|date)\b/i.test(line) && !/\d+\s*(nos|pcs|qty)/i.test(line)) return;
     const cells = line.split(/\t+| {3,}|\s*\|\s*/).map(x => x.trim()).filter(Boolean);
     if (cells.length >= 3 && typeof qtItemFromCells === 'function') { const it = qtItemFromCells(cells); if (it && it.qty) { out.push({desc:it.desc, qty:it.qty, unit:it.unit || 'Nos', note:it.note || ''}); return; } }
@@ -4858,6 +4869,8 @@ async function enqfSave(thenQuote){
       customerRef:$('enqfRef').value, subject:$('enqfSubject').value, requirement:text, items:items, files:files};
     if (src && !src.disabled) p.source = src.value || 'Manual';
     if (ENQF.editId) { p.id = ENQF.editId; p.reviewed = true; }
+    const fromInbox = !ENQF.editId && ENQF.inbox ? ENQF.inbox : null;
+    if (fromInbox) { p.inboxId = fromInbox; p.inboxFiles = ENQF.existing.map(a => a.id); }
     const r = await api(ENQF.editId ? 'updateEnquiry' : 'saveEnquiry', p);
     if (!r || !r.ok) {
       const unknown = r && /unknown action/i.test(r.error || '');
@@ -4869,7 +4882,8 @@ async function enqfSave(thenQuote){
     toast((ENQF.editId ? 'Enquiry updated: ' : 'Enquiry saved: ') + id);
     if (typeof renderEnquiries === 'function' && $('enqRows')) await renderEnquiries();
     else { const e = await api('getEnquiries'); if (e && e.ok) ENQ_CACHE = e.documents || []; }
-    if (thenQuote) { const d = (ENQ_CACHE || []).find(x => x.id === id); if (d) startQuotationFromEnquiry(d); }
+    if (fromInbox && typeof ibxAfterEnquiry === 'function') ibxAfterEnquiry(fromInbox, id);
+    if (thenQuote) { const d = (ENQ_CACHE || []).find(x => x.id === id); if (d) { startQuotationFromEnquiry(d); if (fromInbox) setTimeout(() => openMailDrawer(encA(id)), 350); } }
   } finally { btns.forEach(b => b.disabled = false); }
 }
 /* the older name, still used by a few buttons */
@@ -5303,7 +5317,7 @@ function enqMenu(ev, idEnc){
   ev.stopPropagation(); enqMenuClose();
   const d = ENQ_CACHE.find(x => x.id === decodeURIComponent(idEnc)); if (!d) return;
   const items = [['✎ Edit enquiry', "enquiryForm('" + idEnc + "')"], ['👤 Assign to…', "enqAssignForm('" + idEnc + "')"], ['📝 Follow-up note' + ((d.notes || []).length ? ' (' + d.notes.length + ')' : ''), "enqNoteForm('" + idEnc + "')"], ['👁 View details', "enqViewFull('" + idEnc + "')"]];
-  if (d.source === 'Email' && d.mailId) items.push(['📧 Open e-mail', "openMailDrawer('" + idEnc + "')"]);
+  if (d.source === 'Email' && (d.mailId || d.inboxId)) items.push(['📧 Open e-mail', "openMailDrawer('" + idEnc + "')"]);
   if (d.email) items.push(['✉ Reply by e-mail', "enqReply('" + idEnc + "')"]);
   if (d.status === 'New') items.push(['—'], ['✕ Close — no quotation needed', "enqCloseForm('" + idEnc + "')", 'red']);
   if (d.status === 'Closed') items.push(['—'], ['↺ Reopen', "enqReopen('" + idEnc + "')"]);
@@ -5347,3 +5361,245 @@ function enqCloseForm(idEnc){
 }
 function enqReopen(idEnc){ if (confirm('Reopen ' + decodeURIComponent(idEnc) + '?')) enqDo(idEnc, 'reopen', {}, 'Enquiry reopened.'); }
 Object.assign(window, {enqTab, enqMenu, enqMenuClose, enqAssignForm, enqNoteForm, enqCloseForm, enqReopen, enqDo, enqReply});
+
+
+/* ============================================================
+   INBOX — complete e-mails inside the ERP (like Gmail)
+   The enquiries Gmail sends every mail here (EmailReader.gs).
+   Staff read it and choose: Make Quotation / Make Enquiry / Not an enquiry.
+   ============================================================ */
+const IBX = {mails:[], box:'inbox', cur:null, curMail:null, imgs:false};
+const IBX_FREE = ['gmail.com','yahoo.com','hotmail.com','outlook.com','live.com','icloud.com','aol.com','msn.com','proton.me','protonmail.com','ymail.com'];
+const IBX_COLORS = ['#3B5BDB','#0f766e','#b45309','#7c3aed','#be185d','#0369a1','#4d7c0f','#c2410c'];
+
+function ibxSetCount(n){ IBX.count = n; const el = $('ibxNavCount'); if (el) { el.textContent = n ? String(n > 99 ? '99+' : n) : ''; el.style.display = n ? '' : 'none'; } }
+async function ibxRefreshCount(){
+  if (!S.user || !hasMod('enquiries')) return;
+  const r = await api('getInbox', {countOnly:true});
+  if (r && r.ok) ibxSetCount(r.unread);
+}
+setInterval(() => { if (S.user && document.visibilityState !== 'hidden') ibxRefreshCount(); }, 3 * 60 * 1000);
+(function waitLogin(){ if (S.user && $('ibxNavCount')) ibxRefreshCount(); else setTimeout(waitLogin, 2000); })();
+setInterval(() => { const el = $('ibxNavCount'); if (el && IBX.count != null && el.textContent === '' && IBX.count) ibxSetCount(IBX.count); }, 1500);   /* the menu is rebuilt after every save */
+
+async function renderInbox(){
+  const r = await api('getInbox');
+  const list = $('ibxList'); if (!list) return;
+  if (!r || !r.ok) {
+    const unknown = r && /unknown action/i.test(r.error || '');
+    list.innerHTML = '<div class="ibx-empty" style="padding:30px 16px">' + esc(unknown ? 'The Inbox needs the new Code.gs — paste it in Apps Script and deploy a New version.' : ((r && r.error) || 'Could not load the Inbox.')) + '</div>';
+    return;
+  }
+  IBX.mails = r.mails || [];
+  ibxSetCount(r.unread || 0);
+  ibxRenderList();
+  if (IBX.cur && IBX.curMail && $('ibxRead')) ibxRenderRead();
+}
+function ibxInBox(m, b){ return b === 'all' || (b === 'inbox' ? (m.status === 'New' || m.status === 'Read') : b === 'done' ? m.status === 'Enquiry' : m.status === 'Ignored'); }
+function ibxTab(b){ IBX.box = b; ibxRenderList(); }
+function ibxTime(v){
+  const d = new Date(v); if (isNaN(d)) return '';
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleDateString('en-GB', d.getFullYear() === now.getFullYear() ? {day:'numeric', month:'short'} : {day:'numeric', month:'short', year:'numeric'});
+}
+function ibxWho(m){ return m.fromName || m.fromEmail || 'Unknown sender'; }
+function ibxAvatar(m){
+  const w = ibxWho(m), ch = (w.match(/[A-Za-z0-9]/) || ['?'])[0].toUpperCase();
+  let h = 2166136261; for (const c of String(m.fromEmail || w)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return '<div class="ibx-av" style="background:' + IBX_COLORS[((h >>> 0) >>> 13) % IBX_COLORS.length] + '">' + esc(ch) + '</div>';
+}
+function ibxFiles(m){ return (m.attachments || []).filter(a => !a.inline); }
+function ibxRenderList(){
+  const list = $('ibxList'); if (!list) return;
+  const q = norm(($('ibxSearch') || {}).value || '');
+  const hit = m => !q || [m.fromName, m.fromEmail, m.subject, m.snippet, m.enquiryId, m.id].concat(ibxFiles(m).map(a => a.name)).some(v => norm(v).includes(q));
+  const tabs = [['inbox', 'Inbox'], ['done', 'Made enquiry'], ['ignored', 'Not enquiry'], ['all', 'All mail']];
+  const th = $('ibxTabs');
+  if (th) th.innerHTML = tabs.map(t => {
+    const n = IBX.mails.filter(m => ibxInBox(m, t[0])).length, un = t[0] === 'inbox' ? IBX.mails.filter(m => m.status === 'New').length : 0;
+    return '<button type="button" class="' + (IBX.box === t[0] ? 'on' : '') + '" onclick="ibxTab(\'' + t[0] + '\')">' + t[1] + '<i>' + (un ? un + ' new' : n) + '</i></button>';
+  }).join('');
+  const rows = IBX.mails.filter(m => ibxInBox(m, IBX.box) && hit(m));
+  if (!rows.length) {
+    list.innerHTML = '<div class="ibx-empty" style="padding:34px 16px">' + (IBX.mails.length ? 'No mails here.' : 'No mails yet.<div class="muted small" style="margin-top:6px">Mails sent to the enquiries Gmail appear here within 5 minutes.</div>') + '</div>';
+    return;
+  }
+  list.innerHTML = rows.map(m => {
+    const files = ibxFiles(m);
+    const tag = m.status === 'Enquiry' ? '<span class="enq-pill blu">' + esc(m.enquiryId || 'Enquiry') + '</span>' : m.status === 'Ignored' ? '<span class="enq-pill gry">Not enquiry</span>' : '';
+    return '<div class="ibx-item' + (m.status === 'New' ? ' unread' : '') + (IBX.cur === m.id ? ' active' : '') + '" onclick="ibxOpen(\'' + encA(m.id) + '\')">' + ibxAvatar(m)
+      + '<div class="ibx-mid"><div class="ibx-top"><span class="ibx-from">' + esc(ibxWho(m)) + '</span><span class="ibx-time">' + esc(ibxTime(m.date)) + '</span></div>'
+      + '<div class="ibx-subj">' + esc(m.subject || '(no subject)') + '</div>'
+      + '<div class="ibx-snip">' + esc(m.snippet || '') + '</div>'
+      + ((files.length || tag) ? '<div class="ibx-tags">' + (files.length ? '<span class="ibx-clip">📎 ' + files.length + (files.length === 1 ? ' ' + esc(files[0].name.slice(0, 28)) : ' files') + '</span>' : '') + tag + '</div>' : '')
+      + '</div></div>';
+  }).join('');
+}
+
+async function ibxOpen(idEnc){
+  const id = decodeURIComponent(idEnc);
+  IBX.cur = id; IBX.curMail = null; IBX.imgs = false;
+  ibxRenderList();
+  const host = $('ibxRead'); if (!host) return;
+  $('ibx').classList.add('reading');
+  host.innerHTML = '<div class="ibx-empty">Opening…</div>';
+  const r = await api('getInboxMail', {id:id});
+  if (IBX.cur !== id) return;
+  if (!r || !r.ok) { host.innerHTML = '<div class="ibx-empty">' + esc((r && r.error) || 'Could not open the mail.') + '</div>'; return; }
+  IBX.curMail = r;
+  const m = IBX.mails.find(x => x.id === id);
+  if (m && m.status === 'New') { m.status = 'Read'; ibxRenderList(); ibxSetCount(IBX.mails.filter(x => x.status === 'New').length); }
+  ibxRenderRead();
+}
+function ibxBack(){ const b = $('ibx'); if (b) b.classList.remove('reading'); }
+function ibxSize(n){ n = Number(n) || 0; return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function ibxIcon(a){
+  const t = String(a.type || '').toLowerCase(), n = String(a.name || '').toLowerCase();
+  if (/pdf/.test(t) || /\.pdf$/.test(n)) return ['PDF', '#c8102e'];
+  if (/sheet|excel|csv/.test(t) || /\.(xlsx?|csv)$/.test(n)) return ['XLS', '#15803d'];
+  if (/word|document/.test(t) || /\.docx?$/.test(n)) return ['DOC', '#1d4ed8'];
+  if (/zip|rar|7z|compressed/.test(t) || /\.(zip|rar|7z)$/.test(n)) return ['ZIP', '#7c3aed'];
+  if (/^image\//.test(t)) return ['IMG', '#0369a1'];
+  if (/dwg|dxf|step|stp|cad/.test(n)) return ['CAD', '#b45309'];
+  return [(n.split('.').pop() || 'FILE').slice(0, 4).toUpperCase(), '#64748b'];
+}
+function ibxAttCard(a){
+  const ic = ibxIcon(a);
+  if (!a.id) return '<div class="ibx-att off" title="' + esc(a.skipped || 'still coming from Gmail…') + '"><div class="ibx-att-ic" style="background:' + ic[1] + '">' + ic[0] + '</div><div class="ibx-att-n"><b>' + esc(a.name) + '</b><span>' + esc(a.skipped || 'still coming from Gmail…') + '</span></div></div>';
+  const isImg = /^image\//i.test(a.type || '');
+  const dl = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(a.id);
+  return '<div class="ibx-att">' + (isImg ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="ibx-att-th"><img src="https://drive.google.com/thumbnail?id=' + encodeURIComponent(a.id) + '&sz=w200" alt="" loading="lazy"></a>' : '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="ibx-att-ic" style="background:' + ic[1] + ';text-decoration:none">' + ic[0] + '</a>')
+    + '<div class="ibx-att-n"><a href="' + esc(a.url) + '" target="_blank" rel="noopener" title="Open"><b>' + esc(a.name) + '</b></a><span>' + ibxSize(a.size) + ' · <a href="' + dl + '" target="_blank" rel="noopener">Download</a></span></div></div>';
+}
+function ibxSanitize_(html, imgs){
+  let s = String(html || '')
+    .replace(/<(script|iframe|object|embed|link|base|meta|form|frame|frameset|title)\b[\s\S]*?(<\/\1>|$)/gi, '')
+    .replace(/<(script|iframe|object|embed|link|base|meta|form|input|button)\b[^>]*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, 'blocked:');
+  if (!imgs) s = s.replace(/\s(src|srcset|background|poster)\s*=\s*(["'])\s*(?:https?:)?\/\/[\s\S]*?\2/gi, ' data-blocked=""').replace(/url\(\s*["']?\s*(?:https?:)?\/\/[^)]*\)/gi, 'none');
+  return s;
+}
+function ibxHasRemoteImgs(html){ return /\s(src|background)\s*=\s*["']\s*(?:https?:)?\/\//i.test(String(html || '')); }
+function ibxFrameDoc(r, imgs){
+  const atts = (r.mail && r.mail.attachments) || [];
+  let body;
+  if (r.html) {
+    body = ibxSanitize_(r.html, imgs).replace(/(\ssrc\s*=\s*["']?)cid:([^"'\s>]+)/gi, (m0, pre, cid) => {
+      let c = cid; try { c = decodeURIComponent(cid); } catch (e) {}
+      const a = atts.find(x => x.cid && x.id && x.cid.toLowerCase() === c.toLowerCase());
+      return pre + (a ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(a.id) + '&sz=w1600' : '');
+    });
+  } else body = '<pre>' + esc(r.text || '(empty mail)') + '</pre>';
+  const css = 'body{font:14px/1.55 Arial,Helvetica,sans-serif;color:#1d2433;margin:16px 18px;word-break:break-word}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#2c4fd8}pre{white-space:pre-wrap;font:inherit;margin:0}blockquote{margin:6px 0 6px 6px;padding-left:10px;border-left:3px solid #d5dce8;color:#475569}';
+  return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: https:; font-src https: data:"><base target="_blank"><style>' + css + '</style></head><body>' + body + '</body></html>';
+}
+function ibxForward(r){
+  const t = String((r && r.text) || '');
+  const m = t.match(/-{3,}\s*Forwarded message\s*-{3,}[\s\S]{0,300}?From:\s*\*?\s*([^\n<*]*?)\s*\*?\s*<([^>\s]+@[^>\s]+)>/i)
+    || t.match(/^\*?From:\*?\s*([^\n<\[]*?)\s*[<\[](?:mailto:)?([^>\]\s]+@[^>\]\s]+)[>\]]\s*\r?\n\s*\*?(?:Sent|Date):/mi);
+  return m ? {name:m[1].replace(/["*]/g, '').trim(), email:m[2].toLowerCase()} : null;
+}
+function ibxRenderRead(){
+  const host = $('ibxRead'), r = IBX.curMail; if (!host || !r) return;
+  const m = IBX.mails.find(x => x.id === r.mail.id) || r.mail;
+  const files = ibxFiles(r.mail), fw = ibxForward(r), remote = r.html && ibxHasRemoteImgs(r.html);
+  const idEnc = encA(m.id);
+  let act;
+  if (m.status === 'Enquiry') act = '<span class="ibx-done">✓ Enquiry <b>' + esc(m.enquiryId) + '</b> made from this mail</span><button class="btn small" onclick="ibxOpenEnquiry(\'' + encA(m.enquiryId) + '\')">Open enquiry</button>';
+  else if (m.status === 'Ignored') act = '<span class="ibx-done gry">Marked “Not an enquiry”' + (m.updatedBy ? ' by ' + esc(m.updatedBy) : '') + '</span><button class="btn small" onclick="ibxAct(\'restore\')">↩ Back to Inbox</button>';
+  else act = '<button class="btn primary" onclick="ibxMakeEnquiry(true)">📝 Make Quotation</button><button class="btn" onclick="ibxMakeEnquiry(false)">＋ Make Enquiry</button><button class="btn" onclick="ibxAct(\'ignore\')">✕ Not an enquiry</button>';
+  const thread = IBX.mails.filter(x => x.threadId && x.threadId === m.threadId && x.id !== m.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  host.innerHTML = '<div class="ibx-rhead"><button class="btn small ibx-back" onclick="ibxBack()">← Inbox</button><h2>' + esc(r.mail.subject || '(no subject)') + '</h2></div>'
+    + '<div class="ibx-from-row">' + ibxAvatar(r.mail) + '<div class="ibx-from-txt"><div><b>' + esc(r.mail.fromName || r.mail.fromEmail) + '</b> <span class="muted">&lt;' + esc(r.mail.fromEmail) + '&gt;</span></div>'
+    + '<div class="muted small">to ' + esc(r.mail.to || '—') + (r.mail.cc ? ' · cc ' + esc(r.mail.cc) : '') + '</div></div>'
+    + '<div class="ibx-date muted small">' + esc(new Date(r.mail.date).toLocaleString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})) + '<div>' + esc(m.id) + '</div></div></div>'
+    + (fw ? '<div class="ibx-fw">↪ Forwarded mail — original sender: <b>' + esc(fw.name || fw.email) + '</b> &lt;' + esc(fw.email) + '&gt;</div>' : '')
+    + '<div class="ibx-actions">' + act + '<span style="flex:1"></span>'
+    + (r.mail.fromEmail ? '<button class="btn small" onclick="ibxReply()">↩ Reply</button>' : '')
+    + (m.status === 'Read' ? '<button class="btn small" onclick="ibxAct(\'unread\')">Mark unread</button>' : '') + '</div>'
+    + (files.length ? '<div class="ibx-atts">' + files.map(ibxAttCard).join('') + '</div>' : '')
+    + (remote ? '<div class="ibx-imgbar">' + (IBX.imgs ? 'Pictures from the internet are shown.' : 'Pictures from the internet are hidden.') + ' <a class="model-link" onclick="IBX.imgs=!IBX.imgs;ibxRenderRead()">' + (IBX.imgs ? 'Hide' : 'Show pictures') + '</a></div>' : '')
+    + '<iframe id="ibxFrame" class="ibx-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" title="E-mail"></iframe>'
+    + (thread.length ? '<div class="ibx-thread"><b>In this conversation (' + (thread.length + 1) + ')</b>' + thread.map(x => '<div class="ibx-titem" onclick="ibxOpen(\'' + encA(x.id) + '\')"><span>' + esc(ibxWho(x)) + '</span><span class="muted">' + esc(x.snippet || '').slice(0, 90) + '</span><span class="muted small">' + esc(ibxTime(x.date)) + '</span></div>').join('') + '</div>' : '');
+  const f = $('ibxFrame');
+  f.onload = () => {
+    const fit = () => { try { f.style.height = Math.max(260, f.contentDocument.documentElement.scrollHeight + 24) + 'px'; } catch (e) {} };
+    fit(); [400, 1200, 3000].forEach(t => setTimeout(fit, t));
+  };
+  f.srcdoc = ibxFrameDoc(r, IBX.imgs);
+}
+async function ibxAct(op){
+  const r = IBX.curMail; if (!r) return;
+  const x = await api('inboxAction', {id:r.mail.id, op:op});
+  if (!x || !x.ok) return toast((x && x.error) || 'Could not save.', true);
+  const m = IBX.mails.find(z => z.id === r.mail.id);
+  if (m) { m.status = {read:'Read', unread:'New', ignore:'Ignored', restore:'Read'}[op]; if (op === 'ignore' || op === 'restore') m.updatedBy = (S.user && S.user.username) || ''; }
+  ibxSetCount(IBX.mails.filter(z => z.status === 'New').length);
+  if (op === 'unread') { IBX.cur = null; IBX.curMail = null; ibxBack(); const h = $('ibxRead'); if (h) h.innerHTML = '<div class="ibx-empty">✉<div>Select a mail to read it</div></div>'; ibxRenderList(); return toast('Marked as unread.'); }
+  if (op === 'ignore') {   /* go on with the next mail of the list */
+    const list = IBX.mails.filter(z => ibxInBox(z, IBX.box));
+    toast('Moved to “Not enquiry”.');
+    ibxRenderList();
+    const nxt = list[0];
+    if (nxt) return ibxOpen(encA(nxt.id));
+    ibxBack(); const h = $('ibxRead'); if (h) h.innerHTML = '<div class="ibx-empty">✉<div>All done — nothing left in the Inbox</div></div>'; return;
+  }
+  if (op === 'restore') toast('Back in the Inbox.');
+  ibxRenderList(); ibxRenderRead();
+}
+function ibxReply(){
+  const r = IBX.curMail; if (!r) return;
+  const fw = ibxForward(r), to = fw ? fw.email : r.mail.fromEmail;
+  location.href = 'mailto:' + to + '?subject=' + encodeURIComponent((/^re:/i.test(r.mail.subject || '') ? '' : 'Re: ') + (r.mail.subject || '').replace(/^(fwd?|fw)\s*:\s*/i, ''));
+}
+function ibxOpenEnquiry(idEnc){
+  const id = decodeURIComponent(idEnc);
+  db2Go('enquiries', () => { const s = $('enqSearch'); if (s) { s.value = id; if (typeof filterEnquiries === 'function') filterEnquiries(); } const st = $('enqStatus'); if (st) st.value = ''; });
+}
+function ibxMatchCustomer(email){
+  email = String(email || '').toLowerCase().trim(); if (!email) return null;
+  const list = S.customers || [], mails = c => String(c['Email'] || '').toLowerCase().split(/[;,\s]+/).filter(Boolean);
+  const c = list.find(x => mails(x).indexOf(email) !== -1); if (c) return c;
+  const dom = email.split('@')[1] || ''; if (!dom || IBX_FREE.indexOf(dom) !== -1) return null;
+  return list.find(x => mails(x).some(e => e.split('@')[1] === dom)) || null;
+}
+function ibxTableText(html){
+  try {
+    const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+    return Array.from(doc.querySelectorAll('tr')).map(tr => Array.from(tr.children).map(td => String(td.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\t')).filter(Boolean).join('\n');
+  } catch (e) { return ''; }
+}
+function ibxMakeEnquiry(thenQuote){
+  const r = IBX.curMail; if (!r || typeof enquiryForm !== 'function') return;
+  const m = r.mail, fw = ibxForward(r), who = fw || {name:m.fromName, email:m.fromEmail};
+  const c = ibxMatchCustomer(who.email);
+  enquiryForm();
+  ENQF.inbox = m.id;
+  ENQF.existing = ibxFiles(m).filter(a => a.id).map(a => ({name:a.name, url:a.url, id:a.id, type:a.type}));
+  const set = (id, v) => { const el = $(id); if (el && v) el.value = v; };
+  const text = String(r.text || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  const ph = text.match(/(?:\+?92|0)[\s\-]?\(?\d{2,3}\)?[\s\-]?\d{6,8}/);
+  if (c) set('enqfCust', c['Customer Name']);
+  set('enqfContact', who.name); set('enqfEmail', who.email); set('enqfPhone', ph ? ph[0].trim() : '');
+  set('enqfSubject', String(m.subject || '').replace(/^((re|fwd?|fw)\s*:\s*)+/i, '').slice(0, 300));
+  set('enqfText', text.slice(0, 20000));
+  set('enqfDate', toInputDate(m.date));
+  const src = $('enqfSource'); if (src) { src.value = 'Email'; }
+  if (c) enqfPickCustomer();
+  const tableItems = enqParseItems(ibxTableText(r.html));
+  ENQF.items = tableItems.length ? tableItems : enqParseItems(text);
+  enqfRenderFiles(); enqfRenderItems();
+  const box = document.querySelector('#modalBody .enqf');
+  if (box) box.insertAdjacentHTML('afterbegin', '<div class="ibx-fromnote">✉ From Inbox <b>' + esc(m.id) + '</b> — ' + esc(m.subject || '') + (ENQF.existing.length ? ' · ' + ENQF.existing.length + ' attachment(s) will be kept with the enquiry' : '') + (fw ? ' · forwarded mail, original sender used' : '') + '</div>');
+  const t = $('modalTitle'); if (t) t.textContent = thenQuote ? 'Make Quotation from e-mail — check the enquiry first' : 'New Enquiry from e-mail';
+  if (!c) setTimeout(() => toast('Customer not found from the e-mail address — please choose the customer.', true), 50);
+  if (thenQuote) { const b = $('enqfSave2'); if (b) { b.classList.add('ibx-pulse'); setTimeout(() => b.focus(), 80); } }
+}
+function ibxAfterEnquiry(inboxId, enqId){
+  const m = IBX.mails.find(x => x.id === inboxId);
+  if (m) { m.status = 'Enquiry'; m.enquiryId = enqId; }
+  if ($('ibxList')) { ibxRenderList(); if (IBX.curMail && IBX.curMail.mail.id === inboxId) ibxRenderRead(); }
+}
+Object.assign(window, {renderInbox, ibxTab, ibxOpen, ibxBack, ibxAct, ibxReply, ibxOpenEnquiry, ibxMakeEnquiry, ibxAfterEnquiry, ibxRenderList, ibxRenderRead, ibxRefreshCount, IBX});
