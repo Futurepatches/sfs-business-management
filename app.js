@@ -233,7 +233,8 @@ function syncDatalists(){
     `<datalist id="suplist">${opts(S.suppliers.filter(activeOnly).map(s => s['Supplier Name']))}</datalist>` +
     `<datalist id="mlist">${opts(activeProds)}</datalist>` +
     `<datalist id="ml">${opts(activeProds)}</datalist>` +
-    `<datalist id="ivml">${opts(S.products.map(p => p['Model / Part No.']))}</datalist>`;
+    `<datalist id="ivml">${opts(S.products.map(p => p['Model / Part No.']))}</datalist>` +
+    `<datalist id="grouplist">${opts(allCustomerGroups())}</datalist>`;
 }
 
 /* ---------- CAPTCHA ---------- */
@@ -393,7 +394,7 @@ const pages = {
 <div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap"><input id="supOutSearch" type="search" placeholder="Search supplier…" oninput="filterSupOut()" style="flex:1;min-width:200px"><select id="supOutSt" onchange="filterSupOut()"><option value="">All suppliers</option><option value="due">Outstanding only</option></select><button class="btn ghost small" onclick="clearFilters(['supOutSearch','supOutSt'],filterSupOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 <div class="panel"><h3>Recent Supplier Payments</h3><div class="toolbar" style="flex-wrap:wrap"><input id="supPaySearch" type="search" placeholder="Search supplier / reference…" oninput="filterSupPay()" style="flex:1;min-width:200px">${periodSelectHtml('supPayPer','filterSupPay()')}<select id="supPayMeth" onchange="filterSupPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['supPaySearch','supPayPer','supPayMeth'],filterSupPay)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 </div>`,
-  customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
+  customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
   settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
@@ -480,6 +481,12 @@ function remarksWithTerms(remarks, days){
   const line = d !== '' && !isNaN(Number(d)) && Number(d) >= 0 ? 'Payment Terms: ' + Math.round(Number(d)) : '';
   return [line, clean].filter(Boolean).join('\n');
 }
+/* ---------- CUSTOMER GROUP (stored as a line "Group: NAME" in the customer's Remarks — no backend change) ---------- */
+function groupOfRemarks(r){ const m = String(r || '').match(/^\s*group\s*:\s*(.+?)\s*$/im); return m ? m[1].trim() : ''; }
+function customerGroupOf(name){ const c = findCust(name); return c ? groupOfRemarks(c.Remarks) : ''; }
+function stripGroup(r){ return String(r || '').split('\n').filter(l => !/^\s*group\s*:/i.test(l)).join('\n').trim(); }
+function remarksWithGroup(r, g){ const clean = stripGroup(r), name = String(g || '').trim().replace(/\s+/g, ' '); return [name ? 'Group: ' + name : '', clean].filter(Boolean).join('\n'); }
+function allCustomerGroups(){ const seen = {}; (S.customers || []).forEach(c => { const g = groupOfRemarks(c.Remarks); if (g && !seen[g.toUpperCase()]) seen[g.toUpperCase()] = g; }); return Object.values(seen).sort((a, b) => a.localeCompare(b)); }
 function payDay(v){ const d = new Date(v); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function dueInfo(invDate, termsDays){
   const base = payDay(invDate); if (!base) return null;
@@ -1766,7 +1773,7 @@ function editPartyForm(type, nameEnc){
        <label>NTN/Tax ID<input id="epntn" value="${esc(c['NTN/Tax ID']||'')}"></label>
        <label class="wide">Address<textarea id="epaddr">${esc(c.Address||'')}</textarea></label>
        ${type==='Customer'?`<label>Payment Terms (days)<input id="epterms" type="number" min="0" max="365" step="1" value="${esc(paymentTermsOf(name).isDefault?'':paymentTermsOf(name).days)}" placeholder="${DEFAULT_PAYMENT_TERMS_DAYS} (default)"></label><label>Price Adjustment (%)<input id="eppriceadjust" type="number" step="0.01" min="-100" max="1000" value="${esc(c['Price Adjustment (%)']===undefined?'0':c['Price Adjustment (%)'])}" placeholder="e.g. 15 or -5"><small>Positive adds to price; negative reduces it.</small></label>`:''}
-       <label class="wide">Remarks (Enter STN as: STN: 1234)<textarea id="eprem2">${esc(type==='Customer'?stripPaymentTerms(c.Remarks||''):(c.Remarks||''))}</textarea></label>
+       <label class="wide">Remarks (Enter STN as: STN: 1234)<textarea id="eprem2">${esc(type==='Customer'?stripGroup(stripPaymentTerms(c.Remarks||'')):(c.Remarks||''))}</textarea></label>${type==='Customer'?`<label>Group <small>(optional — companies of one group are added together on the dashboard)</small><input id="epgroup" list="grouplist" value="${esc(groupOfRemarks(c.Remarks||''))}" placeholder="e.g. NOVATEX GROUP"></label>`:''}
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1778,7 +1785,7 @@ async function savePartyEdit(type, nameEnc){
   const name = decodeURIComponent(nameEnc);
   const r = await api(type==='Customer'?'updateCustomer':'updateSupplier', {
     name, contact:$('epcontact').value, phone:$('epphone').value, email:$('epemail').value,
-    ntn:$('epntn').value, address:$('epaddr').value, priceAdjustmentPct:type==='Customer'?Number(($('eppriceadjust')||{}).value||0):undefined, remarks:type==='Customer' ? remarksWithTerms($('eprem2').value, ($('epterms')||{}).value) : $('eprem2').value
+    ntn:$('epntn').value, address:$('epaddr').value, priceAdjustmentPct:type==='Customer'?Number(($('eppriceadjust')||{}).value||0):undefined, remarks:type==='Customer' ? remarksWithGroup(remarksWithTerms($('eprem2').value, ($('epterms')||{}).value), ($('epgroup')||{}).value) : $('eprem2').value
   });
   if (!r.ok) return toast(r.error, true);
   closeModal(); await refresh(); toast(type + ' updated.');
@@ -1804,6 +1811,7 @@ function partyForm(type){
        <label>NTN<input id="pntn"></label>
        <label>STN<input id="pstn"></label>
        ${type==='Customer'?`<label>Payment Terms (days)<input id="pterms" type="number" min="0" max="365" step="1" placeholder="${DEFAULT_PAYMENT_TERMS_DAYS} (default)"></label><label>Price Adjustment (%)<input id="ppriceadjust" type="number" step="0.01" min="-100" max="1000" value="0" placeholder="e.g. 15 or -5"><small>Positive adds to price; negative reduces it.</small></label>`:''}
+       ${type==='Customer'?`<label>Group <small>(optional)</small><input id="pgroup" list="grouplist" placeholder="e.g. NOVATEX GROUP"></label>`:''}
        <label class="wide">Address<textarea id="paddr"></textarea></label>
        <label class="wide">Remarks<textarea id="pr"></textarea></label>
      </div>
@@ -1823,7 +1831,7 @@ async function saveParty(type){
   const city = $('pcity').value.trim(), stn = $('pstn').value.trim();
   const address = [$('paddr').value.trim(), city].filter(Boolean).join(', ');
   let remarks = [stn ? 'STN: ' + stn : '', $('pr').value.trim()].filter(Boolean).join('\n');
-  if (type === 'Customer') remarks = remarksWithTerms(remarks, ($('pterms')||{}).value);
+  if (type === 'Customer') remarks = remarksWithGroup(remarksWithTerms(remarks, ($('pterms')||{}).value), ($('pgroup')||{}).value);
   await guardedSave(async () => {
     const r = await api(type === 'Customer' ? 'saveCustomer' : 'saveSupplier', {
       name, contact:$('pcontact').value, phone:$('pphone').value,
@@ -4467,27 +4475,51 @@ function db2TopYear(y){
   const host = $('db2Top'); if (host) host.querySelector('.db2-tbars') && (host.querySelector('.db2-tbars').style.opacity = '.4');
   api('getSalesSummary', {year:DB2.topYear}).then(r => { DB2.topCache = DB2.topCache || {}; if (r && r.ok) DB2.topCache[DB2.topYear] = r; db2Top(); });
 }
+function db2TopMode(m){ DB2.topMode = m; DB2.topOpen = {}; try { localStorage.setItem('sfsTopMode', m); } catch (e) {} db2Top(); }
+function db2TopToggle(k){ k = decodeURIComponent(k); DB2.topOpen = DB2.topOpen || {}; DB2.topOpen[k] = !DB2.topOpen[k]; db2Top(); }
 function db2Top(){
   const host = $('db2Top'); if (!host) return;
-  const cy = new Date().getFullYear(), y = DB2.topYear || cy;
+  if (!DB2.topMode) { try { DB2.topMode = localStorage.getItem('sfsTopMode') || 'company'; } catch (e) { DB2.topMode = 'company'; } }
+  const cy = new Date().getFullYear(), y = DB2.topYear || cy, mode = DB2.topMode === 'group' ? 'group' : 'company';
   const s = y === cy ? DB2.data.sales : (DB2.topCache || {})[y];
-  const sel = '<select class="db2-sel" onchange="db2TopYear(this.value)">' + [cy, cy - 1, cy - 2].map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>';
-  if (!s) { if (DB2.done || y !== cy) host.innerHTML = '<h3>Top 10 customers ' + sel + '</h3><div class="muted">' + (y !== cy ? 'Loading…' : 'Could not load.') + '</div>'; return; }
+  const sel = '<span class="db2-topctl"><span class="db2-seg"><button type="button" class="' + (mode === 'company' ? 'on' : '') + '" onclick="db2TopMode(\'company\')">Company</button><button type="button" class="' + (mode === 'group' ? 'on' : '') + '" onclick="db2TopMode(\'group\')">Group</button></span>'
+    + '<select class="db2-sel" onchange="db2TopYear(this.value)">' + [cy, cy - 1, cy - 2].map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select></span>';
+  const title = '<h3><span>Top 10 ' + (mode === 'group' ? 'customer groups' : 'customers') + ' <span class="muted small">by sales (excl. GST)</span></span>' + sel + '</h3>';
+  if (!s) { if (DB2.done || y !== cy) host.innerHTML = title + '<div class="muted">' + (y !== cy ? 'Loading…' : 'Could not load.') + '</div>'; return; }
   const all = (s.customerSales || []).filter(x => (+x.amount || 0) > 0);
   const total = all.reduce((a, x) => a + (+x.amount || 0), 0) || Number(s.totalSales) || 0;
-  const list = all.slice(0, 10), max = Math.max(1, ...list.map(x => +x.amount || 0));
-  const top10 = list.reduce((a, x) => a + (+x.amount || 0), 0);
   const canOpen = db2Can('parties') || db2Can('accounts');
-  host.innerHTML = '<h3><span>Top 10 customers <span class="muted small">by sales (excl. GST)</span></span>' + sel + '</h3>'
-    + (list.length ? '<div class="db2-tbars">' + list.map((x, i) => {
-        const amt = +x.amount || 0, w = Math.max(1.5, amt / max * 100), share = total ? Math.round(amt / total * 1000) / 10 : 0;
-        return '<div class="db2-tbar' + (canOpen ? ' click' : '') + '"' + (canOpen ? ' onclick="ledger(\'Customer\',\'' + encA(x.customer) + '\')" title="Open ledger of ' + esc(x.customer) + '"' : ' title="' + esc(x.customer) + '"') + '>'
-          + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
-          + '<span class="db2-tbar-name">' + esc(x.customer) + '</span>'
-          + '<span class="db2-tbar-track"><i style="width:' + w + '%"></i></span>'
-          + '<span class="db2-tbar-val"><b>' + db2Short(amt) + '</b><small>' + share + '%</small></span></div>';
-      }).join('') + '</div>'
-      + '<div class="muted small" style="margin-top:8px">Top 10 = <b>' + db2Short(top10) + '</b>' + (total ? ' (' + Math.round(top10 / total * 100) + '% of ' + y + ' sales)' : '') + ' · ' + all.length + ' customers bought in ' + y + '</div>'
+  /* rows: one per company, or one per group (companies without a group stay on their own) */
+  let rows;
+  if (mode === 'group') {
+    const by = {};
+    all.forEach(x => {
+      const g = customerGroupOf(x.customer), key = g ? 'G:' + g.toUpperCase() : 'C:' + norm(x.customer);
+      const r = by[key] || (by[key] = {key:key, name:g || x.customer, group:!!g, amount:0, members:[]});
+      r.amount += +x.amount || 0; r.members.push(x);
+    });
+    rows = Object.values(by).sort((a, b) => b.amount - a.amount);
+  } else rows = all.map(x => ({key:'C:' + norm(x.customer), name:x.customer, group:false, amount:+x.amount || 0, members:[x]}));
+  const list = rows.slice(0, 10), max = Math.max(1, ...list.map(r => r.amount)), top10 = list.reduce((a, r) => a + r.amount, 0);
+  const groups = allCustomerGroups().length;
+  const bar = (i, r) => {
+    const w = Math.max(1.5, r.amount / max * 100), share = total ? Math.round(r.amount / total * 1000) / 10 : 0, open = r.group && (DB2.topOpen || {})[r.key];
+    const click = r.group ? ' onclick="db2TopToggle(\'' + encA(r.key) + '\')" title="Show the companies of ' + esc(r.name) + '"' : (canOpen ? ' onclick="ledger(\'Customer\',\'' + encA(r.name) + '\')" title="Open ledger of ' + esc(r.name) + '"' : ' title="' + esc(r.name) + '"');
+    let h = '<div class="db2-tbar' + (r.group || canOpen ? ' click' : '') + (r.group ? ' grp' : '') + '"' + click + '>'
+      + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+      + '<span class="db2-tbar-name">' + (r.group ? '<b>' + esc(r.name) + '</b> <span class="db2-grpn">' + (open ? '▾ ' : '▸ ') + r.members.length + ' compan' + (r.members.length === 1 ? 'y' : 'ies') + '</span>' : esc(r.name)) + '</span>'
+      + '<span class="db2-tbar-track"><i style="width:' + w + '%"></i></span>'
+      + '<span class="db2-tbar-val"><b>' + db2Short(r.amount) + '</b><small>' + share + '%</small></span></div>';
+    if (open) h += '<div class="db2-tsub">' + r.members.sort((a, b) => (+b.amount || 0) - (+a.amount || 0)).map(m => {
+        const a = +m.amount || 0;
+        return '<div class="db2-tbar sub' + (canOpen ? ' click' : '') + '"' + (canOpen ? ' onclick="event.stopPropagation();ledger(\'Customer\',\'' + encA(m.customer) + '\')" title="Open ledger"' : '') + '><span></span><span class="db2-tbar-name">' + esc(m.customer) + '</span><span class="db2-tbar-track"><i style="width:' + Math.max(1.5, a / r.amount * 100) + '%"></i></span><span class="db2-tbar-val"><b>' + db2Short(a) + '</b><small>' + Math.round(a / r.amount * 100) + '% of group</small></span></div>';
+      }).join('') + '</div>';
+    return h;
+  };
+  host.innerHTML = title
+    + (list.length ? '<div class="db2-tbars">' + list.map((r, i) => bar(i, r)).join('') + '</div>'
+      + '<div class="muted small" style="margin-top:8px">Top 10 = <b>' + db2Short(top10) + '</b>' + (total ? ' (' + Math.round(top10 / total * 100) + '% of ' + y + ' sales)' : '') + ' · ' + all.length + ' customers bought in ' + y
+      + (mode === 'group' ? ' · ' + (groups ? groups + ' group' + (groups === 1 ? '' : 's') + ' set' : 'no groups set yet') + ((db2Can('parties') || isAdmin()) ? ' · <a class="model-link" onclick="customerGroupsManager()">Manage groups</a>' : '') : '') + '</div>'
       : '<div class="muted">No invoice sales in ' + y + '.</div>');
 }
 
@@ -4559,7 +4591,7 @@ document.addEventListener('keydown', function(e){
   const k = String(e.key).toUpperCase(), qa = (window.DB2_QA || []).find(x => x.k === k);
   if (qa) { e.preventDefault(); qa.go(); }
 });
-Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
+Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2TopMode, db2TopToggle, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
 
 /* ============================================================
    ENQUIRY BOX (free — no paid AI)
@@ -4880,3 +4912,76 @@ document.addEventListener('paste', function(e){
   e.preventDefault(); qtPhotoSet(Number(box.dataset.i), f);
 });
 Object.assign(window, {qtPhotoPick, qtPhotoUseProduct, qtPhotoRemove, qtPhotoSet, qtImgSrc});
+
+
+/* ============================================================
+   CUSTOMER GROUPS — manager with suggestions
+   Groups only change how the dashboard Top 10 adds sales up.
+   DCs, invoices, quotations, ledgers and outstanding stay per company.
+   ============================================================ */
+const CG_SKIP = new Set(['the','m/s','ms','pak','pakistan','al','new','national','united','international','global','general','star','royal','city','karachi','lahore','sindh','punjab']);
+function cgFirstWord(n){ const w = String(n || '').replace(/^m\/s\.?\s*/i, '').trim().split(/[\s\-.,&()]+/)[0] || ''; return w.length >= 4 && !CG_SKIP.has(w.toLowerCase()) ? w : ''; }
+function cgNtn(c){ const d = String(c['NTN/Tax ID'] || '').replace(/\D/g, ''); return d.length >= 5 ? d : ''; }
+function cgSuggestions(){
+  const cs = (S.customers || []).filter(c => String(c.Status || 'Active').toLowerCase() !== 'inactive' && c['Customer Name']);
+  const out = [], used = new Set();
+  const push = (why, list, name) => {
+    const ungrouped = list.filter(c => !groupOfRemarks(c.Remarks));
+    if (list.length < 2 || !ungrouped.length) return;
+    const k = list.map(c => norm(c['Customer Name'])).sort().join('|'); if (used.has(k)) return; used.add(k);
+    const existing = list.map(c => groupOfRemarks(c.Remarks)).find(Boolean);
+    out.push({why:why, name:existing || name, members:list});
+  };
+  const byNtn = {}; cs.forEach(c => { const n = cgNtn(c); if (n) (byNtn[n] = byNtn[n] || []).push(c); });
+  Object.entries(byNtn).forEach(([n, l]) => push('Same NTN ' + n, l, (cgFirstWord(l[0]['Customer Name']) || l[0]['Customer Name']).toUpperCase() + ' GROUP'));
+  const byWord = {}; cs.forEach(c => { const w = cgFirstWord(c['Customer Name']); if (w) (byWord[w.toLowerCase()] = byWord[w.toLowerCase()] || []).push(c); });
+  Object.values(byWord).forEach(l => push('Names start with “' + cgFirstWord(l[0]['Customer Name']) + '”', l, cgFirstWord(l[0]['Customer Name']).toUpperCase() + ' GROUP'));
+  /* drop a suggestion whose companies are all inside a bigger suggestion */
+  const keyset = g => new Set(g.members.map(c => norm(c['Customer Name'])));
+  const sets = out.map(keyset);
+  return out.filter((g, i) => !sets.some((t, j) => j !== i && t.size > sets[i].size && [...sets[i]].every(x => t.has(x)))).sort((a, b) => b.members.length - a.members.length).slice(0, 30);
+}
+function customerGroupsManager(){
+  const can = isAdmin() || hasMod('parties');
+  const groups = {};
+  (S.customers || []).forEach(c => { const g = groupOfRemarks(c.Remarks); if (g) (groups[g.toUpperCase()] = groups[g.toUpperCase()] || {name:g, list:[]}).list.push(c['Customer Name']); });
+  const glist = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+  window.CG_SUG = can ? cgSuggestions() : [];
+  modal('Customer Groups', '<div class="cg">'
+    + '<p class="muted" style="margin-top:0">A group only adds the sales of its companies together in the dashboard <b>Top 10</b> (switch “Group”). DCs, invoices, quotations, ledgers and outstanding stay separate for every company. To put one customer in a group, you can also use <b>Customers → Edit → Group</b>.</p>'
+    + '<h4>Groups (' + glist.length + ')</h4>'
+    + (glist.length ? glist.map(g => '<div class="cg-g"><b>' + esc(g.name) + '</b> <span class="muted small">' + g.list.length + ' compan' + (g.list.length === 1 ? 'y' : 'ies') + '</span><div class="cg-chips">' + g.list.map(n => '<span>' + esc(n) + (can ? ' <a title="Remove from group" onclick="cgRemove(\'' + encA(n) + '\')">×</a>' : '') + '</span>').join('') + '</div></div>').join('') : '<div class="muted">No groups yet.</div>')
+    + (can ? '<h4 style="margin-top:18px">Suggestions (' + CG_SUG.length + ')</h4>'
+      + (CG_SUG.length ? CG_SUG.map((g, i) => '<div class="cg-s"><div class="cg-s-head"><span class="muted small">' + esc(g.why) + '</span><input id="cgName' + i + '" value="' + esc(g.name) + '" placeholder="Group name"><button class="btn small primary" onclick="cgApply(' + i + ')">Make group</button></div><div class="cg-chips">'
+          + g.members.map((c, k) => { const cur = groupOfRemarks(c.Remarks); return '<label><input type="checkbox" id="cgM' + i + '_' + k + '" checked> ' + esc(c['Customer Name']) + (cur ? ' <small class="muted">(' + esc(cur) + ')</small>' : '') + '</label>'; }).join('') + '</div></div>').join('')
+        : '<div class="muted">No suggestions — customers with the same NTN or the same first word in their name will appear here.</div>') : '')
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button></div></div>');
+}
+async function cgSetGroup(names, group){
+  let ok = 0, fail = [];
+  for (const n of names) {
+    const c = findCust(n); if (!c) { fail.push(n); continue; }
+    if ((groupOfRemarks(c.Remarks) || '').toUpperCase() === String(group || '').trim().toUpperCase()) { ok++; continue; }
+    const r = await api('updateCustomer', {name:c['Customer Name'], contact:c['Contact Person'] || '', phone:c.Phone || '', email:c.Email || '', address:c.Address || '', ntn:c['NTN/Tax ID'] || '', remarks:remarksWithGroup(c.Remarks || '', group)});
+    if (r && r.ok) { ok++; c.Remarks = remarksWithGroup(c.Remarks || '', group); } else fail.push(n + (r && r.error ? ' (' + r.error + ')' : ''));
+  }
+  return {ok, fail};
+}
+async function cgApply(i){
+  const g = (window.CG_SUG || [])[i]; if (!g) return;
+  const name = (($('cgName' + i) || {}).value || '').trim().replace(/\s+/g, ' ');
+  if (!name) return toast('Please write a group name.', true);
+  const names = g.members.filter((c, k) => ($('cgM' + i + '_' + k) || {}).checked).map(c => c['Customer Name']);
+  if (names.length < 2) return toast('Tick at least 2 companies.', true);
+  const res = await cgSetGroup(names, name);
+  if (res.fail.length) toast('Could not update: ' + res.fail.join(', '), true); else toast('Group “' + name + '” saved for ' + res.ok + ' companies.');
+  await refresh(); customerGroupsManager();
+}
+async function cgRemove(enc){
+  const n = decodeURIComponent(enc);
+  if (!confirm('Remove ' + n + ' from its group?')) return;
+  const res = await cgSetGroup([n], '');
+  if (res.fail.length) toast('Could not update: ' + res.fail.join(', '), true); else toast(n + ' removed from the group.');
+  await refresh(); customerGroupsManager();
+}
+Object.assign(window, {customerGroupsManager, cgApply, cgRemove});
