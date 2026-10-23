@@ -131,6 +131,8 @@ function nav(){
   ).join('');
 
   // Default: Dashboard if available, otherwise the first item
+  const keepBtn = !document.querySelector('.navbtn.active') && window.SFS_NAV_KEEP ? document.querySelector(`.navbtn[onclick*="'${window.SFS_NAV_KEEP}'"]`) : null;
+  if (keepBtn) keepBtn.classList.add('active');
   if (!document.querySelector('.navbtn.active')) {
     const first = items.find(x => x.id === 'dashboard') || items[0];
     if (first) {
@@ -330,9 +332,28 @@ async function refresh(){
   S.customers = r.customers || [];
   S.suppliers = r.suppliers || [];
   S.tx = r.transactions || [];
+  /* stay on the same page after a save / refresh (keep its search & filters and scroll position) */
+  const keep = sfsCurrentPage(), filters = sfsSaveFilters(), y = window.scrollY;
   syncDatalists();
-  nav();
+  window.SFS_NAV_KEEP = keep; nav(); window.SFS_NAV_KEEP = null;
   renderCurrent();
+  sfsRestoreFilters(filters);
+  setTimeout(() => window.scrollTo(0, y), 60);
+}
+
+/* A search box or filter list whose only job is to filter the list on screen (not part of a form) */
+function sfsIsFilterControl(el){
+  const h = [el.getAttribute('oninput'), el.getAttribute('onchange')].filter(Boolean).join(';').split(';').map(x => x.trim()).filter(Boolean);
+  return h.length > 0 && h.every(x => /^(?:[A-Za-z]*(?:render|filter|Render|Filter)[A-Za-z]*|periodChanged)\((?:'[^']*'|"[^"]*")?\)$/.test(x));
+}
+function sfsCurrentPage(){ const a = document.querySelector('.navbtn.active'); const m = a && a.getAttribute('onclick') && a.getAttribute('onclick').match(/'([^']+)'/); return m ? m[1] : ''; }
+function sfsSaveFilters(){
+  const out = [], root = $('content'); if (!root) return out;
+  root.querySelectorAll('input[id],select[id]').forEach(el => { if (sfsIsFilterControl(el) && el.value !== '') out.push({id:el.id, value:el.value, tag:el.tagName}); });
+  return out;
+}
+function sfsRestoreFilters(list){
+  (list || []).forEach(f => { const el = $(f.id); if (!el || el.value === f.value) return; el.value = f.value; el.dispatchEvent(new Event(f.tag === 'SELECT' ? 'change' : 'input', {bubbles:true})); });
 }
 
 function renderCurrent(){
@@ -3808,6 +3829,7 @@ window.toggleSidebar = (typeof window.toggleSidebar === 'function') ? window.tog
         if (el.closest('.no-dirty-track')) return false;
         if (el.type === 'button' || el.type === 'submit' || el.type === 'reset') return false;
         if (el.type === 'search') return false;
+        if (typeof sfsIsFilterControl === 'function' && sfsIsFilterControl(el)) return false;   /* list search / filter boxes are not unsaved work */
         return true;
       });
   }
