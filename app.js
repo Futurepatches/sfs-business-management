@@ -30,7 +30,8 @@ const ALL_MODULES = [
   {id:'reports',  label:'Reports'},
   {id:'enquiries',label:'Enquiries'},
   {id:'imports', label:'Imports (confidential costing)'},
-  {id:'stockvalue', label:'Stock Value (special permission — dashboard)'}
+  {id:'stockvalue', label:'Stock Value (special permission — dashboard)'},
+  {id:'setstock', label:'Set Stock (special permission — correct product quantity)'}
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -929,7 +930,7 @@ function productDetail(em){
      <div class="actions">
        <button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>
        <button class="btn" onclick="showProductHistory('${encA(m)}')">Product History</button>
-       ${isAdmin()?`<button class="btn" onclick="setStockForm('${encA(m)}')">⚖ Set Stock</button>`:''}
+       ${(isAdmin()||hasMod('setstock'))?`<button class="btn" onclick="setStockForm('${encA(m)}')">⚖ Set Stock</button>`:''}
        <button class="btn" onclick="printProductCard('${encA(m)}')">🖨 Product Card (PDF)</button>
        ${isAdmin()?`<button class="btn danger" onclick="toggleProductStatus('${encA(m)}','${status==='Active'?'Inactive':'Active'}')">${status==='Active'?'Deactivate':'Activate'}</button>`:''}
      </div>`);
