@@ -1309,3 +1309,25 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 .db2-tbar-val b{font-size:13px}
 .db2-tbar-val small{display:block;font-size:10.5px;color:#94a3b8;line-height:1.1}
 @media(max-width:700px){.db2-tbar{grid-template-columns:22px minmax(80px,34%) 1fr 70px;gap:6px;font-size:12px}}
+
+/* ---- Customer groups (Top 10 switch + manager) ---- */
+.db2-topctl{display:inline-flex;align-items:center;gap:8px}
+.db2-seg{display:inline-flex;border:1px solid #e3e8f0;border-radius:9px;overflow:hidden}
+.db2-seg button{border:none;background:#fff;padding:5px 11px;font-size:12px;font-weight:700;color:#64748b;cursor:pointer}
+.db2-seg button.on{background:var(--sfs-navy,#1f3b63);color:#fff}
+.db2-grpn{font-size:11px;color:#2c5282;font-weight:600;white-space:nowrap}
+.db2-tbar.grp .db2-tbar-track i{background:linear-gradient(90deg,#0f766e,#14b8a6)}
+.db2-tsub{margin:-2px 0 4px 34px;padding:4px 0 4px 10px;border-left:2px solid #d5e3f0}
+.db2-tbar.sub{grid-template-columns:0 minmax(110px,30%) 1fr 110px;font-size:12px;padding:2px 4px}
+.db2-tbar.sub .db2-tbar-track{height:10px}
+.db2-tbar.sub .db2-tbar-track i{background:#7aa2d6}
+.cg h4{margin:12px 0 8px}
+.cg-g,.cg-s{border:1px solid #e3e8f0;border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#fbfcfe}
+.cg-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cg-chips span,.cg-chips label{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #e3e8f0;border-radius:99px;padding:3px 10px;font-size:12.5px}
+.cg-chips a{color:#c8102e;font-weight:800;cursor:pointer}
+.cg-s-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cg-s-head input{flex:1;min-width:180px}
+@media(max-width:700px){.db2-topctl{flex-wrap:wrap}.db2-tsub{margin-left:10px}}
+.db2-tbar.grp .db2-tbar-name{white-space:normal;line-height:1.2}
+.db2-tbar.grp .db2-grpn{display:block;margin-top:1px}
