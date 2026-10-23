@@ -1331,3 +1331,9 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 @media(max-width:700px){.db2-topctl{flex-wrap:wrap}.db2-tsub{margin-left:10px}}
 .db2-tbar.grp .db2-tbar-name{white-space:normal;line-height:1.2}
 .db2-tbar.grp .db2-grpn{display:block;margin-top:1px}
+
+/* ---- Stock tools ---- */
+.pd-src{margin-top:12px;padding:10px 12px;border:1px solid #e3e8f0;border-radius:10px;background:#f8fafd;line-height:1.6}
+.pd-warn{color:#b45309;font-weight:600}
+.src-tbl td,.src-tbl th{white-space:nowrap;font-size:12px}
+.src-near td{background:#fff7e6}
