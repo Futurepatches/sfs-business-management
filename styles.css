@@ -1293,3 +1293,19 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 .qt-photo.has{position:relative;display:inline-block;padding:4px;border-style:solid;cursor:default;background:#fff}
 .qt-photo.has img{display:block;max-width:140px;max-height:96px;object-fit:contain;border-radius:5px}
 .qt-photo.has button{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:none;background:#c8102e;color:#fff;font-weight:800;cursor:pointer;line-height:22px;padding:0}
+
+/* ---- Dashboard: Top 10 customers bar graph ---- */
+.db2-tbars{display:flex;flex-direction:column;gap:7px}
+.db2-tbar{display:grid;grid-template-columns:24px minmax(110px,30%) 1fr 92px;align-items:center;gap:10px;font-size:13px;padding:3px 4px;border-radius:8px}
+.db2-tbar.click{cursor:pointer}
+.db2-tbar.click:hover{background:#f3f6fb}
+.db2-tbar-rank{width:22px;height:22px;border-radius:50%;background:#eef2f7;color:#64748b;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.db2-tbar-rank.top{background:var(--sfs-navy,#1f3b63);color:#fff}
+.db2-tbar-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1d2433}
+.db2-tbar-track{height:18px;background:#f1f5f9;border-radius:6px;overflow:hidden}
+.db2-tbar-track i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--sfs-navy,#1f3b63),#3b6fb6)}
+.db2-tbar:first-child .db2-tbar-track i{background:linear-gradient(90deg,var(--sfs-red,#c8102e),#e0485e)}
+.db2-tbar-val{text-align:right;white-space:nowrap}
+.db2-tbar-val b{font-size:13px}
+.db2-tbar-val small{display:block;font-size:10.5px;color:#94a3b8;line-height:1.1}
+@media(max-width:700px){.db2-tbar{grid-template-columns:22px minmax(80px,34%) 1fr 70px;gap:6px;font-size:12px}}
