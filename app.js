@@ -3041,7 +3041,7 @@ function impPageHtml(){
 
     <div class="imp-tiles no-dirty-track" id="impTiles"></div>
 
-    <section class="imp-zone z-calc" id="zCalc"><div class="imp-zhead"><i>🧮</i><div><b>Quick Costing Calculator</b><span>One item, approximate — nothing is saved</span></div></div>
+    <section class="imp-zone z-calc" id="zCalc"><div class="imp-zhead"><i>🧮</i><div><b>Quick Costing Calculator</b><span>One or more items, approximate — nothing is saved</span></div></div>
     <div class="panel icalc" id="impCalcPanel"></div>
     </section>
 
@@ -5629,17 +5629,18 @@ Object.assign(window, {renderInbox, ibxTab, ibxOpen, ibxBack, ibxAct, ibxReply, 
    Detailed = freight, insurance, customs duties and taxes (Pakistan).
    Settings (rates, %) are remembered on this computer only.
    ============================================================ */
-const IC_DEF = {open:true, mode:'quick', model:'', desc:'', qty:1, price:'', cur:'USD', rate:'', uplift:'', freight:'', fcur:'pct', ccur:'PKR', other:'', ins:1, land:1,
-  cd:20, acd:2, rd:0, st:18, ast:3, it:6, stIn:false, astIn:false, itIn:false, clear:'', margin:30, sale:''};
+const IC_DEF = {open:true, mode:'quick', cur:'USD', rate:'', uplift:'', freight:'', fcur:'pct', ccur:'PKR', other:'', ins:1, land:1,
+  cd:20, acd:2, rd:0, st:18, ast:3, it:6, stIn:false, astIn:false, itIn:false, clear:'', margin:30};
 let IC = null;
+function icBlank(){ return {model:'', qty:1, price:'', sale:''}; }
 function icLoad(){
   if (IC) return IC;
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('sfsImpCalc') || '{}') || {}; } catch (e) { saved = {}; }
-  IC = Object.assign({}, IC_DEF, saved, {model:'', desc:'', qty:1, price:'', sale:'', freight:'', clear:''});
+  IC = Object.assign({}, IC_DEF, saved, {items:[icBlank()], freight:'', clear:''});
   return IC;
 }
-function icKeep(){   /* remember only the settings, not the item */
+function icKeep(){   /* remember only the settings, not the items */
   try { const o = {}; ['open','mode','cur','rate','rates','uplift','fcur','ccur','other','ins','land','cd','acd','rd','st','ast','it','stIn','astIn','itIn','margin'].forEach(k => o[k] = IC[k]); localStorage.setItem('sfsImpCalc', JSON.stringify(o)); } catch (e) {}
 }
 function icAvgUplift(){
@@ -5658,15 +5659,16 @@ function icUseAvg(){ const a = icAvgUplift(); if (!a) return; IC.uplift = a.pct;
 function icRender(){
   const host = $('impCalcPanel'); if (!host) return;
   icLoad();
-  const num = (id, v, ph, cls) => '<input id="' + id + '" class="' + (cls || '') + '" type="number" min="0" step="any" value="' + esc(v) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' oninput="icSet(\'' + id + '\',this.value)">';
+  const num = (id, v, ph) => '<input id="' + id + '" type="number" min="0" step="any" value="' + esc(v) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' oninput="icSet(\'' + id + '\',this.value)">';
   const pct = (id, label, v, inKey) => '<label class="ic-pct">' + label + '<span class="ic-unit">' + num(id, v) + '<i>%</i></span>' + (inKey ? '<span class="ic-in"><input type="checkbox" id="' + inKey + '"' + (IC[inKey] ? ' checked' : '') + ' onchange="icSet(\'' + inKey + '\',this.checked)"> add to cost</span>' : '') + '</label>';
-  host.innerHTML = (('<div class="ic-grid" style="margin-top:0"><div class="ic-form">'
-    + '<div class="form-grid ic-row">'
-    + '<label class="ic-wide">Item (optional)<input id="icModel" list="mlist" value="' + esc(IC.model) + '" placeholder="Model / part no. or any description" onchange="icModel(this.value)"></label>'
-    + '<label>Qty' + num('icQty', IC.qty) + '</label>'
-    + '<label>Unit price<span class="ic-unit">' + num('icPrice', IC.price, '0.00') + '<select id="icCur" onchange="icSet(\'icCur\',this.value)">' + IMP_CURRENCIES.map(c => '<option' + (c === IC.cur ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></span></label>'
+  host.innerHTML = '<div class="form-grid ic-row ic-head">'
+    + '<label>Invoice currency<select id="icCur" onchange="icSet(\'icCur\',this.value)">' + IMP_CURRENCIES.map(c => '<option' + (c === IC.cur ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></label>'
     + '<label>Rate (Rs. per 1 <span id="icCurLbl">' + esc(IC.cur) + '</span>)' + num('icRate', IC.cur === 'PKR' ? 1 : IC.rate, 'e.g. 281.50') + '</label>'
-    + '</div><div id="icProd" class="muted small"></div>'
+    + '<label>Target margin (on sale price)<span class="ic-unit">' + num('icMargin', IC.margin) + '<i>%</i></span></label><span></span></div>'
+    + '<div class="table-wrap ic-items-wrap"><table class="ic-items"><thead><tr><th style="width:30px">#</th><th>Item <small>(model or any description)</small></th><th style="width:80px">Qty</th><th style="width:110px">Unit price <span id="icCurTh">' + esc(IC.cur) + '</span></th>'
+    + '<th class="r" style="width:110px">Value Rs.</th><th class="r hl" style="width:120px">Landed / unit</th><th class="r" style="width:120px">Sale @ <span id="icMgTh">' + esc(IC.margin) + '</span>%</th><th style="width:110px">Your sale price</th><th class="r" style="width:76px">Margin</th><th style="width:34px"></th></tr></thead><tbody id="icItems"></tbody>'
+    + '<tfoot><tr><td></td><td colspan="9"><button type="button" class="btn small" onclick="icAddItem()">+ Add item</button> <button type="button" class="btn small" onclick="icPasteForm()">Paste from Excel</button> <span class="muted small">Charges are shared between the items by value.</span></td></tr></tfoot></table></div>'
+    + '<div class="ic-grid"><div class="ic-form">'
     + '<div class="ic-tabs"><button type="button" class="' + (IC.mode === 'quick' ? 'on' : '') + '" onclick="icMode(\'quick\')">Quick — expenses %</button><button type="button" class="' + (IC.mode === 'detail' ? 'on' : '') + '" onclick="icMode(\'detail\')">Detailed — freight, duty &amp; taxes</button></div>'
     + (IC.mode === 'quick'
       ? '<div class="form-grid ic-row"><label>Expenses on goods value<span class="ic-unit">' + num('icUplift', IC.uplift, 'e.g. 35') + '<i>%</i></span></label><label>Clearing / transport (Rs.) <small>optional</small>' + num('icClear', IC.clear, '0') + '</label></div>'
@@ -5680,46 +5682,83 @@ function icRender(){
         + '<div class="form-grid ic-row ic-4">' + pct('icCd', 'Customs Duty', IC.cd) + pct('icAcd', 'Additional CD', IC.acd) + pct('icRd', 'Regulatory Duty', IC.rd) + '</div>'
         + '<div class="ic-sub">Taxes paid at import <span class="muted small">— tick “add to cost” only if you cannot adjust / claim it back</span></div>'
         + '<div class="form-grid ic-row ic-4">' + pct('icSt', 'Sales Tax', IC.st, 'stIn') + pct('icAst', 'Additional ST', IC.ast, 'astIn') + pct('icIt', 'Income Tax (WHT)', IC.it, 'itIn') + '</div>')
-    + '<div class="form-grid ic-row" style="margin-top:6px"><label>Target margin (on sale price)<span class="ic-unit">' + num('icMargin', IC.margin) + '<i>%</i></span></label><label>or check a sale price (Rs. / unit)' + num('icSale', IC.sale, 'optional') + '</label></div>'
-    + '</div><div class="ic-result" id="icResult"></div></div>'));
+    + '</div><div class="ic-result" id="icResult"></div></div>';
   IC.open = true;
-  if (IC.open) { const r = $('icRate'); if (r) r.disabled = IC.cur === 'PKR'; icHistoryNote(); icModel(IC.model, true); icCalc(); }
+  const r = $('icRate'); if (r) r.disabled = IC.cur === 'PKR';
+  icRenderItems(); icHistoryNote(); icCalc();
 }
-function icToggle(){ icLoad(); IC.open = !IC.open; icKeep(); icRender(); }
+function icRenderItems(){
+  const h = $('icItems'); if (!h) return;
+  h.innerHTML = IC.items.map((it, i) => '<tr>'
+    + '<td class="muted">' + (i + 1) + '</td>'
+    + '<td><input id="ic-mod-' + i + '" list="mlist" value="' + esc(it.model) + '" placeholder="Model / part no. or description" onchange="icItemModel(' + i + ',this.value)" oninput="IC.items[' + i + '].model=this.value"><div class="ic-pinfo" id="ic-p-' + i + '"></div></td>'
+    + '<td><input type="number" min="0" step="any" value="' + esc(it.qty) + '" oninput="icItem(' + i + ',\'qty\',this.value)"></td>'
+    + '<td><input type="number" min="0" step="any" value="' + esc(it.price) + '" placeholder="0.00" oninput="icItem(' + i + ',\'price\',this.value)"></td>'
+    + '<td class="r" id="ic-v-' + i + '"></td><td class="r hl" id="ic-l-' + i + '"></td><td class="r" id="ic-s-' + i + '"></td>'
+    + '<td><input id="ic-sale-' + i + '" type="number" min="0" step="any" value="' + esc(it.sale) + '" placeholder="optional" oninput="icItem(' + i + ',\'sale\',this.value)"></td>'
+    + '<td class="r" id="ic-m-' + i + '"></td>'
+    + '<td><button type="button" class="btn small danger" title="Remove" onclick="icDelItem(' + i + ')">×</button></td></tr>').join('');
+  IC.items.forEach((it, i) => icItemInfo(i));
+}
+function icItemInfo(i){
+  const box = $('ic-p-' + i), it = IC.items[i]; if (!box || !it) return;
+  const p = it.model ? findProd(it.model) : null;
+  box.innerHTML = p ? esc([p.Description, p.Brand].filter(Boolean).join(' · ')) + ' · now cost <b>' + money(p['Cost Price']) + '</b>, sale <b>' + money(p['Sale Price']) + '</b>, stock ' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) : '';
+}
+function icItemModel(i, v){
+  const it = IC.items[i]; if (!it) return;
+  it.model = String(v || '').trim();
+  const p = it.model ? findProd(it.model) : null;
+  if (p) {   /* update this row only (no re-draw while the box still has focus) */
+    it.model = p['Model / Part No.']; const m = $('ic-mod-' + i); if (m && m.value !== it.model) m.value = it.model;
+    if (!String(it.sale).trim() && Number(p['Sale Price']) > 0) { it.sale = p['Sale Price']; const s = $('ic-sale-' + i); if (s) s.value = it.sale; }
+  }
+  icItemInfo(i);
+  icCalc();
+}
+function icItem(i, k, v){ if (IC.items[i]) { IC.items[i][k] = v; icCalc(); } }
+function icAddItem(){ IC.items.push(icBlank()); icRenderItems(); icCalc(); const ins = document.querySelectorAll('#icItems input[list]'); if (ins.length) ins[ins.length - 1].focus(); }
+function icDelItem(i){ IC.items.splice(i, 1); if (!IC.items.length) IC.items.push(icBlank()); icRenderItems(); icCalc(); }
+function icPasteForm(){
+  modal('Paste items into the calculator', '<div class="muted" style="margin-bottom:10px">One item per row, columns: <b>Model / description, Qty, Unit price</b> (and optionally <b>Sale price</b>). Copy them from Excel and paste here.</div>'
+    + '<textarea id="icPasteText" style="width:100%;min-height:200px;font-family:monospace"></textarea>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="icPasteApply()">Add items</button></div>');
+}
+function icPasteApply(){
+  const rows = parseBulkRows(($('icPasteText') || {}).value || '').filter(r => String(r[0] || '').trim() && (impNum(r[1]) > 0 || impNum(r[2]) > 0));
+  if (!rows.length) return toast('No rows with a quantity or price were found.', true);
+  const add = rows.map(r => { const p = findProd(String(r[0]).trim()); return {model:p ? p['Model / Part No.'] : String(r[0]).trim(), qty:impNum(r[1]) || 1, price:impNum(r[2]) || '', sale:impNum(r[3]) || (p && Number(p['Sale Price']) > 0 ? p['Sale Price'] : '')}; });
+  IC.items = IC.items.filter(it => String(it.model).trim() || impNum(it.price) > 0).concat(add);
+  closeModal(); icRenderItems(); icCalc(); toast(add.length + ' item(s) added.');
+}
 function icMode(m){ IC.mode = m; icKeep(); icRender(); }
 function icSet(id, v){
-  const map = {icQty:'qty', icPrice:'price', icCur:'cur', icRate:'rate', icUplift:'uplift', icFreight:'freight', icFcur:'fcur', icCcur:'ccur', icOther:'other', icIns:'ins', icLand:'land', icCd:'cd', icAcd:'acd', icRd:'rd', icSt:'st', icAst:'ast', icIt:'it', icClear:'clear', icMargin:'margin', icSale:'sale'};
+  const map = {icCur:'cur', icRate:'rate', icUplift:'uplift', icFreight:'freight', icFcur:'fcur', icCcur:'ccur', icOther:'other', icIns:'ins', icLand:'land', icCd:'cd', icAcd:'acd', icRd:'rd', icSt:'st', icAst:'ast', icIt:'it', icClear:'clear', icMargin:'margin'};
   const k = map[id] || id; IC[k] = v;
   if (k === 'cur') {   /* every currency remembers its own last rate */
     IC.rates = IC.rates || {};
     const r = $('icRate'); if (r) { r.disabled = v === 'PKR'; r.value = v === 'PKR' ? 1 : (IC.rates[v] || ''); IC.rate = r.value; }
-    const l = $('icCurLbl'); if (l) l.textContent = v;
+    ['icCurLbl', 'icCurTh'].forEach(x => { const l = $(x); if (l) l.textContent = v; });
     const f = $('icFcur'); if (f && f.options[1]) f.options[1].textContent = v;
   }
   if (k === 'rate' && IC.cur !== 'PKR') { IC.rates = IC.rates || {}; IC.rates[IC.cur] = v; }
+  if (k === 'margin') { const t = $('icMgTh'); if (t) t.textContent = v; }
   icKeep(); icCalc();
-}
-function icModel(v, quiet){
-  IC.model = String(v || '').trim();
-  const p = IC.model ? findProd(IC.model) : null, box = $('icProd');
-  if (p) {
-    IC.model = p['Model / Part No.']; IC.desc = p.Description || '';
-    const m = $('icModel'); if (m) m.value = IC.model;
-    if (!quiet && !String(IC.sale).trim() && Number(p['Sale Price']) > 0) { IC.sale = p['Sale Price']; const s = $('icSale'); if (s) s.value = IC.sale; }
-    if (box) box.innerHTML = esc(p.Description || '') + ' · ' + esc(p.Brand || '') + ' · now: cost <b>Rs. ' + money(p['Cost Price']) + '</b>, sale <b>Rs. ' + money(p['Sale Price']) + '</b>, stock ' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock);
-  } else if (box) box.innerHTML = IC.model ? 'Not in the product list — fine, the calculator works for any item.' : '';
-  if (!quiet) icCalc();
 }
 function icCalc(){
   const out = $('icResult'); if (!out || !IC) return null;
-  const n = impNum, qty = n(IC.qty) || 0, rate = IC.cur === 'PKR' ? 1 : n(IC.rate);
-  if (!(qty > 0) || !(n(IC.price) > 0) || !(rate > 0)) {
-    out.innerHTML = '<div class="ic-wait">Enter <b>qty</b>, <b>unit price</b> and the <b>exchange rate</b> to see the landed cost.</div>';
+  const n = impNum, rate = IC.cur === 'PKR' ? 1 : n(IC.rate), mg = Math.min(95, n(IC.margin));
+  const set = (id, v, cls) => { const e = $(id); if (e) { e.innerHTML = v; e.className = e.className.replace(/\s*(up|dn|amb)\b/g, '') + (cls ? ' ' + cls : ''); } };
+  const valid = IC.items.map((it, i) => ({it, i, qty:n(it.qty), fob:n(it.qty) * n(it.price) * rate})).filter(x => x.qty > 0 && x.fob > 0);
+  IC.items.forEach((it, i) => ['v', 'l', 's', 'm'].forEach(c => set('ic-' + c + '-' + i, '')));
+  if (!(rate > 0) || !valid.length) {
+    out.innerHTML = '<div class="ic-wait">Enter the <b>exchange rate</b>, and for each item its <b>qty</b> and <b>unit price</b> to see the landed cost.</div>';
     return null;
   }
-  const fob = qty * n(IC.price) * rate, lines = [], add = (label, v, note, cls) => lines.push([label, v, note || '', cls || '']);
+  const fob = valid.reduce((a, x) => a + x.fob, 0), qtyAll = valid.reduce((a, x) => a + x.qty, 0);
+  const lines = [], add = (label, v, note, cls) => lines.push([label, v, note || '', cls || '']);
   let cost, cash;
-  add('Goods value', fob, qty + ' × ' + money(n(IC.price)) + ' ' + IC.cur + ' @ ' + rate);
+  add('Goods value', fob, valid.length === 1 ? valid[0].qty + ' × ' + money(n(valid[0].it.price)) + ' ' + IC.cur + ' @ ' + rate : valid.length + ' items @ ' + rate);
   if (IC.mode === 'quick') {
     const ex = fob * n(IC.uplift) / 100, cl = n(IC.clear);
     if (ex) add('Expenses ' + n(IC.uplift) + '%', ex, 'freight, duty, clearing');
@@ -5742,41 +5781,58 @@ function icCalc(){
     cash = cost + adj.reduce((a, t) => a + t[1], 0);
     adj.forEach(t => add(t[0], t[1], 'paid, adjustable — not in cost', 'adj'));
   }
-  const unit = cost / qty, mg = Math.min(95, n(IC.margin)), sugg = mg > 0 ? unit / (1 - mg / 100) : unit, sale = n(IC.sale);
-  const saleM = sale > 0 ? (sale - unit) / sale * 100 : null;
-  const p = IC.model ? findProd(IC.model) : null, oldCost = p ? n(p['Cost Price']) : 0;
-  out.innerHTML = '<div class="ic-big"><span>Landed cost per ' + esc((p && p.Unit) || 'unit') + '</span><b>Rs. ' + money(unit) + '</b><em>total for ' + qty + ': Rs. ' + money(cost) + ' · ' + (fob ? ((cost / fob - 1) * 100).toFixed(1) : 0) + '% over goods value</em></div>'
+  /* every item carries the charges in proportion to its value */
+  let saleTot = 0, costForSale = 0;
+  valid.forEach(x => {
+    const share = cost * x.fob / fob, unit = share / x.qty, sugg = mg > 0 ? unit / (1 - mg / 100) : unit, sale = n(x.it.sale);
+    x.unit = unit;
+    set('ic-v-' + x.i, money(x.fob));
+    set('ic-l-' + x.i, '<b>' + money(unit) + '</b>');
+    set('ic-s-' + x.i, money(Math.ceil(sugg)));
+    if (sale > 0) { const m = (sale - unit) / sale * 100; set('ic-m-' + x.i, m.toFixed(1) + '%', m < 0 ? 'dn' : m < 15 ? 'amb' : 'up'); saleTot += sale * x.qty; costForSale += share; }
+  });
+  const one = valid.length === 1 ? valid[0] : null;
+  const p = one && one.it.model ? findProd(one.it.model) : null, oldCost = p ? n(p['Cost Price']) : 0;
+  out.innerHTML = (one
+      ? '<div class="ic-big"><span>Landed cost per ' + esc((p && p.Unit) || 'unit') + '</span><b>Rs. ' + money(one.unit) + '</b><em>total for ' + one.qty + ': Rs. ' + money(cost) + ' · ' + ((cost / fob - 1) * 100).toFixed(1) + '% over goods value</em></div>'
+      : '<div class="ic-big"><span>Total landed cost · ' + valid.length + ' items, ' + qtyAll + ' pcs</span><b>Rs. ' + money(cost) + '</b><em>' + ((cost / fob - 1) * 100).toFixed(1) + '% over goods value · per item in the table above</em></div>')
     + '<table class="ic-tbl">' + lines.map(l => '<tr class="' + l[3] + '"><td>' + esc(l[0]) + (l[2] ? '<small>' + esc(l[2]) + '</small>' : '') + '</td><td>' + money(l[1]) + '</td></tr>').join('')
     + '<tr class="tot"><td>Landed cost (total)</td><td>' + money(cost) + '</td></tr>'
     + (cash > cost + 0.5 ? '<tr class="adj"><td>Cash needed at import<small>incl. adjustable taxes</small></td><td>' + money(cash) + '</td></tr>' : '') + '</table>'
-    + '<div class="ic-sale"><div><span>Sale price for ' + mg + '% margin</span><b>Rs. ' + money(Math.ceil(sugg)) + '</b></div>'
-    + (saleM !== null ? '<div><span>At Rs. ' + money(sale) + '</span><b class="' + (saleM < 0 ? 'dn' : saleM < 15 ? 'amb' : 'up') + '">' + saleM.toFixed(1) + '% margin</b></div>' : '')
-    + (oldCost > 0 ? '<div><span>Current cost in ERP</span><b>Rs. ' + money(oldCost) + ' <small class="' + (unit > oldCost ? 'dn' : 'up') + '">' + (unit >= oldCost ? '+' : '') + ((unit / oldCost - 1) * 100).toFixed(1) + '%</small></b></div>' : '') + '</div>'
-    + '<div class="ic-btns"><button class="btn small" onclick="icToSheet()">➕ Add to New Import</button><button class="btn small" onclick="icClearItem()">Clear item</button></div>';
-  return {unit, cost, cash};
+    + '<div class="ic-sale">'
+    + (saleTot > 0 ? '<div><span>Sale value at your prices' + (valid.some(x => !(n(x.it.sale) > 0)) ? ' (items with a price)' : '') + '</span><b>Rs. ' + money(saleTot) + '</b></div><div><span>Profit / margin</span><b class="' + (saleTot - costForSale < 0 ? 'dn' : 'up') + '">Rs. ' + money(saleTot - costForSale) + ' · ' + ((saleTot - costForSale) / saleTot * 100).toFixed(1) + '%</b></div>' : '')
+    + (one && oldCost > 0 ? '<div><span>Current cost in ERP</span><b>Rs. ' + money(oldCost) + ' <small class="' + (one.unit > oldCost ? 'dn' : 'up') + '">' + (one.unit >= oldCost ? '+' : '') + ((one.unit / oldCost - 1) * 100).toFixed(1) + '%</small></b></div>' : '')
+    + '</div>'
+    + '<div class="ic-btns"><button class="btn small" onclick="icToSheet()">➕ Add to New Import</button><button class="btn small" onclick="icClearItem()">Clear items</button></div>';
+  return {cost, cash};
 }
-function icClearItem(){ Object.assign(IC, {model:'', desc:'', qty:1, price:'', sale:'', freight:'', clear:''}); icRender(); }
+function icClearItem(){ IC.items = [icBlank()]; IC.freight = ''; IC.clear = ''; icRender(); }
 function icToSheet(){
   if (!IC) return;
-  const p = IC.model ? findProd(IC.model) : null;
-  if (!IC.model) return toast('Enter the model / part no. first — the import sheet needs it.', true);
+  const items = IC.items.filter(it => impNum(it.qty) > 0 && impNum(it.price) > 0);
+  if (!items.length) return toast('Enter at least one item with qty and unit price.', true);
+  const noModel = items.filter(it => !String(it.model).trim()).length;
+  if (noModel) return toast(noModel + ' item(s) have no model / part no. — the import sheet needs it.', true);
   const empty = IMP.rows.every(r => !r.model && !r.qty && !r.price);
-  if (empty) {   /* first item: take over currency and rate too */
+  if (empty) {   /* first items: take over currency and rate too */
     IMP.rows = [];
     IMP.h = Object.assign({}, IMP.h || {}, {cur:IC.cur, rate:IC.cur === 'PKR' ? 1 : IC.rate});
     if ($('impCur')) { $('impCur').value = IMP.h.cur; $('impRate').value = IMP.h.rate; impSyncRateBox(); }
-  } else if (IMP.h && IMP.h.cur !== IC.cur) return toast('The import sheet below is in ' + IMP.h.cur + ' — change the calculator currency to ' + IMP.h.cur + ' first.', true);
-  IMP.rows.push({model:p ? p['Model / Part No.'] : IC.model, desc:p ? (p.Description || '') : (IC.desc || ''), cat:p ? (p.Category || 'Others') : 'Others', brand:p ? (p.Brand || '') : '', unit:p ? (p.Unit || 'Pcs') : 'Pcs', qty:IC.qty, price:IC.price, sale:IC.sale || ''});
+  } else if (IMP.h && IMP.h.cur !== IC.cur) return toast('New Import is in ' + IMP.h.cur + ' — change the calculator currency to ' + IMP.h.cur + ' first.', true);
+  items.forEach(it => {
+    const p = findProd(it.model);
+    IMP.rows.push({model:p ? p['Model / Part No.'] : String(it.model).trim(), desc:p ? (p.Description || '') : '', cat:p ? (p.Category || 'Others') : 'Others', brand:p ? (p.Brand || '') : '', unit:p ? (p.Unit || 'Pcs') : 'Pcs', qty:it.qty, price:it.price, sale:it.sale || ''});
+  });
   impRenderCharges(); impRenderGrid(); impRecalc();
   if (typeof impTab === 'function') impTab('zCost');
-  toast('Added to the import items. Freight and duty for the whole shipment are entered in step 2.');
+  toast(items.length + ' item(s) added to New Import. Freight and duty for the whole shipment are entered in step 2.');
   const g = $('impGrid'); if (g) g.scrollIntoView({behavior:'smooth', block:'center'});
 }
-Object.assign(window, {icRender, icToggle, icMode, icSet, icModel, icCalc, icUseAvg, icToSheet, icClearItem});
+Object.assign(window, {icRender, icMode, icSet, icItem, icItemModel, icAddItem, icDelItem, icPasteForm, icPasteApply, icCalc, icUseAvg, icToSheet, icClearItem, IC_DEF});
 
 /* ---------- Imports page: coloured tiles, one section open at a time ---------- */
 const IMP_TABS = [
-  {id:'zCalc',   cls:'z-calc',   icon:'🧮', t:'Costing Calculator', d:'Landed cost of one item — quick'},
+  {id:'zCalc',   cls:'z-calc',   icon:'🧮', t:'Costing Calculator', d:'Landed cost of one or more items'},
   {id:'zCost',   cls:'z-cost',   icon:'📦', t:'New Import',         d:'Shipment costing → products + stock'},
   {id:'zProfit', cls:'z-profit', icon:'📈', t:'Profit Reports',     d:'Monthly profit & profit per invoice'},
   {id:'zHist',   cls:'z-hist',   icon:'🗂', t:'Past Imports',       d:'Saved costing sheets'}
