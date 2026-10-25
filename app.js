@@ -3030,6 +3030,7 @@ async function impLoadHistory(){
   const r = await api('getImportCostings', {});
   if (r && r.ok) IMP_HIST = r.imports || [];
   if (typeof icHistoryNote === 'function') icHistoryNote();
+  if (typeof impTiles === 'function') impTiles();
   else if (r && r.error && !/unknown action/i.test(r.error)) toast(r.error, true);
   impRenderHistory();
 }
@@ -3038,8 +3039,13 @@ function impPageHtml(){
   return `<div class="wrap" id="impPage">
     <div class="imp-banner"><b>🔒 Confidential.</b> Rates, duty and costing on this page are visible only to Admin and users given “Imports” access.</div>
 
-    <div class="panel icalc" id="impCalcPanel"></div>
+    <div class="imp-tiles no-dirty-track" id="impTiles"></div>
 
+    <section class="imp-zone z-calc" id="zCalc"><div class="imp-zhead"><i>🧮</i><div><b>Quick Costing Calculator</b><span>One item, approximate — nothing is saved</span></div></div>
+    <div class="panel icalc" id="impCalcPanel"></div>
+    </section>
+
+    <section class="imp-zone z-cost" id="zCost"><div class="imp-zhead"><i>📦</i><div><b>New Import Costing</b><span>A real shipment → landed cost, new products and stock</span></div></div>
     <div class="panel"><h3>1. Shipment Details</h3>
       <div class="form-grid">
         <label>Date<input id="impDate" type="date" oninput="impHdr()"></label>
@@ -3070,10 +3076,16 @@ function impPageHtml(){
       <button class="btn" onclick="impPreview()">Preview Costing</button>
       <button class="btn primary" onclick="impSave()">Save Import → Products + Inward Stock</button>
     </div>
+    </section>
 
+    <section class="imp-zone z-profit" id="zProfit"><div class="imp-zhead"><i>📈</i><div><b>Profit Reports</b><span>What the imported items earned</span></div></div>
     <div class="panel" id="impProfit"></div>
     <div class="panel" id="impInvProfit"></div>
+    </section>
+
+    <section class="imp-zone z-hist" id="zHist"><div class="imp-zhead"><i>🗂</i><div><b>Past Imports</b><span>Saved costing sheets</span></div></div>
     <div class="panel" id="impHistory"></div>
+    </section>
   </div>`;
 }
 
@@ -3085,7 +3097,7 @@ function renderImports(){
   $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
   $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
   IMP.h = h; impSyncRateBox();
-  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab();
 }
 function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
 function impHdr(){
@@ -3214,6 +3226,7 @@ function impRecalc(){
       ${c.exc ? '<div><span>Not added to cost (taxes)</span><b>' + money(c.exc) + '</b></div>' : ''}
       <div><span>Items</span><b>${nNew} new · ${nOld} existing</b></div>
     </div>`;
+  if (typeof impTiles === 'function') impTiles();
   return c;
 }
 
@@ -5647,9 +5660,7 @@ function icRender(){
   icLoad();
   const num = (id, v, ph, cls) => '<input id="' + id + '" class="' + (cls || '') + '" type="number" min="0" step="any" value="' + esc(v) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' oninput="icSet(\'' + id + '\',this.value)">';
   const pct = (id, label, v, inKey) => '<label class="ic-pct">' + label + '<span class="ic-unit">' + num(id, v) + '<i>%</i></span>' + (inKey ? '<span class="ic-in"><input type="checkbox" id="' + inKey + '"' + (IC[inKey] ? ' checked' : '') + ' onchange="icSet(\'' + inKey + '\',this.checked)"> add to cost</span>' : '') + '</label>';
-  host.innerHTML = '<div class="panel-head"><h3>🧮 Quick Costing Calculator <span class="muted small" style="font-weight:500">— one item, approximate. Nothing is saved.</span></h3>'
-    + '<button class="btn small" onclick="icToggle()">' + (IC.open ? 'Hide' : 'Open calculator') + '</button></div>'
-    + (!IC.open ? '' : '<div class="ic-grid"><div class="ic-form">'
+  host.innerHTML = (('<div class="ic-grid" style="margin-top:0"><div class="ic-form">'
     + '<div class="form-grid ic-row">'
     + '<label class="ic-wide">Item (optional)<input id="icModel" list="mlist" value="' + esc(IC.model) + '" placeholder="Model / part no. or any description" onchange="icModel(this.value)"></label>'
     + '<label>Qty' + num('icQty', IC.qty) + '</label>'
@@ -5670,7 +5681,8 @@ function icRender(){
         + '<div class="ic-sub">Taxes paid at import <span class="muted small">— tick “add to cost” only if you cannot adjust / claim it back</span></div>'
         + '<div class="form-grid ic-row ic-4">' + pct('icSt', 'Sales Tax', IC.st, 'stIn') + pct('icAst', 'Additional ST', IC.ast, 'astIn') + pct('icIt', 'Income Tax (WHT)', IC.it, 'itIn') + '</div>')
     + '<div class="form-grid ic-row" style="margin-top:6px"><label>Target margin (on sale price)<span class="ic-unit">' + num('icMargin', IC.margin) + '<i>%</i></span></label><label>or check a sale price (Rs. / unit)' + num('icSale', IC.sale, 'optional') + '</label></div>'
-    + '</div><div class="ic-result" id="icResult"></div></div>');
+    + '</div><div class="ic-result" id="icResult"></div></div>'));
+  IC.open = true;
   if (IC.open) { const r = $('icRate'); if (r) r.disabled = IC.cur === 'PKR'; icHistoryNote(); icModel(IC.model, true); icCalc(); }
 }
 function icToggle(){ icLoad(); IC.open = !IC.open; icKeep(); icRender(); }
@@ -5740,7 +5752,7 @@ function icCalc(){
     + '<div class="ic-sale"><div><span>Sale price for ' + mg + '% margin</span><b>Rs. ' + money(Math.ceil(sugg)) + '</b></div>'
     + (saleM !== null ? '<div><span>At Rs. ' + money(sale) + '</span><b class="' + (saleM < 0 ? 'dn' : saleM < 15 ? 'amb' : 'up') + '">' + saleM.toFixed(1) + '% margin</b></div>' : '')
     + (oldCost > 0 ? '<div><span>Current cost in ERP</span><b>Rs. ' + money(oldCost) + ' <small class="' + (unit > oldCost ? 'dn' : 'up') + '">' + (unit >= oldCost ? '+' : '') + ((unit / oldCost - 1) * 100).toFixed(1) + '%</small></b></div>' : '') + '</div>'
-    + '<div class="ic-btns"><button class="btn small" onclick="icToSheet()">➕ Add to import items below</button><button class="btn small" onclick="icClearItem()">Clear item</button></div>';
+    + '<div class="ic-btns"><button class="btn small" onclick="icToSheet()">➕ Add to New Import</button><button class="btn small" onclick="icClearItem()">Clear item</button></div>';
   return {unit, cost, cash};
 }
 function icClearItem(){ Object.assign(IC, {model:'', desc:'', qty:1, price:'', sale:'', freight:'', clear:''}); icRender(); }
@@ -5756,7 +5768,33 @@ function icToSheet(){
   } else if (IMP.h && IMP.h.cur !== IC.cur) return toast('The import sheet below is in ' + IMP.h.cur + ' — change the calculator currency to ' + IMP.h.cur + ' first.', true);
   IMP.rows.push({model:p ? p['Model / Part No.'] : IC.model, desc:p ? (p.Description || '') : (IC.desc || ''), cat:p ? (p.Category || 'Others') : 'Others', brand:p ? (p.Brand || '') : '', unit:p ? (p.Unit || 'Pcs') : 'Pcs', qty:IC.qty, price:IC.price, sale:IC.sale || ''});
   impRenderCharges(); impRenderGrid(); impRecalc();
+  if (typeof impTab === 'function') impTab('zCost');
   toast('Added to the import items. Freight and duty for the whole shipment are entered in step 2.');
   const g = $('impGrid'); if (g) g.scrollIntoView({behavior:'smooth', block:'center'});
 }
 Object.assign(window, {icRender, icToggle, icMode, icSet, icModel, icCalc, icUseAvg, icToSheet, icClearItem});
+
+/* ---------- Imports page: coloured tiles, one section open at a time ---------- */
+const IMP_TABS = [
+  {id:'zCalc',   cls:'z-calc',   icon:'🧮', t:'Costing Calculator', d:'Landed cost of one item — quick'},
+  {id:'zCost',   cls:'z-cost',   icon:'📦', t:'New Import',         d:'Shipment costing → products + stock'},
+  {id:'zProfit', cls:'z-profit', icon:'📈', t:'Profit Reports',     d:'Monthly profit & profit per invoice'},
+  {id:'zHist',   cls:'z-hist',   icon:'🗂', t:'Past Imports',       d:'Saved costing sheets'}
+];
+function impCurTab(){ let k = ''; try { k = localStorage.getItem('sfsImpTab') || ''; } catch (e) {} return IMP_TABS.some(x => x.id === k) ? k : 'zCalc'; }
+function impTiles(){
+  const host = $('impTiles'); if (!host) return;
+  const cur = impCurTab();
+  const filled = (IMP.rows || []).filter(r => r.model || r.qty || r.price).length;
+  const badge = {zCost:filled ? filled + ' item' + (filled === 1 ? '' : 's') + ' in progress' : '', zHist:(IMP_HIST || []).length ? IMP_HIST.length + ' saved' : ''};
+  host.innerHTML = IMP_TABS.map(x => '<button type="button" class="imp-tile ' + x.cls + (x.id === cur ? ' on' : '') + '" onclick="impTab(\'' + x.id + '\')">'
+    + '<i>' + x.icon + '</i><div><b>' + x.t + '</b><span>' + x.d + '</span>' + (badge[x.id] ? '<em>' + badge[x.id] + '</em>' : '') + '</div></button>').join('');
+}
+function impTab(id){
+  if (id) { try { localStorage.setItem('sfsImpTab', id); } catch (e) {} }
+  const cur = id || impCurTab();
+  IMP_TABS.forEach(x => { const z = document.getElementById(x.id); if (z) z.hidden = x.id !== cur; });
+  impTiles();
+}
+function impJump(id){ impTab(id); }
+Object.assign(window, {impTab, impTiles, impJump});
