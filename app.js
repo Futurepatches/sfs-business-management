@@ -423,7 +423,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}</div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -2161,7 +2161,7 @@ function psCsv(){
 }
 
 /* ---------- SETTINGS ---------- */
-function renderSettings(){}
+function renderSettings(){ if (isAdmin()) bkLoad(); }
 async function refreshSource(){
   if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
@@ -5854,3 +5854,35 @@ function impTab(id){
 }
 function impJump(id){ impTab(id); }
 Object.assign(window, {impTab, impTiles, impJump});
+
+
+/* ---------- Settings: automatic daily backup (Admin) ---------- */
+async function bkLoad(){
+  const host = $('bkPanel'); if (!host) return;
+  const r = await api('backupStatus');
+  if (!r || !r.ok) {
+    const unknown = r && /unknown action/i.test(r.error || '');
+    host.innerHTML = '<h3>🛡 Data Backup</h3><div class="muted">' + esc(unknown ? 'Backup needs the new Code.gs — paste it in Apps Script, deploy a New version, then run “setupDailyBackup” once.' : ((r && r.error) || 'Could not check the backup.')) + '</div>';
+    return;
+  }
+  const when = v => { const d = new Date(v); return isNaN(d) ? '' : d.toLocaleString('en-GB', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}); };
+  const age = r.last ? (Date.now() - new Date(r.last.at)) / 36e5 : null;
+  const state = !r.on ? ['bad', 'Automatic backup is OFF', 'In Apps Script select “setupDailyBackup” and press Run once.']
+    : r.lastError ? ['bad', 'Last backup FAILED', esc(r.lastError.error || '') + ' — ' + when(r.lastError.at)]
+    : age === null ? ['warn', 'ON — no backup yet', 'The first copy is made tonight, or press “Backup now”.']
+    : age > 36 ? ['warn', 'ON — but the last backup is ' + Math.round(age / 24) + ' days old', 'Check the Apps Script triggers.']
+    : ['ok', 'ON — every night around 2 AM', 'Last backup: <b>' + when(r.last.at) + '</b>'];
+  host.innerHTML = '<h3>🛡 Data Backup</h3>'
+    + '<div class="bk-state ' + state[0] + '"><b>' + state[1] + '</b><span>' + state[2] + '</span></div>'
+    + '<div class="muted small" style="margin:8px 0">A full copy of the ERP Google Sheet (all data) is kept in Google Drive → <b>SFS ERP Backups</b>. Kept: last 30 days + one per month for 12 months' + (r.count ? ' · <b>' + r.count + '</b> copies now' : '') + '.</div>'
+    + '<div class="actions" style="justify-content:flex-start"><button class="btn primary" id="bkNowBtn" onclick="bkNow()">Backup now</button>'
+    + (r.folderUrl ? '<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(r.folderUrl) + '">Open backup folder</a>' : '')
+    + (r.last && r.last.url ? '<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(r.last.url) + '">Open latest copy</a>' : '') + '</div>';
+}
+async function bkNow(){
+  const b = $('bkNowBtn'); if (b) { b.disabled = true; b.textContent = 'Making a copy…'; }
+  const r = await api('backupNow');
+  if (!r || !r.ok) toast((r && r.error) || 'Backup failed.', true); else toast('Backup made: ' + r.name);
+  bkLoad();
+}
+Object.assign(window, {bkLoad, bkNow});
