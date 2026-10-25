@@ -1536,3 +1536,10 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 @media(max-width:1000px){.ic-head{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ic-items{min-width:900px}}
 .ic-items td input{border:1px solid #d5dce8!important;border-radius:9px!important;background:#fff;box-shadow:none!important;font-size:13.5px}
 .ic-items td input:focus{border-color:var(--z,#4f46e5)!important;box-shadow:0 0 0 3px rgba(79,70,229,.15)!important;outline:none}
+
+/* ---- Settings: backup ---- */
+.bk-state{display:flex;flex-direction:column;gap:2px;border-radius:12px;padding:10px 14px;margin-top:6px;border:1px solid}
+.bk-state b{font-size:14px}.bk-state span{font-size:12.5px}
+.bk-state.ok{background:#ecf9f1;border-color:#c7ebd5;color:#166534}
+.bk-state.warn{background:#fff8e6;border-color:#f6e2b0;color:#8a5a00}
+.bk-state.bad{background:#fdecea;border-color:#f5c2bd;color:#b42318}
