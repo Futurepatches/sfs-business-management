@@ -423,7 +423,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}</div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -2161,7 +2161,7 @@ function psCsv(){
 }
 
 /* ---------- SETTINGS ---------- */
-function renderSettings(){ if (isAdmin()) bkLoad(); }
+function renderSettings(){ if (isAdmin()) bkLoad(); if (typeof offPanel === 'function') offPanel(); }
 async function refreshSource(){
   if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
@@ -5910,3 +5910,183 @@ async function bkNow(){
   bkLoad();
 }
 Object.assign(window, {bkLoad, bkNow});
+
+
+/* ============================================================
+   OFFLINE (read-only) — login and read the ERP without internet
+   - While online, every page's data is kept on this device, LOCKED with
+     the user's password (AES-GCM, key from PBKDF2 — nobody can read it
+     without the password).
+   - Without internet: sign in with the same username + password and see
+     the last saved data. Nothing can be saved / edited / deleted offline.
+   - Only on devices where "Keep offline copy" is ticked at sign-in.
+   - Offline sign-in works for 7 days after the last online use.
+   ============================================================ */
+const OFF_DAYS = 7;
+const OFF_READ = {bootstrap:1, getReports:1, getOutstanding:1, getEnquiries:1, quotationHistory:1, getSalesSummary:1, getInbox:1, getInboxMail:1,
+  stockMovement:1, getUserActivity:1, getSupplierPaymentHistory:1, getSupplierOutstanding:1, getSourceRecords:1, getPaymentHistory:1, getLedger:1,
+  quotationItemHistory:1, listUsers:1, getProfit:1, getInvoiceProfit:1, getImportCostings:1, getEnquiryMail:1, enquiryAssignees:1, backupStatus:1};
+const OFF = {key:null, meta:null, mode:false};   /* mode = signed in without internet */
+const OFF_TE = new TextEncoder(), OFF_TD = new TextDecoder();
+
+function offDb(){
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('no IndexedDB'));
+    const rq = indexedDB.open('sfs-offline', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+  });
+}
+async function offIdb(mode, fn){
+  const db = await offDb();
+  return new Promise((res, rej) => { const tx = db.transaction('kv', mode), st = tx.objectStore('kv'); let out; const r = fn(st); if (r) r.onsuccess = () => { out = r.result; }; tx.oncomplete = () => { db.close(); res(out); }; tx.onerror = () => { db.close(); rej(tx.error); }; });
+}
+const offGetRaw = k => offIdb('readonly', st => st.get(k)).catch(() => undefined);
+const offSetRaw = (k, v) => offIdb('readwrite', st => st.put(v, k)).catch(() => {});
+const offWipe = () => offIdb('readwrite', st => st.clear()).catch(() => {});
+const offB64 = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+const offUnB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function offDerive(pass, salt){
+  const base = await crypto.subtle.importKey('raw', OFF_TE.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt:salt, iterations:150000, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, true, ['encrypt', 'decrypt']);
+}
+async function offEnc(obj){ const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, OFF.key, OFF_TE.encode(JSON.stringify(obj))); return {iv:iv, ct:ct}; }
+async function offDec(rec, key){ const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:rec.iv}, key || OFF.key, rec.ct); return JSON.parse(OFF_TD.decode(pt)); }
+async function offKeyName(action, data){
+  const d = Object.assign({}, data || {}); delete d.session;
+  const h = await crypto.subtle.digest('SHA-256', OFF_TE.encode(action + '|' + JSON.stringify(d)));
+  return 'c:' + offB64(h);
+}
+async function offRememberKey(){ try { sessionStorage.sfsOffK = offB64(await crypto.subtle.exportKey('raw', OFF.key)); } catch (e) {} }
+async function offRestoreKey(){
+  try {
+    OFF.meta = await offGetRaw('meta');
+    if (!OFF.meta || !sessionStorage.sfsOffK) return;
+    OFF.key = await crypto.subtle.importKey('raw', offUnB64(sessionStorage.sfsOffK), {name:'AES-GCM'}, true, ['encrypt', 'decrypt']);
+    OFF.mode = sessionStorage.sfsOffMode === '1';
+  } catch (e) { OFF.key = null; }
+}
+
+/* after a normal (online) sign-in */
+async function offAfterLogin(username, pass, user){
+  try {
+    const keep = $('offKeep') ? $('offKeep').checked : false;
+    try { localStorage.sfsOffKeep = keep ? '1' : '0'; } catch (e) {}
+    const old = await offGetRaw('meta');
+    if (!keep) { if (old) await offWipe(); OFF.key = null; OFF.meta = null; delete sessionStorage.sfsOffK; return; }
+    if (!window.crypto || !crypto.subtle) return;
+    const same = old && String(old.username).toLowerCase() === String(username).toLowerCase();
+    if (old && !same) await offWipe();                                   /* one person's copy per device */
+    let salt = null, key = null;
+    if (same) { try { key = await offDerive(pass, old.salt); await offDec(old.check, key); salt = old.salt; } catch (e) { key = null; await offWipe(); } }   /* password changed -> start fresh */
+    if (!key) { salt = crypto.getRandomValues(new Uint8Array(16)); key = await offDerive(pass, salt); }
+    OFF.key = key;
+    const meta = {username:username, user:user, salt:salt, lastOnline:Date.now(), check:await offEnc({ok:'SFS'})};
+    OFF.meta = meta; await offSetRaw('meta', meta); await offRememberKey();
+  } catch (e) { console.warn('offline copy not set up', e); }
+}
+
+/* sign-in without internet */
+async function offLogin(username, pass){
+  const meta = await offGetRaw('meta');
+  if (!meta) return {ok:false, error:'No internet — and this device has no offline copy. (Tick “Keep an offline copy on this device” next time you sign in with internet.)'};
+  if (String(meta.username).toLowerCase() !== String(username).toLowerCase()) return {ok:false, error:'No internet — the offline copy on this device belongs to another user.'};
+  if (Date.now() - Number(meta.lastOnline || 0) > OFF_DAYS * 864e5) return {ok:false, error:'No internet — the offline copy is older than ' + OFF_DAYS + ' days. Please sign in once with internet.'};
+  let key;
+  try { key = await offDerive(pass, meta.salt); await offDec(meta.check, key); } catch (e) { return {ok:false, error:'Invalid username or password'}; }
+  OFF.key = key; OFF.meta = meta; OFF.mode = true;
+  await offRememberKey(); sessionStorage.sfsOffMode = '1';
+  return {ok:true, session:'', user:meta.user, offline:true};
+}
+
+async function offPut(action, data, res){
+  if (!OFF.key) return;
+  try {
+    const clean = Object.assign({}, res); delete clean._offline; delete clean._savedAt;
+    await offSetRaw(await offKeyName(action, data), Object.assign(await offEnc(clean), {at:Date.now()}));
+    if (OFF.meta && action === 'bootstrap') { OFF.meta.lastOnline = Date.now(); OFF.meta.user = res.user || OFF.meta.user; await offSetRaw('meta', OFF.meta); }
+  } catch (e) {}
+}
+async function offGet(action, data){
+  if (!OFF.key) return {ok:false, error:'No internet connection.'};
+  try {
+    const rec = await offGetRaw(await offKeyName(action, data));
+    if (!rec) return {ok:false, error:'Offline — this was not opened with internet on this device yet, so it is not saved here.', _offline:true};
+    const r = await offDec(rec); r._offline = true; r._savedAt = rec.at; return r;
+  } catch (e) { return {ok:false, error:'Offline copy could not be read.'}; }
+}
+function offNetDown(r){ return !navigator.onLine || (r && !r.ok && /connection error|unexpected response|failed to fetch/i.test(r.error || '')); }
+
+/* every request goes through here */
+const offOnlineApi = api;
+api = async function(action, data){
+  data = data || {};
+  const read = !!OFF_READ[action];
+  if (action === 'login') {
+    let r = navigator.onLine ? await offOnlineApi(action, data) : null;
+    if (r && r.ok) { await offAfterLogin(data.username, data.password, r.user); OFF.mode = false; delete sessionStorage.sfsOffMode; offBar(); return r; }
+    if (!r || offNetDown(r)) { r = await offLogin(data.username, data.password); offBar(); }
+    return r;
+  }
+  if (action === 'logout') { delete sessionStorage.sfsOffMode; return offOnlineApi(action, data); }
+  if (OFF.mode || !navigator.onLine) {
+    if (read) { const c = await offGet(action, data); offBar(c._savedAt); return c; }
+    return {ok:false, error:OFF.mode && navigator.onLine ? 'Internet is back — please Sign in again (Logout → Sign in) to save changes.' : 'No internet — saving / changes are not possible offline. Viewing only.'};
+  }
+  const r = await offOnlineApi(action, data);
+  if (r && r.ok && read) { offPut(action, data, r); if (action === 'bootstrap') offBar(); }
+  else if (read && OFF.key && offNetDown(r)) { const c = await offGet(action, data); if (c.ok) { offBar(c._savedAt); return c; } }
+  return r;
+};
+window.api = api;
+
+/* top bar while offline */
+let OFF_SHOWN_AT = 0;
+function offBar(at){
+  if (at) OFF_SHOWN_AT = Math.max(OFF_SHOWN_AT, at);
+  let b = $('offBar');
+  const show = (OFF.mode || !navigator.onLine) && S.user;
+  if (!show) { if (b) b.remove(); document.body.classList.remove('off-on'); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'offBar'; document.body.appendChild(b); }
+  document.body.classList.add('off-on');
+  const when = OFF_SHOWN_AT ? new Date(OFF_SHOWN_AT).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '';
+  const back = OFF.mode && navigator.onLine;
+  b.innerHTML = back ? '🌐 Internet is back. You are viewing the offline copy — <a onclick="logout()">Sign in again</a> to save changes.'
+    : '📴 Offline — viewing only' + (when ? '. Data saved on <b>' + esc(when) + '</b>' : '') + '. Saving is off until internet returns.';
+}
+window.addEventListener('online', () => offBar()); window.addEventListener('offline', () => offBar());
+
+/* login screen: "keep offline copy" tick + Settings panel */
+(function offLoginTick(){
+  const pass = $('loginPass'); if (!pass || $('offKeep')) return;
+  let keep = false; try { keep = localStorage.sfsOffKeep === '1'; } catch (e) {}
+  const lab = document.createElement('label'); lab.className = 'off-keep';
+  lab.innerHTML = '<input type="checkbox" id="offKeep"' + (keep ? ' checked' : '') + '> Keep an offline copy on this device <small>(not on shared computers)</small>';
+  const pl = pass.closest('label') || pass; pl.parentNode.insertBefore(lab, pl.nextSibling);
+})();
+async function offPanel(){
+  const host = $('offPanel'); if (!host) return;
+  const meta = await offGetRaw('meta');
+  let n = 0; try { n = await offIdb('readonly', st => st.count()); } catch (e) {}
+  host.innerHTML = '<h3>📴 Offline copy on this device</h3>'
+    + (meta ? '<div class="bk-state ok"><b>ON for ' + esc((meta.user && meta.user.name) || meta.username) + '</b><span>' + Math.max(0, n - 1) + ' saved pages · last online ' + esc(new Date(meta.lastOnline).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})) + ' · offline sign-in works for ' + OFF_DAYS + ' days after that</span></div>'
+      + '<div class="muted small" style="margin:8px 0">The copy is locked with your password. Open the pages you need once with internet so they are saved. Without internet you can sign in and view them — saving is not possible.</div>'
+      + '<div class="actions" style="justify-content:flex-start"><button class="btn danger" onclick="offRemove()">Remove offline copy from this device</button></div>'
+      : '<div class="bk-state warn"><b>OFF on this device</b><span>To turn it on: Logout, tick “Keep an offline copy on this device” and sign in.</span></div>');
+}
+async function offRemove(){
+  if (!confirm('Remove the offline copy from this device? (Nothing on the server is changed.)')) return;
+  await offWipe(); OFF.key = null; OFF.meta = null; delete sessionStorage.sfsOffK; try { localStorage.sfsOffKeep = '0'; } catch (e) {}
+  toast('Offline copy removed from this device.'); offPanel();
+}
+Object.assign(window, {offPanel, offRemove});
+
+/* restore the key after a page reload in the same session, then start */
+offRestoreKey().then(() => {
+  /* page reloaded while signed in offline: go straight back in */
+  if (OFF.mode && OFF.key && !S.session && $('app') && $('app').classList.contains('hidden')) {
+    try { S.user = JSON.parse(sessionStorage.sfsUser || 'null'); } catch (e) { S.user = null; }
+    if (S.user) enter();
+  } else if (OFF.mode && S.user) offBar();
+});

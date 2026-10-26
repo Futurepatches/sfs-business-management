@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; if (Date.now() - hidden > 30 * 864e5) ib.style.display = 'block'; });
   document.getElementById('pwaInstallX').onclick = function(ev){ ev.stopPropagation(); ib.style.display = 'none'; try { localStorage.setItem('sfsInstallHidden', String(Date.now())); } catch (e) {} };
   ib.onclick = function(){ if (!deferred) return; deferred.prompt(); deferred.userChoice.finally(function(){ deferred = null; ib.style.display = 'none'; }); };
-  window.addEventListener('appinstalled', function(){ ib.style.display = 'none'; show('SFS ERP installed ✓ — desktop / home screen par icon dekhein.', '', null); setTimeout(function(){ bar.className = ''; }, 6000); });
+  window.addEventListener('appinstalled', function(){ ib.style.display = 'none'; show('SFS ERP installed ✓ — open it from the icon on your desktop / home screen.', '', null); setTimeout(function(){ bar.className = ''; }, 6000); });
 
   /* 3. "new version" notice: checks app.js / styles.css every 5 minutes and when the window comes back */
   var base = {};
@@ -199,15 +199,13 @@ document.addEventListener('DOMContentLoaded', function(){
     Promise.all([sig('app.js'), sig('styles.css')]).then(function(v){
       var k = v.join('|'); if (!v[0] && !v[1]) return;
       if (!base.k) { base.k = k; return; }
-      if (k !== base.k) show('Naya version aaya hai.', 'Update', function(){ location.reload(); });
+      if (k !== base.k) show('A new version of SFS ERP is available.', 'Update', function(){ location.reload(); });
     });
   }
   setTimeout(check, 4000); setInterval(check, 5 * 60 * 1000);
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') check(); });
 
-  /* 4. offline / online */
-  window.addEventListener('offline', function(){ show('Internet connection nahi hai — save nahi hoga.', '', null, 'off'); });
-  window.addEventListener('online', function(){ show('Internet wapas aa gaya ✓', '', null); setTimeout(function(){ if (bar.textContent.indexOf('wapas') >= 0) bar.className = ''; }, 3000); check(); });
+  /* offline / online notices are shown by app.js (offline copy bar) */
 })();
 </script>
 

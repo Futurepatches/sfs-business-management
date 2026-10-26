@@ -36,9 +36,9 @@ input,select,textarea{font-family:inherit;font-size:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ---------- LOGIN ----------
-   login-bg.webp 1798x576 ka wide banner hai (logo + "ERP Access Portal" image ke andar hi hai).
-   Isliye ise poori screen par "cover" nahi karte (logo/products kat jate the).
-   Banner upar ki patti mein full width lagta hai (::before) aur neeche page ke rang mein fade ho jata hai. */
+   login-bg.webp is a wide 1798x576 banner (the logo and "ERP Access Portal" are part of the image).
+   So it is not stretched to "cover" the whole screen (that cut off the logo / products).
+   The banner runs full width across the top (::before) and fades into the page colour below. */
 .login-screen{
   --bn-bg:#e9eef1;
   --bn-h:clamp(230px,32vw,640px);
@@ -57,7 +57,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
   background-repeat:no-repeat;
 }
 .login-card{position:relative;z-index:2;background:rgba(255,255,255,.96);margin:auto;display:flex;flex-direction:column;justify-content:center;padding:42px 48px;width:100%;max-width:390px;min-height:auto;text-align:left;border-radius:16px;box-shadow:0 18px 55px rgba(11,27,43,.18);backdrop-filter:blur(5px)}
-/* Logo ab banner (login-bg.webp) mein hai, is liye card ke andar wala logo chhupa diya */
+/* The logo is now part of the banner (login-bg.webp), so the logo inside the card is hidden */
 .login-logo{display:none}
 .login-card .eyebrow{color:var(--brand);font-size:11px;letter-spacing:.1em;font-weight:700;margin-bottom:6px;text-transform:uppercase}
 .login-card h1{font-family:var(--font-display);font-size:30px;font-weight:700;margin:0 0 28px;color:var(--ink);letter-spacing:-.01em}
@@ -66,7 +66,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .login-card input:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 4px rgba(59,91,219,.12)}
 .login-card .muted{color:var(--bad);font-size:12.5px;min-height:16px;margin:-6px 0 14px;font-weight:500}
 .login-card .btn.full{width:100%;margin-top:6px;padding:12px}
-/* Mobile: chhota banner (sirf logo wala left hissa), card banner ke neeche, poori screen nahi dhakta */
+/* Mobile: smaller banner (only the logo part on the left), card below the banner, does not cover the whole screen */
 @media (max-width:760px){
   .login-screen{display:block;--bn-h:230px;padding-bottom:24px}
   .login-screen::before{
@@ -1564,3 +1564,12 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 #qsfOpen label,#qsfLost label{display:block;font-weight:700;font-size:13px;color:#334155}
 #qsfOpen input,#qsfLost input{display:block;width:100%;margin-top:6px;border:1px solid #d5dce8;border-radius:10px;padding:10px 12px;font:inherit;font-weight:500;background:#fff}
 #qsfOpen input:focus,#qsfLost input:focus{outline:none;border-color:#0369a1;box-shadow:0 0 0 3px rgba(3,105,161,.15)}
+
+/* ---- offline (read-only) ---- */
+#offBar{position:fixed;left:0;right:0;top:0;z-index:2147482999;background:#7a2e0e;color:#fff;font:600 13px/1.35 Inter,Arial,sans-serif;padding:8px 16px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#offBar a{color:#fff;text-decoration:underline;cursor:pointer;font-weight:800}
+body.off-on{padding-top:36px}
+.off-keep{display:flex!important;align-items:center;gap:8px;font-size:13px!important;font-weight:600;color:#334155;margin:4px 0 6px;cursor:pointer;flex-direction:row!important}
+.off-keep input{width:auto!important;margin:0!important}
+.off-keep small{color:#94a3b8;font-weight:500}
+@media print{#offBar{display:none!important}body.off-on{padding-top:0}}

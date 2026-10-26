@@ -3,7 +3,7 @@
      FRESH from the internet first; the saved copy is used only when there is no internet.
    - Pictures (logo, backgrounds, icons) are kept and refreshed in the background.
    - Data (Google Apps Script) is never touched or stored here. */
-const CACHE = 'sfs-erp-v1';
+const CACHE = 'sfs-erp-v2';
 const CORE = ['./', 'app.js', 'styles.css', 'config.js', 'logo.png', 'icon-192.png'];
 
 self.addEventListener('install', e => {
@@ -24,7 +24,7 @@ function offlinePage(req) {
   if (req.mode !== 'navigate') return Response.error();
   return new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SFS ERP</title>'
     + '<body style="font-family:Arial,sans-serif;background:#eef3fb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#1f3b63;text-align:center">'
-    + '<div><div style="font-size:42px">📡</div><h2>Internet connection nahi hai</h2><p style="color:#64748b">SFS ERP ko internet chahiye. Connection aate hi dobara kholein.</p>'
+    + '<div><div style="font-size:42px">📡</div><h2>No internet connection</h2><p style="color:#64748b">SFS ERP could not be opened. Please check the internet connection and try again.</p>'
     + '<button onclick="location.reload()" style="background:#1f3b63;color:#fff;border:0;border-radius:10px;padding:10px 18px;font-size:15px">Try again</button></div>',
     {headers: {'Content-Type': 'text/html; charset=utf-8'}});
 }
