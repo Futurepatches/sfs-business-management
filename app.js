@@ -2652,7 +2652,7 @@ function pickQuotationCustomer(){const c=findCust($('qtcustomer').value);if(!c){
 
 function addQuotationLine(){ QTL.push({model:'',desc:'',itemRemarks:'',make:'',qty:'',unit:'Pcs',rate:'',rateAuto:true,deliveryStatus:'Pending',history:null}); renderQuotationLines(); }
 function removeQuotationLine(i){ QTL.splice(i,1); if(!QTL.length)QTL.push({model:'',make:'',qty:'',unit:'Pcs',rate:'',rateAuto:true,deliveryStatus:'Pending',history:null}); renderQuotationLines(); updateQuotationTotal(); }
-function quotationModelChanged(i){ const x=QTL[i],p=findProd(x.model); if(p){x.unit=p.Unit||'Pcs'; if(!x.make)x.make=p.Brand||''; const base=Number(p['Sale Price']||0); if(base>0){x.rate=quotationAdjustedRate(base);x.rateAuto=true;} } x.history=null; renderQuotationLines(); updateQuotationTotal(); loadQuotationItemHistory(i); }
+function quotationModelChanged(i){ const x=QTL[i],p=findProd(x.model); qtAutoPhoto(x,p); if(p){x.unit=p.Unit||'Pcs'; if(!x.make)x.make=p.Brand||''; const base=Number(p['Sale Price']||0); if(base>0){x.rate=quotationAdjustedRate(base);x.rateAuto=true;} } x.history=null; renderQuotationLines(); updateQuotationTotal(); loadQuotationItemHistory(i); }
 async function loadQuotationItemHistory(i){const x=QTL[i];if(!x||!x.model)return;const model=String(x.model||'').trim(),customer=String($('qtcustomer')?.value||'').trim(),c=findCust(customer);if(!customer||!c){x.history=null;renderQuotationLines();return;}const r=await api('quotationItemHistory',{customerId:c['Customer ID']||'',customer:customer,model:model});if(QTL[i]!==x||String(x.model||'').trim()!==model||String($('qtcustomer')?.value||'').trim()!==customer)return;x.history=r&&r.ok?r.history:null;renderQuotationLines();}
 function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=x.history?'<div class="muted small" style="margin-top:4px;color:#315b86">Previous sale: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+' · Rate '+money(x.history.rate)+'</div>':''; return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
 function updateQuotationTotal(){ const gross=QTL.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0); const pct=Math.min(100,Math.max(0,Number($('qtdiscount')?.value||0))); const disc=gross*pct/100; if($('qttotal'))$('qttotal').textContent=pct>0?('SUB TOTAL: '+money(gross)+'   |   LESS '+pct+'% DISCOUNT: '+money(disc)+'   |   TOTAL: '+money(gross-disc)):('TOTAL: '+money(gross)); }
@@ -4949,7 +4949,8 @@ Object.assign(window, {enquiryForm, saveEnquiry, enqfSave, enqfPickCustomer, enq
 
 /* ============================================================
    QUOTATION ITEM PICTURES (optional, one per item)
-   Paste (click the box, Ctrl+V), choose a file, or use the product's own photo.
+   A product's own photo is added automatically when the product is chosen (× removes it).
+   Or paste (click the box, Ctrl+V) / choose another picture.
    No picture = nothing changes on the quotation.
    ============================================================ */
 function qtDriveThumb(u){
@@ -4986,7 +4987,7 @@ async function qtPhotoSet(i, file){
   try {
     const r = await qtPhotoPrep(file);
     if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
-    x.imageNew = {name:r.name, type:r.type, data:r.data}; x.imagePreview = r.preview; x.image = '';
+    x.imageNew = {name:r.name, type:r.type, data:r.data}; x.imagePreview = r.preview; x.image = ''; x.imageAuto = false;
     renderQuotationLines();
   } catch (e) { toast(e.message, true); }
 }
@@ -4998,12 +4999,19 @@ function qtPhotoPick(i){
 function qtPhotoUseProduct(i){
   const x = QTL[i], p = x && findProd(x.model); if (!p || !p['Product Image']) return;
   if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
-  x.image = p['Product Image']; x.imageNew = null; x.imagePreview = ''; renderQuotationLines();
+  x.image = p['Product Image']; x.imageNew = null; x.imagePreview = ''; x.imageAuto = true; x.noAutoImage = false; renderQuotationLines();
 }
 function qtPhotoRemove(i){
   const x = QTL[i]; if (!x) return;
   if (x.imagePreview) URL.revokeObjectURL(x.imagePreview);
-  x.image = ''; x.imageNew = null; x.imagePreview = ''; renderQuotationLines();
+  x.image = ''; x.imageNew = null; x.imagePreview = ''; x.imageAuto = false; x.noAutoImage = true; renderQuotationLines();
+}
+/* the product's own photo is put on the quotation line automatically (it can be removed with ×) */
+function qtAutoPhoto(x, p){
+  if (!x) return;
+  const pic = p && p['Product Image'] ? String(p['Product Image']).trim() : '';
+  if (x.imageAuto && !x.imageNew) { x.image = pic; x.imageAuto = !!pic; return; }   /* model changed: follow the new product */
+  if (pic && !x.image && !x.imageNew && !x.noAutoImage) { x.image = pic; x.imageAuto = true; }
 }
 document.addEventListener('paste', function(e){
   const box = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.qt-photo[data-i]') : null;
