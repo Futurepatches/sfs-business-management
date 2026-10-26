@@ -31,7 +31,8 @@ const ALL_MODULES = [
   {id:'enquiries',label:'Enquiries'},
   {id:'imports', label:'Imports (confidential costing)'},
   {id:'stockvalue', label:'Stock Value (special permission — dashboard)'},
-  {id:'setstock', label:'Set Stock (special permission — correct product quantity)'}
+  {id:'setstock', label:'Set Stock (special permission — correct product quantity)'},
+  {id:'purchase', label:'Purchase Orders (foreign orders to suppliers)'}
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -77,7 +78,7 @@ function nav(){
     {id:'products',  label:'Products',    mod:'products', section:'Inventory'},
     {id:'inward',    label:'Inward',      mod:'products', section:'Inventory'},
     {id:'imports',   label:'Imports',     mod:'imports',  section:'Inventory'},
-    {id:'purchaseorders', label:'Purchase Orders', mod:'imports', section:'Inventory'},
+    {id:'purchaseorders', label:'Purchase Orders', mod:'purchase', section:'Inventory'},
     {id:'dc',        label:'New Delivery Challan', mod:'sales', section:'Sales'},
     {id:'dchistory', label:'DC History',  mod:'sales',    section:'Sales'},
     {id:'invoices',  label:'New Invoice', mod:'sales',    section:'Sales'},
@@ -379,7 +380,7 @@ function showPage(p, btn){
   $('pageTitle').textContent = label;
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
-  if ((p === 'imports' || p === 'purchaseorders') && !hasMod('imports')) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
+  if ((p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
@@ -6296,7 +6297,7 @@ offRestoreKey().then(() => {
 
 /* ============================================================
    PURCHASE ORDERS (foreign orders) — list, form, print in the SFS format
-   Admin and users with the "Imports" module only.
+   Admin and users given the "Purchase Orders" permission only.
    ============================================================ */
 const PO_ST = ['Draft', 'Sent', 'Confirmed', 'Ready', 'Shipped', 'Arrived', 'Closed', 'Cancelled'];
 const PO_ST_INFO = {Draft:'not sent yet', Sent:'sent to the supplier', Confirmed:'supplier confirmed / PI received', Ready:'goods ready at the supplier',
