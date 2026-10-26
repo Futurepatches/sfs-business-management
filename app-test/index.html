@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="../">
+<meta name="theme-color" content="#1f3b63">
+<link rel="manifest" href="app-test/manifest.webmanifest">
+<link rel="apple-touch-icon" href="app-test/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SFS ERP">
+<title>SFS ERP (Test)</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+<style id="sfsProgressStyles">
+  /* --- SFS top loading bar (added) --- */
+  #sfsProgress{position:fixed;left:0;right:0;top:0;height:3px;z-index:2147483000;
+    pointer-events:none;opacity:0;transition:opacity .25s ease}
+  #sfsProgress.sfs-active{opacity:1}
+  #sfsProgressBar{position:relative;height:100%;width:0;border-radius:0 3px 3px 0;
+    background:linear-gradient(90deg,#3B5BDB 0%,#5B7CFA 45%,#10B981 100%);
+    box-shadow:0 0 8px rgba(59,91,219,.55),0 0 14px rgba(16,185,129,.35);
+    transition:width .25s ease}
+  #sfsProgressBar::after{content:"";position:absolute;right:0;top:0;bottom:0;width:90px;
+    background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.8));
+    border-radius:0 3px 3px 0;opacity:.9}
+  @media print{#sfsProgress{display:none!important}}
+  @media (prefers-reduced-motion:reduce){#sfsProgressBar{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- --- SFS top loading bar (added) --- -->
+<div id="sfsProgress" role="progressbar" aria-label="Loading"><div id="sfsProgressBar"></div></div>
+
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login" class="login-screen">
+  <div class="login-card">
+    <img src="logo.png" alt="SFS" class="login-logo">
+    <div class="eyebrow">Standard Fluid Systems</div>
+    <h1>Business Management</h1>
+
+    <label>Username
+      <input id="loginUser" type="text" autocomplete="username" placeholder="admin">
+    </label>
+
+    <label>Password
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+    </label>
+
+    <!-- The captcha has been removed. This hidden field only exists for compatibility with the older app.js (the user never sees it). -->
+    <input id="captchaAnswer" type="hidden">
+
+    <div id="loginError" class="muted"></div>
+
+    <button class="btn primary full" onclick="login()">Sign In</button>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app" class="hidden">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="brand">
+      <img src="logo.png" alt="SFS">
+      <div>
+        <small>Business Management</small>
+      </div>
+      <button class="collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="userbox">
+      <b id="who">—</b>
+      <small id="role">—</small>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <header>
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p>Inventory • Purchases • Sales • Documents</p>
+      </div>
+      <div class="header-actions">
+        <span id="busy" class="busy hidden">Working…</span>
+        <button class="btn" onclick="refresh()">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div id="content"></div>
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modalTitle">—</h3>
+      <button onclick="closeModal()" aria-label="Close">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div id="toastHost" class="toast-host"></div>
+
+<!-- ============ PRINT AREA ============ -->
+<div id="printArea"></div>
+
+<!-- ============ SCRIPTS ============ -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+/* ---------- Sidebar collapse toggle ---------- */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try { localStorage.setItem('sfsSidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+}
+(function(){
+  try {
+    if (localStorage.getItem('sfsSidebarCollapsed') === '1') {
+      document.getElementById('sidebar')?.classList.add('collapsed');
+    }
+  } catch(e) {}
+})();
+
+/* ---------- Captcha compatibility ----------
+   If the older captcha check still exists in app.js, this quietly fills in the correct answer,
+   so that login works with just a username + password. Once the captcha is removed from app.js, this does nothing. */
+(function(){
+  var original = window.login;
+  if (typeof original !== 'function') return;
+  window.login = function(){
+    try {
+      var a = document.getElementById('captchaAnswer');
+      if (a && typeof SFS_CAPTCHA_ANSWER !== 'undefined') a.value = SFS_CAPTCHA_ANSWER;
+    } catch(e) {}
+    return original.apply(this, arguments);
+  };
+})();
+
+/* ---------- Enter key on login fields ---------- */
+document.addEventListener('DOMContentLoaded', function(){
+  ['loginUser','loginPass'].forEach(function(id){
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); login(); }
+    });
+  });
+});
+</script>
+
+<!-- ============ TEST APP: install button, update notice, offline notice ============ -->
+<style>
+#pwaBar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2147483001;display:none;align-items:center;gap:12px;background:#1f3b63;color:#fff;border-radius:14px;padding:10px 12px 10px 16px;box-shadow:0 14px 34px rgba(15,35,70,.35);font:14px/1.3 Inter,Arial,sans-serif;max-width:calc(100vw - 32px)}
+#pwaBar.show{display:flex}#pwaBar.off{background:#b42318}
+#pwaBar button{border:0;border-radius:10px;padding:8px 14px;font-weight:700;cursor:pointer;background:#fff;color:#1f3b63;white-space:nowrap}
+#pwaBar .x{background:transparent;color:#fff;opacity:.7;padding:6px 8px}
+#pwaTest{position:fixed;right:10px;top:10px;z-index:2147483001;background:#f59e0b;color:#fff;font:800 10px/1 Arial,sans-serif;letter-spacing:.08em;padding:4px 7px;border-radius:6px;pointer-events:none}
+#pwaInstall{position:fixed;right:16px;bottom:18px;z-index:2147483000;display:none;border:0;border-radius:99px;padding:11px 18px;font:700 14px Inter,Arial,sans-serif;background:#1f3b63;color:#fff;box-shadow:0 10px 26px rgba(15,35,70,.3);cursor:pointer}
+@media print{#pwaBar,#pwaTest,#pwaInstall{display:none!important}}
+</style>
+<div id="pwaTest">TEST APP</div>
+<button id="pwaInstall" type="button">⬇ Install SFS ERP</button>
+<div id="pwaBar"><span id="pwaMsg"></span><button id="pwaBtn" type="button"></button><button class="x" type="button" onclick="document.getElementById('pwaBar').className=''">✕</button></div>
+<script>
+(function(){
+  var bar = document.getElementById('pwaBar'), msg = document.getElementById('pwaMsg'), btn = document.getElementById('pwaBtn');
+  function show(text, label, fn, cls){ msg.textContent = text; btn.textContent = label; btn.style.display = label ? '' : 'none'; btn.onclick = fn; bar.className = 'show' + (cls ? ' ' + cls : ''); }
+
+  /* 1. service worker (makes it installable; code always fresh from the internet) */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('app-test/sw.js', {scope: 'app-test/'}).catch(function(){});
+
+  /* 2. install button (Chrome / Edge) */
+  var deferred = null, ib = document.getElementById('pwaInstall');
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; ib.style.display = 'block'; });
+  ib.onclick = function(){ if (!deferred) return; deferred.prompt(); deferred.userChoice.finally(function(){ deferred = null; ib.style.display = 'none'; }); };
+  window.addEventListener('appinstalled', function(){ ib.style.display = 'none'; show('SFS ERP installed ✓ — desktop / home screen par icon dekhein.', '', null); setTimeout(function(){ bar.className = ''; }, 6000); });
+
+  /* 3. "new version" notice: checks app.js / styles.css every 5 minutes and when the window comes back */
+  var base = {};
+  function sig(u){ return fetch(u, {method:'HEAD', cache:'no-store'}).then(function(r){ return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified') || r.headers.get('content-length') || '') : ''; }).catch(function(){ return ''; }); }
+  function check(){
+    if (!navigator.onLine) return;
+    Promise.all([sig('app.js'), sig('styles.css')]).then(function(v){
+      var k = v.join('|'); if (!v[0] && !v[1]) return;
+      if (!base.k) { base.k = k; return; }
+      if (k !== base.k) show('Naya version aaya hai.', 'Update', function(){ location.reload(); });
+    });
+  }
+  setTimeout(check, 4000); setInterval(check, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') check(); });
+
+  /* 4. offline / online */
+  window.addEventListener('offline', function(){ show('Internet connection nahi hai — save nahi hoga.', '', null, 'off'); });
+  window.addEventListener('online', function(){ show('Internet wapas aa gaya ✓', '', null); setTimeout(function(){ if (bar.textContent.indexOf('wapas') >= 0) bar.className = ''; }, 3000); check(); });
+})();
+</script>
+
+</body>
+</html>
