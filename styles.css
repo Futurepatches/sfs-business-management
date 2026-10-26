@@ -1543,3 +1543,24 @@ aside#sidebar.collapsed .brand .collapse-btn{position:static;margin:4px auto 0}
 .bk-state.ok{background:#ecf9f1;border-color:#c7ebd5;color:#166534}
 .bk-state.warn{background:#fff8e6;border-color:#f6e2b0;color:#8a5a00}
 .bk-state.bad{background:#fdecea;border-color:#f5c2bd;color:#b42318}
+
+/* ---- quotation status badges ---- */
+.badge.qs{border-radius:99px;font-weight:700;padding:3px 10px;border:1px solid transparent}
+.badge.qs-sent{background:#e0f2fe;color:#0369a1;border-color:#bae6fd}
+.badge.qs-won{background:#e8f6ee;color:#15803d;border-color:#c7ebd5}
+.badge.qs-lost{background:#fdecea;color:#c8102e;border-color:#f5c2bd}
+.badge.qs-wait{background:#fff4e0;color:#b45309;border-color:#f8e2bb}
+.qsf-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.qsf-opt{border:1.5px solid #e3e8f0;border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:1px;position:relative}
+.qsf-opt input{position:absolute;opacity:0}
+.qsf-opt b{font-size:14px;color:#0369a1}.qsf-opt span{font-size:11.5px;color:#64748b}
+.qsf-opt.won b{color:#15803d}.qsf-opt.lost b{color:#c8102e}
+.qsf-opt:has(input:checked){border-color:#0369a1;background:#f0f8ff}
+.qsf-opt.won:has(input:checked){border-color:#15803d;background:#effaf3}
+.qsf-opt.lost:has(input:checked){border-color:#c8102e;background:#fff3f2}
+.qsf-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qsf-chips button{border:1px solid #e3e8f0;background:#fff;border-radius:99px;padding:4px 10px;font-size:12px;color:#334155;cursor:pointer}
+.qsf-chips button:hover{background:#f1f5fb;border-color:#c9d6e8}
+#qsfOpen label,#qsfLost label{display:block;font-weight:700;font-size:13px;color:#334155}
+#qsfOpen input,#qsfLost input{display:block;width:100%;margin-top:6px;border:1px solid #d5dce8;border-radius:10px;padding:10px 12px;font:inherit;font-weight:500;background:#fff}
+#qsfOpen input:focus,#qsfLost input:focus{outline:none;border-color:#0369a1;box-shadow:0 0 0 3px rgba(3,105,161,.15)}
