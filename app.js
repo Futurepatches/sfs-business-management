@@ -2659,7 +2659,7 @@ function addQuotationLine(){ QTL.push({model:'',desc:'',itemRemarks:'',make:'',q
 function removeQuotationLine(i){ QTL.splice(i,1); if(!QTL.length)QTL.push({model:'',make:'',qty:'',unit:'Pcs',rate:'',rateAuto:true,deliveryStatus:'Pending',history:null}); renderQuotationLines(); updateQuotationTotal(); }
 function quotationModelChanged(i){ const x=QTL[i],p=findProd(x.model); qtAutoPhoto(x,p); if(p){x.unit=p.Unit||'Pcs'; if(!x.make)x.make=p.Brand||''; const base=Number(p['Sale Price']||0); if(base>0){x.rate=quotationAdjustedRate(base);x.rateAuto=true;} } x.history=null; renderQuotationLines(); updateQuotationTotal(); loadQuotationItemHistory(i); }
 async function loadQuotationItemHistory(i){const x=QTL[i];if(!x||!x.model)return;const model=String(x.model||'').trim(),customer=String($('qtcustomer')?.value||'').trim(),c=findCust(customer);if(!customer||!c){x.history=null;renderQuotationLines();return;}const r=await api('quotationItemHistory',{customerId:c['Customer ID']||'',customer:customer,model:model});if(QTL[i]!==x||String(x.model||'').trim()!==model||String($('qtcustomer')?.value||'').trim()!==customer)return;x.history=r&&r.ok?r.history:null;renderQuotationLines();}
-function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=x.history?'<div class="muted small" style="margin-top:4px;color:#315b86">Previous sale: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+' · Rate '+money(x.history.rate)+'</div>':''; return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
+function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=x.history?'<div class="muted small" style="margin-top:4px;color:#315b86">Previous sale: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+' · Rate '+money(x.history.rate)+'</div>':''; return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+qtSrcCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal();qtSrcMargin('+i+')"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
 function updateQuotationTotal(){ const gross=QTL.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0); const pct=Math.min(100,Math.max(0,Number($('qtdiscount')?.value||0))); const disc=gross*pct/100; if($('qttotal'))$('qttotal').textContent=pct>0?('SUB TOTAL: '+money(gross)+'   |   LESS '+pct+'% DISCOUNT: '+money(disc)+'   |   TOTAL: '+money(gross-disc)):('TOTAL: '+money(gross)); }
 async function saveQuotation(){
   if(window.SFS_QT_SAVING)return;
@@ -2692,7 +2692,7 @@ async function loadQTHistory(){ const r=await api('quotationHistory'); if(!r.ok)
 /* quotation status: stored as Pending / Won / Lost; "Pending" is shown as "Sent to client" (made and sent, waiting for the customer) */
 function qtStatusLabel(s, stage){ s = s || 'Pending'; return s === 'Pending' ? (String(stage || '').trim() || 'Sent to client') : s === 'Won' ? 'Won — PO received' : s; }
 function statusBadge(s, stage){ s = s || 'Pending'; const st = String(stage || '').trim(), sent = s === 'Pending' && (!st || /^sent/i.test(st)); const c = s === 'Won' ? 'qs-won' : s === 'Lost' ? 'qs-lost' : sent ? 'qs-sent' : 'qs-wait'; return '<span class="badge qs ' + c + '" style="font-size:11px">' + (s === 'Won' ? '✓ ' : sent ? '✉ ' : s === 'Pending' ? '⏳ ' : '') + esc(qtStatusLabel(s, stage)) + '</span>'; }
-function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); fillSelect('qtCust',QT_CACHE.map(d=>d.customer),'All Customers'); const rng=periodRange('qtPer'),cust=($('qtCust')||{}).value||'',st=($('qtSt')||{}).value||''; const rows=QT_CACHE.filter(d=>(!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q)||norm(qtStatusLabel(d.status,d.stage)).includes(q))&&inPeriod(d.date,rng)&&(!cust||d.customer===cust)&&(!st||(d.status||'Pending')===st)); const qInfo=$('qtInfo'); if(qInfo)qInfo.textContent='Showing '+rows.length+' of '+QT_CACHE.length+' quotation(s) • Total '+money(rows.reduce((a,d)=>a+(+d.subtotal||0),0)); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status,d.stage)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="editQuotation(\''+encA(d.no)+'\')">Edit</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\',\''+encA(d.stage||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
+function filterQTHistory(){ const h=$('qtrows'); if(!h)return; const q=norm($('qts')?.value||''); fillSelect('qtCust',QT_CACHE.map(d=>d.customer),'All Customers'); const rng=periodRange('qtPer'),cust=($('qtCust')||{}).value||'',st=($('qtSt')||{}).value||''; const rows=QT_CACHE.filter(d=>(!q||norm(d.no).includes(q)||norm(d.customer).includes(q)||norm(d.ref||d.po).includes(q)||norm(d.enquiryId).includes(q)||norm(qtStatusLabel(d.status,d.stage)).includes(q)||(d.items||[]).some(x=>norm(x.srcName).includes(q)))&&inPeriod(d.date,rng)&&(!cust||d.customer===cust)&&(!st||(d.status||'Pending')===st)); const qInfo=$('qtInfo'); if(qInfo)qInfo.textContent='Showing '+rows.length+' of '+QT_CACHE.length+' quotation(s) • Total '+money(rows.reduce((a,d)=>a+(+d.subtotal||0),0)); h.innerHTML=rows.map(d=>'<tr><td><b>'+esc(d.no)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+esc(d.customer)+'</td><td>'+esc(d.po)+'</td><td>'+money(d.subtotal)+'</td><td>'+statusBadge(d.status,d.stage)+'</td><td><button class="btn" onclick="viewQuotation(\''+encA(d.no)+'\')">View / Print</button><button class="btn small" onclick="editQuotation(\''+encA(d.no)+'\')">Edit</button><button class="btn small'+((d.items||[]).some(x=>x.srcName||x.srcRate)?' qt-src-has':'')+'" title="Where each price came from (internal)" onclick="qtSourcesView(\''+encA(d.no)+'\')">🔒 Source</button><button class="btn small" onclick="quotationStatusForm(\''+encA(d.no)+'\',\''+encA(d.status||'Pending')+'\',\''+encA(d.lossReason||'')+'\',\''+encA(d.stage||'')+'\')">Status</button></td></tr>').join('')||'<tr><td colspan="7">No quotations found.</td></tr>'; }
 function viewQuotation(en){ const no=decodeURIComponent(en); const d=QT_CACHE.find(x=>x.no===no); if(d)printQuotation(d); }
 
 let REVISION_QUOTATION=null;
@@ -2721,7 +2721,7 @@ function editQuotation(en){
     if($('qtref'))$('qtref').value=d.ref||d.po||'';
     if($('qtrefDate'))$('qtrefDate').value=toInputDate(d.poDate);
     if($('qtpaymentTerms'))$('qtpaymentTerms').value=d.paymentTerms||'20 Days';
-    QTL=(d.items||[]).map(x=>({model:(x.model==='-'?'':(x.model||'')),desc:x.desc||'',itemRemarks:x.itemRemarks||'',make:x.make||'',qty:x.qty||'',unit:x.unit||'Pcs',rate:x.rate||'',rateAuto:false,deliveryStatus:x.deliveryStatus||'Pending',history:null,image:x.image||''}));
+    QTL=(d.items||[]).map(x=>({model:(x.model==='-'?'':(x.model||'')),desc:x.desc||'',itemRemarks:x.itemRemarks||'',make:x.make||'',qty:x.qty||'',unit:x.unit||'Pcs',rate:x.rate||'',rateAuto:false,deliveryStatus:x.deliveryStatus||'Pending',history:null,image:x.image||'',srcName:x.srcName||'',srcRate:x.srcRate||'',srcNote:x.srcNote||''}));
     renderQuotationLines(); updateQuotationTotal();
     QTL.forEach((x,i)=>{ if(x.model) loadQuotationItemHistory(i); });
     if($('qtsavebtn'))$('qtsavebtn').textContent='Update Quotation';
@@ -6552,3 +6552,60 @@ function poPrint(idEnc, withPending){
   printDoc(body, '<span></span>', o.no);   /* the footer is part of page 1 (above) */
 }
 Object.assign(window, {renderPurchaseOrders, poRenderList, poNew, poEdit, poCopy, poBack, poSet, poSupplierPicked, poItemModel, poAddItem, poPasteForm, poPasteApply, poSave, poStatusForm, poStatusSave, poPrint, poTotals, poRenderItems, poBlankItem, PO});
+
+
+/* ============================================================
+   QUOTATION — PRICE SOURCE (internal, never printed)
+   For every item: where the price came from (supplier / local market / stock),
+   the cost rate there, and a note. Saved with the quotation and shown in
+   Quotation History → 🔒 Source.
+   ============================================================ */
+function qtSrcList(){
+  const set = new Set();
+  (S.suppliers || []).forEach(s => { if (s['Supplier Name']) set.add(String(s['Supplier Name']).trim()); });
+  (typeof QT_CACHE !== 'undefined' ? QT_CACHE : []).forEach(d => (d.items || []).forEach(x => { if (x.srcName) set.add(String(x.srcName).trim()); }));
+  ['Stock (own)', 'Local market'].forEach(x => set.add(x));
+  let dl = document.getElementById('qtSrcList');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'qtSrcList'; document.body.appendChild(dl); }
+  dl.innerHTML = Array.from(set).sort().map(v => '<option value="' + esc(v) + '">').join('');
+}
+function qtSrcCell(x, i){
+  if (i === 0) setTimeout(qtSrcList, 0);
+  const open = x.srcOpen || x.srcName || x.srcRate || x.srcNote;
+  if (!open) return '<div class="qt-src-add"><a class="model-link" onmousedown="event.preventDefault()" onclick="qtSrcOpen(' + i + ')">🔒 Add price source</a> <span class="muted small">(internal — not printed)</span></div>';
+  return '<div class="qt-src"><div class="qt-src-h">🔒 Price source <span>internal — not printed</span></div><div class="qt-src-row">'
+    + '<input list="qtSrcList" placeholder="Where from? e.g. Univer Italy / ABC Traders" value="' + esc(x.srcName || '') + '" oninput="QTL[' + i + '].srcName=this.value">'
+    + '<input type="number" min="0" step="any" placeholder="Cost rate (Rs.)" value="' + esc(x.srcRate || '') + '" oninput="QTL[' + i + '].srcRate=this.value;qtSrcMargin(' + i + ')">'
+    + '<input placeholder="Note (e.g. EUR 35 @ 320 + 30%)" value="' + esc(x.srcNote || '') + '" oninput="QTL[' + i + '].srcNote=this.value"></div>'
+    + '<div class="qt-src-m" id="qtsm' + i + '">' + qtSrcMarginText(x) + '</div></div>';
+}
+function qtSrcOpen(i){
+  if (!QTL[i]) return; QTL[i].srcOpen = true; renderQuotationLines();
+  setTimeout(() => { const rows = document.querySelectorAll('#qtlines > tr'); const e = rows[i] && rows[i].querySelector('.qt-src-row input'); if (e) e.focus(); }, 30);
+}
+function qtSrcMarginText(x){
+  const c = Number(x.srcRate) || 0, r = Number(x.rate) || 0;
+  if (!(c > 0) || !(r > 0)) return '';
+  const m = (r - c) / r * 100;
+  return '<span class="' + (m < 0 ? 'dn' : m < 10 ? 'amb' : 'up') + '">Margin ' + m.toFixed(1) + '% · profit Rs. ' + money((r - c) * (Number(x.qty) || 0)) + '</span>';
+}
+function qtSrcMargin(i){ const e = $('qtsm' + i), x = QTL[i]; if (e && x) e.innerHTML = qtSrcMarginText(x); }
+function qtSourcesView(en){
+  const no = decodeURIComponent(en), d = (QT_CACHE || []).find(x => x.no === no); if (!d) return;
+  const items = (d.items || []);
+  let cost = 0, sale = 0, known = 0;
+  const rows = items.map((x, k) => {
+    const q = Number(x.qty) || 0, r = Number(x.rate) || 0, c = Number(x.srcRate) || 0;
+    if (c > 0) { cost += c * q; sale += r * q; known++; }
+    const m = c > 0 && r > 0 ? (r - c) / r * 100 : null;
+    return '<tr><td class="muted">' + (k + 1) + '</td><td><b>' + esc(x.model && x.model !== '-' ? x.model : '') + '</b><div class="muted small">' + esc(x.desc || '') + '</div></td><td class="r">' + esc(q) + '</td><td class="r">' + money(r) + '</td>'
+      + '<td>' + (x.srcName ? esc(x.srcName) : '<span class="muted">—</span>') + (x.srcNote ? '<div class="muted small">' + esc(x.srcNote) + '</div>' : '') + '</td>'
+      + '<td class="r">' + (c > 0 ? money(c) : '<span class="muted">—</span>') + '</td><td class="r">' + (m === null ? '' : '<b class="' + (m < 0 ? 'dn' : m < 10 ? 'amb' : 'up') + '">' + m.toFixed(1) + '%</b>') + '</td></tr>';
+  }).join('');
+  modal('🔒 Price source — ' + d.no + ' · ' + (d.customer || ''),
+    '<div class="muted small" style="margin-bottom:8px">Internal information — it is never printed on the quotation or the PDF.</div>'
+    + '<div class="table-wrap"><table class="qt-src-tbl"><thead><tr><th>#</th><th>Item</th><th class="r">Qty</th><th class="r">Quoted rate</th><th>Source</th><th class="r">Source rate</th><th class="r">Margin</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + (known ? '<div class="qt-src-sum">Items with a source rate: <b>' + known + ' of ' + items.length + '</b> · cost Rs. <b>' + money(cost) + '</b> · quoted Rs. <b>' + money(sale) + '</b> · profit <b class="' + (sale - cost < 0 ? 'dn' : 'up') + '">Rs. ' + money(sale - cost) + (sale ? ' (' + ((sale - cost) / sale * 100).toFixed(1) + '%)' : '') + '</b></div>' : '<div class="muted" style="margin-top:8px">No price source was written for this quotation. Use Edit to add it.</div>')
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="closeModal();editQuotation(\'' + encA(d.no) + '\')">Edit</button></div>');
+}
+Object.assign(window, {qtSrcCell, qtSrcMargin, qtSourcesView, qtSrcList, qtSrcOpen});
