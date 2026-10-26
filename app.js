@@ -2997,11 +2997,13 @@ function printDoc(body, footerHtml, fileName){
     .print-company b{font-size:12px}
     @media print{
       @page{size:A4;margin:0}
-      html,body{margin:0!important;padding:0!important;width:210mm;height:297mm}
-      body *{visibility:hidden!important}
-      #printArea,#printArea *{visibility:visible!important}
-      #printArea{position:absolute!important;left:0;top:0;width:210mm!important}
-      .print-doc{padding:8mm 14mm 14mm;min-height:275mm}
+      /* only the document is printed: everything else is removed from the page (not just made invisible),
+         so the rest of the ERP screen can never add extra / blank pages */
+      html,body{margin:0!important;padding:0!important;width:210mm!important;height:auto!important;min-height:0!important;overflow:visible!important;background:#fff!important}
+      body > *:not(#printArea){display:none!important}
+      #printArea{display:block!important;position:static!important;width:210mm!important;margin:0!important;padding:0!important}
+      .print-doc{padding:8mm 14mm 14mm;min-height:275mm;height:auto}   /* same look as before: footer at the bottom of page 1 */
+      .doc-items tr,.doc-totals tr,.doc-endblock,.print-company{break-inside:avoid;page-break-inside:avoid}
     }
   </style>
   <div class="print-doc">
