@@ -1573,3 +1573,9 @@ body.off-on{padding-top:36px}
 .off-keep input{width:auto!important;margin:0!important}
 .off-keep small{color:#94a3b8;font-weight:500}
 @media print{#offBar{display:none!important}body.off-on{padding-top:0}}
+
+/* ---- offline outbox badge ---- */
+#offOutbox{position:fixed;right:16px;bottom:18px;z-index:2147482998;border:0;border-radius:99px;padding:10px 16px;font:700 13px Inter,Arial,sans-serif;background:#b45309;color:#fff;box-shadow:0 10px 24px rgba(15,35,70,.25);cursor:pointer}
+#offOutbox.err{background:#c8102e}
+@media print{#offOutbox{display:none!important}}
+@media(max-width:700px){#offOutbox{left:10px;right:10px;bottom:70px}}
