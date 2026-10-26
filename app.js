@@ -1247,7 +1247,8 @@ async function saveDC(print){
     if (!r.ok) return toast(r.error, true);
     p.no = r.id || p.no;                       // auto-number will also appear on print
     if (print) printDC(p);
-    toast(editing ? 'Delivery Challan updated.' : 'Delivery Challan saved and stock reduced.');
+    if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.markClean) window.SFSUnsavedChanges.markClean();
+    if (!r.queued) toast(editing ? 'Delivery Challan updated.' : 'Delivery Challan saved and stock reduced.');
     EDIT_DC = null; dcl = [];
     await refresh();
     if ($('dchRows')) loadDCHistory();
@@ -1458,7 +1459,8 @@ async function saveInvoice(print){
     if (!r.ok) return toast(r.error, true);
     p.no = r.id || p.no;                       // auto-number will also appear on print
     if (print) printInvoice(p);
-    toast(EDIT_INVOICE ? 'Invoice updated successfully.' : 'Invoice saved.');
+    if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.markClean) window.SFSUnsavedChanges.markClean();
+    if (!r.queued) toast(EDIT_INVOICE ? 'Invoice updated successfully.' : 'Invoice saved.');
     EDIT_INVOICE = null;
     await refresh();
     if ($('ivhRows')) loadIVHistory();
@@ -2673,7 +2675,7 @@ async function saveQuotation(){
     const gross=items.reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0),pct=Math.min(100,Math.max(0,Number(payload.discount||0))),net=gross-gross*pct/100;
     const sub=Number(r.subtotal);
     if(!isNaN(sub)&&Math.abs(sub-gross)>0.01&&Math.abs(sub-net)>0.01)toast('Saved '+(r.id||'')+', but the saved total ('+money(sub)+') differs from the form total ('+money(net)+'). Please open it in Quotation History and verify all items.',true);
-    else toast(QT_EDIT_MODE?'Quotation updated successfully: '+(r.id||''):'Quotation saved successfully: '+(r.id||''));
+    else if(!r.queued)toast(QT_EDIT_MODE?'Quotation updated successfully: '+(r.id||''):'Quotation saved successfully: '+(r.id||''));
     if(window.SFSUnsavedChanges&&window.SFSUnsavedChanges.markClean)window.SFSUnsavedChanges.markClean();
     const wasEditing=QT_EDIT_MODE;
     if(wasEditing){ QT_EDIT_MODE=false; REVISION_QUOTATION=null; if($('qtsavebtn'))$('qtsavebtn').textContent='Save Quotation'; $('qtno').readOnly=false; setTimeout(()=>showPage('qthistory'),250); }
@@ -4920,7 +4922,7 @@ async function enqfSave(thenQuote){
     const id = ENQF.editId || r.id;
     ENQF.files.forEach(f => { if (f.url) URL.revokeObjectURL(f.url); }); ENQF.files = [];
     closeModal();
-    toast((ENQF.editId ? 'Enquiry updated: ' : 'Enquiry saved: ') + id);
+    if (!r.queued) toast((ENQF.editId ? 'Enquiry updated: ' : 'Enquiry saved: ') + id);
     if (typeof renderEnquiries === 'function' && $('enqRows')) await renderEnquiries();
     else { const e = await api('getEnquiries'); if (e && e.ok) ENQ_CACHE = e.documents || []; }
     if (fromInbox && typeof ibxAfterEnquiry === 'function') ibxAfterEnquiry(fromInbox, id);
@@ -5943,7 +5945,11 @@ async function offIdb(mode, fn){
 }
 const offGetRaw = k => offIdb('readonly', st => st.get(k)).catch(() => undefined);
 const offSetRaw = (k, v) => offIdb('readwrite', st => st.put(v, k)).catch(() => {});
-const offWipe = () => offIdb('readwrite', st => st.clear()).catch(() => {});
+const offWipe = () => offDb().then(db => new Promise(res => {   /* clears the copy but never the documents still waiting to be sent */
+  const tx = db.transaction('kv', 'readwrite'), rq = tx.objectStore('kv').openCursor();
+  rq.onsuccess = () => { const c = rq.result; if (!c) return; if (String(c.key).indexOf('q:') !== 0) c.delete(); c.continue(); };
+  tx.oncomplete = () => { db.close(); res(); }; tx.onerror = () => { db.close(); res(); };
+})).catch(() => {});
 const offB64 = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
 const offUnB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
@@ -6018,6 +6024,182 @@ async function offGet(action, data){
 }
 function offNetDown(r){ return !navigator.onLine || (r && !r.ok && /connection error|unexpected response|failed to fetch/i.test(r.error || '')); }
 
+/* ---------- OFFLINE OUTBOX ----------
+   Without internet, a new Delivery Challan, Invoice, Quotation or Enquiry is kept on this
+   device (with a number, so the DC / invoice can be printed and handed over) and sent to the
+   ERP automatically as soon as the user is online and signed in again.
+   - Numbers: the next number after the last one known on this device (DC / invoice / quotation).
+     If that number was used meanwhile, the user can send it with the next free number.
+   - Stock shown offline already takes the waiting DCs off.
+   - Waiting items can be edited (Edit in history) until they are sent. */
+const OFF_QUEUE = {saveDC:'DC', saveInvoice:'Invoice', saveQuotation:'Quotation', saveEnquiry:'Enquiry'};
+const OFF_QUEUE_EDIT = {updateDC:'saveDC', updateInvoice:'saveInvoice', updateQuotation:'saveQuotation', updateEnquiry:'saveEnquiry'};
+let OFF_SYNCING = false;
+
+function offQAll(){
+  return offDb().then(db => new Promise(res => {
+      const out = [], tx = db.transaction('kv', 'readonly'), rq = tx.objectStore('kv').openCursor();
+      rq.onsuccess = () => { const c = rq.result; if (!c) return; if (String(c.key).indexOf('q:') === 0) out.push(c.value); c.continue(); };
+      tx.oncomplete = () => { db.close(); res(out.sort((a, b) => a.seq - b.seq)); };
+      tx.onerror = () => { db.close(); res([]); };
+    })).catch(() => []);
+}
+const offQPut = it => offSetRaw('q:' + it.seq, it);
+const offQDel = it => offIdb('readwrite', st => st.delete('q:' + it.seq)).catch(() => {});
+function offMe(){ return String((S.user && S.user.username) || (OFF.meta && OFF.meta.username) || '').toLowerCase(); }
+async function offQMine(){ const me = offMe(); return (await offQAll()).filter(x => x.user === me); }
+
+/* next number after the highest known one with the same prefix as the newest document */
+function offNextNo(nos){
+  const list = nos.map(n => String(n || '').trim()).map(n => ({n:n, m:n.match(/^(.*?)(\d+)$/)})).filter(x => x.m);
+  if (!list.length) return '';
+  const prefix = list[0].m[1];
+  let best = null;
+  list.filter(x => x.m[1] === prefix).forEach(x => { if (!best || Number(x.m[2]) > Number(best.m[2])) best = x; });
+  return prefix + String(Number(best.m[2]) + 1).padStart(best.m[2].length, '0');
+}
+async function offProvisionalNo(kind, q){
+  const fromQ = q.filter(x => x.kind === kind).map(x => x.no).reverse();
+  let known = [];
+  if (kind === 'DC' || kind === 'Invoice') { const c = await offGet('getReports', {mode:'docs', type:kind === 'DC' ? 'DC' : 'INVOICE'}); known = c.ok ? (c.documents || []).map(d => d.no) : []; }
+  if (kind === 'Quotation') { const c = await offGet('quotationHistory', {}); known = c.ok ? (c.documents || []).map(d => d.no) : []; }
+  return offNextNo(fromQ.concat(known));
+}
+
+async function offQueue(action, data){
+  const kind = OFF_QUEUE[action], q = await offQAll(), me = offMe();
+  const d = JSON.parse(JSON.stringify(data || {})); delete d.session;
+  let no = String(d.no || '').trim();
+  if (kind === 'Enquiry') no = 'PENDING-' + (q.filter(x => x.kind === 'Enquiry').length + 1) + '-' + String(Date.now()).slice(-4);
+  else if (!no) {
+    no = await offProvisionalNo(kind, q);
+    if (!no) return {ok:false, error:'No internet, and this device does not know the last ' + kind + ' number yet. Type the ' + kind + ' number yourself, then save again.'};
+    d.no = no;
+  }
+  if (q.some(x => x.kind === kind && x.no === no)) return {ok:false, error:kind + ' ' + no + ' is already waiting to be sent. Use another number.'};
+  const it = {seq:Date.now() + Math.random(), user:me, action:action, kind:kind, no:no, data:d, at:Date.now(), status:'waiting', error:''};
+  await offQPut(it);
+  setTimeout(() => { toast('Saved on this device — ' + kind + ' ' + (kind === 'Enquiry' ? '' : no + ' ') + 'will be sent to the ERP when the internet is back.'); offOutboxBadge(); }, 350);
+  const res = {ok:true, id:no, queued:true};
+  if (kind === 'Invoice') { const sub = (d.items || []).reduce((a, x) => a + (+x.qty || 0) * (+x.rate || 0), 0); res.subtotal = sub; }
+  return res;
+}
+/* editing something that is still waiting: just replace it */
+async function offQueueEdit(action, data){
+  const base = OFF_QUEUE_EDIT[action], key = String((data && (data.no || data.id)) || '').trim();
+  if (!base || !key) return null;
+  const it = (await offQMine()).find(x => x.action === base && x.no === key);
+  if (!it) return null;
+  const d = JSON.parse(JSON.stringify(data)); delete d.session; delete d.id; d.no = it.kind === 'Enquiry' ? '' : it.no; delete d.edit; delete d._editing;
+  it.data = Object.assign({}, it.data, d); it.status = 'waiting'; it.error = '';
+  await offQPut(it); offOutboxBadge();
+  return {ok:true, id:it.no, queued:true};
+}
+
+/* what the screens see: waiting documents are added to the lists, and stock already reduced */
+async function offMerge(action, data, r){
+  if (!r || !r.ok) return r;
+  const q = await offQMine(); if (!q.length) return r;
+  const out = Object.assign({}, r), by = k => q.filter(x => x.kind === k);
+  const doc = it => Object.assign({}, it.data, {no:it.no, createdBy:(S.user && S.user.username) || '', _queued:true});
+  if (action === 'bootstrap' && Array.isArray(r.products)) {
+    const take = {};
+    by('DC').forEach(it => (it.data.items || []).forEach(x => { const m = String(x.model || '').trim(); take[m] = (take[m] || 0) + (Number(x.qty) || 0); }));
+    out.products = r.products.map(p => { const m = String(p['Model / Part No.'] || '').trim(); if (!take[m]) return p; const c = Object.assign({}, p); c.currentStock = (Number(p.currentStock) || 0) - take[m]; return c; });
+  }
+  if (action === 'getReports' && data && data.mode === 'docs') {
+    const k = String(data.type || '').toUpperCase() === 'DC' ? 'DC' : 'Invoice';
+    const add = by(k).map(it => { const d = doc(it); d.customer = it.data.customer; d.dc = it.data.dc || ''; d.subtotal = (it.data.items || []).reduce((a, x) => a + (+x.qty || 0) * (+x.rate || 0), 0); return d; });
+    out.documents = add.reverse().concat((r.documents || []).filter(d => !add.some(a => a.no === d.no)));
+  }
+  if (action === 'quotationHistory') {
+    const add = by('Quotation').map(it => { const d = doc(it); d.status = 'Pending'; d.stage = 'Waiting to be sent (offline)'; d.subtotal = (it.data.items || []).reduce((a, x) => a + (+x.qty || 0) * (+x.rate || 0), 0); return d; });
+    out.documents = add.reverse().concat((r.documents || []).filter(d => !add.some(a => a.no === d.no)));
+  }
+  if (action === 'getEnquiries') {
+    const add = by('Enquiry').map(it => Object.assign({}, it.data, {id:it.no, status:'New', source:it.data.source || 'Manual', date:it.data.date || new Date(it.at).toISOString(), notes:[], _queued:true}));
+    out.documents = add.reverse().concat(r.documents || []);
+  }
+  return out;
+}
+
+/* send everything that is waiting (only the signed-in user's own items, oldest first) */
+async function offSync(){
+  if (OFF_SYNCING || OFF.mode || !navigator.onLine || !S.session) return;
+  if ((await offQMine()).length === 0) return;
+  if (navigator.locks && navigator.locks.request) return navigator.locks.request('sfs-outbox-sync', {ifAvailable:true}, lock => lock ? offSyncRun() : null);   /* one window at a time */
+  return offSyncRun();
+}
+async function offSyncRun(){
+  if (OFF_SYNCING) return;
+  const q = await offQMine(); if (!q.length) return;
+  OFF_SYNCING = true;
+  let sent = 0, stopped = null;
+  const rename = {}, renamedShown = {};
+  try {
+    for (const it0 of q) {
+      const it = await offGetRaw('q:' + it0.seq);          /* re-read: another window may have sent it already */
+      if (!it) continue;
+      if (it.status === 'error' && !it.retry) { stopped = it; break; }
+      const d = JSON.parse(JSON.stringify(it.data));
+      if (d.dc) d.dc = String(d.dc).split(/\s*,\s*/).map(n => rename[n] || n).join(', ');
+      if (d.enquiryId && rename[d.enquiryId]) d.enquiryId = rename[d.enquiryId];
+      if (it.kind === 'Enquiry') delete d.no;
+      if (it.newNumber) d.no = '';
+      const r = await offOnlineApi(it.action, d);
+      if (r && r.ok) {
+        if (r.id && r.id !== it.no) { rename[it.no] = r.id; if (it.kind !== 'Enquiry') renamedShown[it.kind + ' ' + it.no] = r.id; }
+        await offQDel(it); sent++;
+        if (rename[it.no]) {      /* later items that point at this one get the real number */
+          for (const o0 of q) { if (o0.seq === it.seq) continue; const o = await offGetRaw('q:' + o0.seq); if (!o) continue; let ch = false;
+            if (o.data.dc && String(o.data.dc).split(/\s*,\s*/).indexOf(it.no) !== -1) { o.data.dc = String(o.data.dc).split(/\s*,\s*/).map(n => n === it.no ? rename[it.no] : n).join(', '); ch = true; }
+            if (o.data.enquiryId === it.no) { o.data.enquiryId = rename[it.no]; ch = true; }
+            if (ch) await offQPut(o); }
+        }
+      } else if (offNetDown(r)) { break; }
+      else { it.status = 'error'; it.error = (r && r.error) || 'Could not be saved.'; it.retry = false; it.newNumber = false; await offQPut(it); stopped = it; break; }
+    }
+  } finally { OFF_SYNCING = false; }
+  if (sent) { toast(sent + ' document' + (sent === 1 ? '' : 's') + ' saved offline ' + (sent === 1 ? 'was' : 'were') + ' sent to the ERP ✓' + (Object.keys(renamedShown).length ? ' (some got a new number — see the message)' : '')); if (Object.keys(renamedShown).length) setTimeout(() => alert('These documents were saved with a different number than the one used offline:\n\n' + Object.keys(renamedShown).map(k => k + '  →  ' + renamedShown[k]).join('\n') + '\n\nPlease correct the printed copies.'), 400); if (typeof refresh === 'function') refresh(); }
+  if (stopped) toast(stopped.kind + ' ' + (stopped.kind === 'Enquiry' ? '' : stopped.no + ' ') + 'could not be sent: ' + stopped.error + ' — open “Waiting to send” to fix it.', true);
+  offOutboxBadge();
+}
+
+/* small badge + list of waiting documents */
+async function offOutboxBadge(){
+  const q = await offQMine();
+  let b = document.getElementById('offOutbox');
+  if (!q.length || !S.user) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.id = 'offOutbox'; b.type = 'button'; b.onclick = offOutboxOpen; document.body.appendChild(b); }
+  const err = q.some(x => x.status === 'error');
+  b.className = err ? 'err' : '';
+  b.innerHTML = (err ? '⚠ ' : '⏳ ') + q.length + ' document' + (q.length === 1 ? '' : 's') + ' waiting to be sent';
+}
+async function offOutboxOpen(){
+  const q = await offQMine();
+  const online = navigator.onLine && !OFF.mode && S.session;
+  modal('Waiting to be sent', (q.length ? '<div class="muted small" style="margin-bottom:8px">' + (online ? 'These are sent automatically. If one has a problem, fix it here.' : (OFF.mode && navigator.onLine ? 'Internet is back — <a class="model-link" onclick="logout()">sign in again</a> and they are sent automatically.' : 'They are sent automatically when the internet is back and you are signed in.')) + '</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Number</th><th>Customer</th><th>Saved</th><th>Status</th><th></th></tr></thead><tbody>'
+    + q.map(it => '<tr><td>' + esc(it.kind) + '</td><td><b>' + esc(it.kind === 'Enquiry' ? '(new)' : it.no) + '</b></td><td>' + esc(it.data.customer || it.data.customerName || '') + '</td><td>' + esc(new Date(it.at).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})) + '</td>'
+      + '<td>' + (it.status === 'error' ? '<span style="color:#c8102e;font-weight:600">' + esc(it.error) + '</span>' : 'Waiting') + '</td>'
+      + '<td style="white-space:nowrap">' + (it.status === 'error' ? '<button class="btn small" onclick="offRetry(' + it.seq + ',false)">Retry</button>' + (/already exists|already/i.test(it.error) && it.kind !== 'Enquiry' ? ' <button class="btn small" onclick="offRetry(' + it.seq + ',true)">Send with next free number</button>' : '') : '')
+      + ' <button class="btn small danger" onclick="offDrop(' + it.seq + ')">Delete</button></td></tr>').join('')
+    + '</tbody></table></div>' : '<div class="muted">Nothing is waiting.</div>') + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button>' + (online && q.length ? '<button class="btn primary" onclick="closeModal();offSync()">Send now</button>' : '') + '</div>');
+}
+async function offRetry(seq, newNumber){
+  const it = (await offQMine()).find(x => x.seq === seq); if (!it) return;
+  it.status = 'waiting'; it.error = ''; it.retry = true; it.newNumber = !!newNumber; await offQPut(it);
+  closeModal(); offSync();
+}
+async function offDrop(seq){
+  const it = (await offQMine()).find(x => x.seq === seq); if (!it) return;
+  if (!confirm('Delete ' + it.kind + ' ' + (it.kind === 'Enquiry' ? '' : it.no) + ' from this device? It was never sent to the ERP, so it will be gone.')) return;
+  await offQDel(it); toast('Deleted from this device.'); offOutboxOpen(); offOutboxBadge(); if (typeof refresh === 'function') refresh();
+}
+Object.assign(window, {offSync, offOutboxOpen, offRetry, offDrop});
+window.addEventListener('online', () => setTimeout(offSync, 1500));
+setInterval(() => { if (navigator.onLine && !OFF.mode && S.session) offSync(); }, 2 * 60 * 1000);
+
 /* every request goes through here */
 const offOnlineApi = api;
 api = async function(action, data){
@@ -6025,21 +6207,27 @@ api = async function(action, data){
   const read = !!OFF_READ[action];
   if (action === 'login') {
     let r = navigator.onLine ? await offOnlineApi(action, data) : null;
-    if (r && r.ok) { await offAfterLogin(data.username, data.password, r.user); OFF.mode = false; delete sessionStorage.sfsOffMode; offBar(); return r; }
-    if (!r || offNetDown(r)) { r = await offLogin(data.username, data.password); offBar(); }
+    if (r && r.ok) { await offAfterLogin(data.username, data.password, r.user); OFF.mode = false; delete sessionStorage.sfsOffMode; offBar(); setTimeout(() => { offOutboxBadge(); offSync(); }, 1500); return r; }
+    if (!r || offNetDown(r)) { r = await offLogin(data.username, data.password); offBar(); setTimeout(offOutboxBadge, 800); }
     return r;
   }
   if (action === 'logout') { delete sessionStorage.sfsOffMode; return offOnlineApi(action, data); }
-  if (OFF.mode || !navigator.onLine) {
-    if (read) { const c = await offGet(action, data); offBar(c._savedAt); return c; }
-    return {ok:false, error:OFF.mode && navigator.onLine ? 'Internet is back — please Sign in again (Logout → Sign in) to save changes.' : 'No internet — saving / changes are not possible offline. Viewing only.'};
+  const offline = OFF.mode || !navigator.onLine;
+  if (offline) {
+    if (read) { const c = await offGet(action, data); offBar(c._savedAt); return offMerge(action, data, c); }
+    if (OFF_QUEUE_EDIT[action]) { const e = await offQueueEdit(action, data); if (e) return e; }
+    if (OFF_QUEUE[action]) { if (!OFF.key && !OFF.meta) return {ok:false, error:'No internet. To save without internet, tick “Keep an offline copy on this device” when you sign in.'}; return offQueue(action, data); }
+    return {ok:false, error:OFF.mode && navigator.onLine ? 'Internet is back — please Sign in again (Logout → Sign in) to save changes.' : 'No internet — this cannot be saved offline. (New DC, Invoice, Quotation and Enquiry can be saved offline.)'};
   }
+  if (OFF_QUEUE_EDIT[action]) { const e = await offQueueEdit(action, data); if (e) { setTimeout(offSync, 500); return e; } }
   const r = await offOnlineApi(action, data);
-  if (r && r.ok && read) { offPut(action, data, r); if (action === 'bootstrap') offBar(); }
-  else if (read && OFF.key && offNetDown(r)) { const c = await offGet(action, data); if (c.ok) { offBar(c._savedAt); return c; } }
+  if (r && r.ok && read) { offPut(action, data, r); if (action === 'bootstrap') { offBar(); offOutboxBadge(); } return offMerge(action, data, r); }
+  if (read && OFF.key && offNetDown(r)) { const c = await offGet(action, data); if (c.ok) { offBar(c._savedAt); return offMerge(action, data, c); } }
+  if (OFF_QUEUE[action] && offNetDown(r) && (OFF.key || OFF.meta)) return offQueue(action, data);
   return r;
 };
 window.api = api;
+
 
 /* top bar while offline */
 let OFF_SHOWN_AT = 0;
@@ -6053,7 +6241,7 @@ function offBar(at){
   const when = OFF_SHOWN_AT ? new Date(OFF_SHOWN_AT).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '';
   const back = OFF.mode && navigator.onLine;
   b.innerHTML = back ? '🌐 Internet is back. You are viewing the offline copy — <a onclick="logout()">Sign in again</a> to save changes.'
-    : '📴 Offline — viewing only' + (when ? '. Data saved on <b>' + esc(when) + '</b>' : '') + '. Saving is off until internet returns.';
+    : '📴 Offline' + (when ? ' — data from <b>' + esc(when) + '</b>' : '') + '. New DC, Invoice, Quotation and Enquiry are kept on this device and sent when the internet is back. Other changes are not possible.';
 }
 window.addEventListener('online', () => offBar()); window.addEventListener('offline', () => offBar());
 
