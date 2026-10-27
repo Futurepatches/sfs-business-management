@@ -1537,6 +1537,8 @@ function filterIVHistory(){
       <td>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}')">View</button>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}',true)">Print</button>
+        ${oiIsOld(d) && hasMod('sales') ? `<button class="btn small oi-up" title="Old invoice without items — upload its Excel file" onclick="oiUpload('${encA(d.no)}')">⬆ Upload invoice</button>` : ''}
+        ${d.sourceFile ? `<a class="btn small" href="${esc(d.sourceFile)}" target="_blank" rel="noopener" title="The original Excel file">📎 Original</a>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -1583,7 +1585,9 @@ function viewInvoice(noEnc, print){
      <div class="actions">
        <button class="btn" onclick="closeModal()">Close</button>
        <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
-       ${isAdmin() ? '<button class="btn" onclick="editInvoice(\'' + encA(no) + '\')">Edit Invoice</button>' : ''}
+       ${d.sourceFile ? '<a class="btn" href="' + esc(d.sourceFile) + '" target="_blank" rel="noopener">📎 Original file</a>' : ''}
+       ${oiIsOld(d) && hasMod('sales') ? '<button class="btn primary" onclick="closeModal();oiUpload(\'' + encA(no) + '\')">⬆ Upload invoice</button>' : ''}
+       ${isAdmin() && !oiIsOld(d) ? '<button class="btn" onclick="editInvoice(\'' + encA(no) + '\')">Edit Invoice</button>' : ''}
      </div>`);
 }
 
@@ -7178,3 +7182,185 @@ async function mrDelete(idEnc){
 }
 Object.assign(window, {MR, renderMarketRates, mrRenderList, mrNew, mrOpen, mrBack, mrRenderItems, mrTotals, mrFromPct, mrFromSale, mrRateChanged, mrPick, mrAddOffer, mrDelOffer, mrAddItem, mrDelItem, mrApplyAll,
   mrParse, mrPasteForm, mrPasteApply, mrPickEnquiry, mrUseEnquiry, mrFromEnquiry, mrSave, mrQuotation, mrMakeQuotation, mrToProduct, mrSaveProduct, mrDelete});
+
+
+/* ============================================================
+   OLD INVOICES — "⬆ Upload invoice"
+   Invoices entered before the ERP have only number, date, customer and amount.
+   Upload the old Excel invoice: its items are read, checked against the amount and saved
+   in place of the amount-only line. No stock change. The original file is kept in Drive.
+   ============================================================ */
+function oiIsOld(d){ return !!d && !(d.items || []).some(x => String(x.model || '').trim() || String(x.desc || '').trim()); }
+let OI = null;
+function oiLoadXlsx(){
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = () => ok(window.XLSX); sc.onerror = () => bad(new Error('Could not load the Excel reader — check the internet connection.')); document.head.appendChild(sc); });
+}
+function oiUpload(noEnc){
+  const no = decodeURIComponent(noEnc);
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm,.ods,.csv';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) oiRead(no, f); };
+  inp.click();
+}
+async function oiRead(no, file){
+  const buf = await file.arrayBuffer();
+  let wb = null;
+  try { wb = await oiReadXlsx(buf); } catch (e) { wb = null; }          /* .xlsx is read here, without any download */
+  if (!wb) {                                                             /* older .xls files: the free SheetJS reader is loaded */
+    let XL; try { XL = await oiLoadXlsx(); } catch (e) { return toast('This file could not be read. Save it as .xlsx in Excel and try again.', true); }
+    try { const w = XL.read(buf, {type:'array', cellDates:true}); wb = {SheetNames:w.SheetNames, rows:{}}; w.SheetNames.forEach(n => wb.rows[n] = XL.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''})); }
+    catch (e) { return toast('This file could not be read as Excel.', true); }
+  }
+  const res = oiParse(wb);
+  if (!res.items.length) return toast('No item lines were found in this file. Is it the invoice sheet?', true);
+  const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+  OI = {no:no, file:file, dataUrl:dataUrl, res:res};
+  oiPreview();
+}
+function oiCell(v){ if (v instanceof Date) return v; return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+function oiNum(v){ if (typeof v === 'number') return v; const n = Number(String(v || '').replace(/[, ]/g, '').replace(/^rs\.?/i, '')); return isNaN(n) ? NaN : n; }
+/* small built-in .xlsx reader (an .xlsx file is a zip of XML files) -> {SheetNames, rows:{name: [[cell,...],...]}} */
+async function oiReadXlsx(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  if (u8[0] !== 0x50 || u8[1] !== 0x4b) return null;
+  let eo = -1; for (let i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eo = i; break; }
+  if (eo < 0) return null;
+  const n = dv.getUint16(eo + 10, true); let p = dv.getUint32(eo + 16, true);
+  const files = {}, td = new TextDecoder();
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    files[td.decode(u8.subarray(p + 46, p + 46 + nl))] = {method:method, csize:csize, off:off};
+    p += 46 + nl + xl + cl;
+  }
+  const read = async name => {
+    const f = files[name]; if (!f) return '';
+    const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(start, start + f.csize);
+    if (f.method === 0) return td.decode(data);
+    const ds = new DecompressionStream('deflate-raw'), out = new Response(new Blob([data]).stream().pipeThrough(ds));
+    return td.decode(await out.arrayBuffer());
+  };
+  const X = t => new DOMParser().parseFromString(t || '<x/>', 'application/xml');
+  const kids = (el, tag) => Array.from(el.getElementsByTagName(tag));
+  const wbx = X(await read('xl/workbook.xml')), rel = X(await read('xl/_rels/workbook.xml.rels'));
+  const targets = {}; kids(rel, 'Relationship').forEach(r => targets[r.getAttribute('Id')] = r.getAttribute('Target'));
+  const shared = kids(X(await read('xl/sharedStrings.xml')), 'si').map(si => kids(si, 't').map(t => t.textContent).join(''));
+  const st = X(await read('xl/styles.xml')), custom = {};
+  kids(st, 'numFmt').forEach(f => custom[f.getAttribute('numFmtId')] = f.getAttribute('formatCode') || '');
+  const cx = st.getElementsByTagName('cellXfs')[0];
+  const isDate = (cx ? kids(cx, 'xf') : []).map(xf => { const id = Number(xf.getAttribute('numFmtId')); return (id >= 14 && id <= 22) || (id >= 45 && id <= 47) || (custom[id] && /[dmy]/i.test(custom[id].replace(/"[^"]*"|\[[^\]]*\]/g, ''))); });
+  const col = ref => { let c = 0; for (const ch of String(ref).replace(/\d+/g, '')) c = c * 26 + ch.charCodeAt(0) - 64; return c - 1; };
+  const out = {SheetNames:[], rows:{}};
+  for (const sh of kids(wbx, 'sheet')) {
+    const name = sh.getAttribute('name'), rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    let t = targets[rid] || ''; t = t.replace(/^\//, ''); if (!/^xl\//.test(t)) t = 'xl/' + t;
+    const doc = X(await read(t)), rows = [];
+    kids(doc, 'row').forEach(r => {
+      const ri = Number(r.getAttribute('r')) - 1, arr = [];
+      kids(r, 'c').forEach(c => {
+        const ty = c.getAttribute('t'), v = (c.getElementsByTagName('v')[0] || {}).textContent;
+        let val = '';
+        if (ty === 's') val = shared[Number(v)] || '';
+        else if (ty === 'inlineStr') val = kids(c, 't').map(x => x.textContent).join('');
+        else if (ty === 'str' || ty === 'e') val = v || '';
+        else if (ty === 'b') val = v === '1';
+        else if (v != null && v !== '') { val = Number(v); if (isDate[Number(c.getAttribute('s') || 0)] && val > 0 && val < 2958466) val = new Date(Math.round((val - 25569) * 864e5)); }
+        arr[col(c.getAttribute('r'))] = val;
+      });
+      for (let i = 0; i < arr.length; i++) if (arr[i] === undefined) arr[i] = '';
+      rows[ri] = arr;
+    });
+    for (let i = 0; i < rows.length; i++) if (!rows[i]) rows[i] = [];
+    out.SheetNames.push(name); out.rows[name] = rows;
+  }
+  return out.SheetNames.length ? out : null;
+}
+function oiParse(wb){
+  /* the sheet with "Invoice" in it (old files may have extra working sheets) */
+  const sheets = wb.SheetNames.map(n => ({n:n, rows:wb.rows[n] || []}));
+  const score = sh => { const t = sh.rows.slice(0, 25).map(r => r.join(' ')).join(' ').toLowerCase(); return (/invoice\s*(#|no)/.test(t) ? 4 : 0) + (/invoice/.test(sh.n.toLowerCase()) ? 2 : 0) + (/descr/.test(t) ? 1 : 0); };
+  const sh = sheets.slice().sort((a, b) => score(b) - score(a))[0] || {rows:[]};
+  const rows = sh.rows.map(r => r.map(oiCell));
+  const out = {sheet:sh.n, no:'', date:'', customer:'', po:'', dc:'', items:[], subtotal:NaN, gst:NaN};
+  const right = (r, c) => { for (let k = c + 1; k < r.length; k++) if (r[k] !== '' ) return r[k]; return ''; };
+  const after = (txt, re) => { const m = String(txt).match(re); return m ? m[1].replace(/^[\s:\-#.]+/, '').trim() : ''; };
+  let hr = -1, cols = {};
+  for (let i = 0; i < rows.length && i < 60; i++) {
+    const r = rows[i], low = r.map(x => String(x).toLowerCase());
+    const di = low.findIndex(x => /^descr/.test(x)), qi = low.findIndex(x => /^(qty|quantity)/.test(x));
+    if (di !== -1 && qi !== -1) {
+      hr = i; cols = {desc:di, qty:qi, rate:low.findIndex(x => /rate|price/.test(x)), amt:low.findIndex(x => /amount|total/.test(x)), model:low.findIndex(x => /model|part/.test(x)), item:low.findIndex(x => /^(item|s\.?\s*no|sr)/.test(x))};
+      break;
+    }
+    r.forEach((v, c) => {
+      const t = String(v), l = t.toLowerCase();
+      if (!out.no && /invoice\s*(#|no)/.test(l)) out.no = after(t, /invoice\s*(?:#|no\.?)\s*:?\s*(\S.*)$/i) || String(right(r, c));
+      else if (!out.customer && /^(m\/s|messrs|customer|bill to)/.test(l)) out.customer = after(t, /^(?:m\/s|messrs|customer|bill to)\.?\s*:?\s*(\S.*)$/i) || String(right(r, c));
+      else if (!out.po && /^p\.?\s*o\.?\s*(#|no)/.test(l)) out.po = after(t, /^p\.?\s*o\.?\s*(?:#|no\.?)\s*:?\s*(\S.*)$/i) || String(right(r, c));
+      else if (!out.dc && /(delivery challan|^d\.?\s*c\.?\s*(#|no))/.test(l)) out.dc = after(t, /(?:delivery challan|d\.?\s*c\.?)\s*(?:#|no\.?)?\s*:?\s*(\S.*)$/i) || String(right(r, c));
+      else if (!out.date && /^date\s*:?$/.test(l)) { const v2 = right(r, c); out.date = v2 instanceof Date ? v2 : String(v2); }
+    });
+  }
+  if (hr === -1) return out;
+  let cur = null;
+  const push = () => { if (cur && (cur.desc || cur.model)) { cur.desc = (cur.desc + (cur.make ? ' (Make: ' + cur.make + ')' : '')).trim(); delete cur.make; out.items.push(cur); } cur = null; };
+  for (let i = hr + 1; i < rows.length; i++) {
+    const r = rows[i], line = r.map(String).join(' ').trim(), low = line.toLowerCase();
+    if (/sub\s*total/.test(low)) { push(); const c = r.findIndex(x => /sub\s*total/i.test(String(x))); out.subtotal = oiNum(right(r, c)); continue; }
+    if (out.items.length || cur) {
+      if (/gst|sales tax/.test(low) && !isNaN(out.subtotal)) { const nums = r.filter(x => !isNaN(oiNum(x)) && x !== ''); out.gst = nums.length ? oiNum(nums[nums.length - 1]) : NaN; continue; }
+      if (!isNaN(out.subtotal)) continue;
+    }
+    if (!line) continue;
+    if (/^note\s*:/i.test(String(r[cols.desc] || '')) || /^(rupees|amount in words)/.test(low)) { push(); continue; }
+    const desc = String(r[cols.desc] || ''), qty = oiNum(r[cols.qty]), rate = cols.rate !== -1 ? oiNum(r[cols.rate]) : NaN, amt = cols.amt !== -1 ? oiNum(r[cols.amt]) : NaN;
+    const model = cols.model !== -1 && cols.model !== cols.desc ? String(r[cols.model] || '') : '';
+    if ((!isNaN(qty) && qty > 0 && r[cols.qty] !== '') || (!isNaN(rate) && rate > 0 && r[cols.rate] !== '')) {
+      push(); cur = {model:model, desc:desc, make:'', qty:isNaN(qty) ? 0 : qty, rate:isNaN(rate) ? 0 : rate, amount:isNaN(amt) ? 0 : amt};
+      if (!cur.rate && cur.amount && cur.qty) cur.rate = Math.round(cur.amount / cur.qty * 100) / 100;
+      continue;
+    }
+    if (!cur) continue;
+    let m;
+    if ((m = desc.match(/^(?:model|part)\s*(?:no\.?|#|number)?\s*[:\-]\s*(.+)$/i))) { if (!cur.model) cur.model = m[1].trim(); }
+    else if ((m = desc.match(/^(?:make|brand)\s*[:\-]\s*(.+)$/i))) cur.make = m[1].trim();
+    else if (desc) cur.desc = (cur.desc + ' ' + desc).trim();
+  }
+  push();
+  return out;
+}
+function oiPreview(){
+  const o = OI; if (!o) return;
+  const d = IVH_CACHE.find(x => x.no === o.no) || {};
+  const r = o.res, sum = Math.round(r.items.reduce((a, x) => a + (Number(x.amount) || x.qty * x.rate), 0) * 100) / 100;
+  const erpSub = Number(d.subtotal) || 0, diff = Math.abs(sum - erpSub) > 1;
+  const noDiff = r.no && String(r.no).replace(/\s/g, '').toUpperCase() !== String(o.no).replace(/\s/g, '').toUpperCase();
+  modal('Upload old invoice — ' + o.no,
+    '<div class="oi-box"></div><div class="muted" style="margin-bottom:10px">File: <b>' + esc(o.file.name) + '</b>' + (r.sheet ? ' · sheet “' + esc(r.sheet) + '”' : '') + '. Check the items, then save. Stock is not changed.</div>'
+    + (noDiff ? '<div class="imp-warn" style="margin-bottom:10px;border-color:#f3b4b4;background:#fdecea">⚠ This file is invoice <b>' + esc(r.no) + '</b>, but you are uploading it to invoice <b>' + esc(o.no) + '</b>. Please check you picked the right file.</div>' : '')
+    + '<div class="doc-info"><div><b>Customer (file):</b> ' + esc(r.customer || '—') + '</div><div><b>Customer (ERP):</b> ' + esc(d.customer || '—') + '</div>'
+    + '<div><b>Date (file):</b> ' + (r.date ? fmtDate(r.date) : '—') + '</div><div><b>Date (ERP):</b> ' + fmtDate(d.date) + '</div>'
+    + '<div><b>PO #:</b> ' + esc(r.po || '—') + '</div><div><b>DC #:</b> ' + esc(r.dc || '—') + '</div></div>'
+    + '<div class="table-wrap"><table class="doc-table"><thead><tr><th>#</th><th>Model / Part No.</th><th>Description</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amount</th></tr></thead><tbody>'
+    + r.items.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><input class="oi-in" value="' + esc(x.model) + '" placeholder="—" oninput="OI.res.items[' + i + '].model=this.value"></td><td><input class="oi-in oi-desc" value="' + esc(x.desc) + '" oninput="OI.res.items[' + i + '].desc=this.value"></td><td class="right">' + esc(x.qty) + '</td><td class="right">' + money(x.rate) + '</td><td class="right">' + money(x.amount || x.qty * x.rate) + '</td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<div class="oi-tot"><div><span>Items total (file)</span><b>' + money(sum) + '</b></div><div><span>Invoice amount in ERP (before GST)</span><b>' + money(erpSub) + '</b></div>'
+    + '<div class="' + (diff ? 'bad' : 'good') + '"><span>' + (diff ? '⚠ Difference' : '✓ Matches') + '</span><b>' + (diff ? money(sum - erpSub) : '') + '</b></div></div>'
+    + (diff ? '<div class="imp-warn" style="margin-top:8px">The items do not add up to the amount saved in the ERP. If you save anyway, the invoice amount (and the outstanding) will change to the items total.</div>' : '')
+    + '<div class="actions"><button class="btn" onclick="closeModal();OI=null">Cancel</button><button class="btn primary" id="oiSave" onclick="oiSave(' + (diff ? 'true' : 'false') + ')">Save items' + (diff ? ' anyway' : '') + '</button></div>');
+}
+async function oiSave(allowDiff){
+  const o = OI; if (!o) return;
+  if (allowDiff && !confirm('The invoice amount will change to the items total. Continue?')) return;
+  const b = $('oiSave'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  const items = o.res.items.map(x => ({model:String(x.model || '').trim(), desc:String(x.desc || '').trim(), qty:x.qty, rate:x.rate, amount:x.amount || x.qty * x.rate}));
+  const r = await api('oldInvoiceItems', {no:o.no, items:items, po:o.res.po, dc:o.res.dc, fileBase64:o.dataUrl, fileName:o.file.name, allowDiff:!!allowDiff});
+  if (!r || !r.ok) {
+    if (b) { b.disabled = false; b.textContent = 'Save items'; }
+    return toast(((r && r.error) || 'Could not save.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  }
+  closeModal(); OI = null;
+  toast('Invoice ' + r.id + ': ' + r.lines + ' item line(s) saved. Original file kept.');
+  if (typeof loadIVHistory === 'function' && $('ivhRows')) await loadIVHistory();
+}
+Object.assign(window, {oiIsOld, oiUpload, oiRead, oiReadXlsx, oiParse, oiPreview, oiSave});
