@@ -6632,3 +6632,190 @@ function qtSearchItems(d, q){
   return '<div class="qt-hit">' + hits.map(x => '↳ <b>' + esc(x.model && x.model !== '-' ? x.model : '') + '</b> ' + esc(String(x.desc || '').slice(0, 60)) + ' <span>× ' + esc(x.qty) + (Number(x.rate) ? ' @ ' + money(x.rate) : '') + '</span>').join('<br>') + ((d.items || []).length > hits.length && hits.length === 4 ? '<br>…' : '') + '</div>';
 }
 window.qtSearchHit = qtSearchHit;
+
+
+/* ============================================================
+   CLICKABLE REFERENCES (screen only — never in print / PDF)
+   Anywhere in the ERP, a Model #, DC #, Invoice #, Quotation #, PO #,
+   Enquiry # or customer name becomes a link that opens a quick-view
+   side panel. Works for old and new data: nothing is saved, the links
+   are made while the screen is shown. Not inside input boxes.
+   ============================================================ */
+const XR = {idx:new Map(), cust:new Map(), docs:{DC:new Map(), Invoice:new Map(), Quotation:new Map(), PO:new Map(), Enquiry:new Map()}, stack:[], warmAt:0, dirty:true, busy:false};
+const XR_SKIP = 'input,textarea,select,option,button,a,script,style,svg,datalist,.xref,.no-xref,#printArea,[contenteditable],.model-link,[onclick]:not(#modal):not(.modal):not(#mailDrawer),.modal-head,#xrPanel .xr-head,.navbtn,#pwaBar,#offBar';
+function xrKey(s){ return String(s || '').trim().toUpperCase(); }
+
+/* ---- keep an index of what can be linked ---- */
+function xrIngest(action, data, r){
+  if (!r || !r.ok) return;
+  const put = (k, list, idf) => { (list || []).forEach(d => { const id = String(d[idf] || '').trim(); if (id) XR.docs[k].set(xrKey(id), d); }); XR.dirty = true; };
+  if (action === 'getReports' && data && data.mode === 'docs') put(String(data.type).toUpperCase() === 'DC' ? 'DC' : 'Invoice', r.documents, 'no');
+  else if (action === 'quotationHistory') put('Quotation', r.documents, 'no');
+  else if (action === 'getEnquiries') put('Enquiry', r.documents, 'id');
+  else if (action === 'getPurchaseOrders') put('PO', r.orders, 'no');
+  else if (action === 'bootstrap') XR.dirty = true;
+  if (XR.dirty) xrSchedule(document.body);
+}
+function xrBuild(){
+  if (!XR.dirty) return;
+  XR.idx.clear(); XR.cust.clear();
+  (S.products || []).forEach(p => {
+    const m = String(p['Model / Part No.'] || '').trim();
+    if (m.length >= 3 && /\d/.test(m) && /[A-Za-z]/.test(m)) XR.idx.set(xrKey(m), {t:'Model', id:m});
+  });
+  Object.keys(XR.docs).forEach(t => XR.docs[t].forEach((d, k) => XR.idx.set(k, {t:t, id:String(t === 'Enquiry' ? d.id : d.no)})));
+  (S.customers || []).forEach(c => { const n = String(c['Customer Name'] || '').trim(); if (n.length >= 3) XR.cust.set(n.toLowerCase(), n); });
+  XR.dirty = false;
+}
+async function xrWarm(force){
+  if (!S.user || (!force && Date.now() - XR.warmAt < 5 * 60 * 1000)) return;
+  XR.warmAt = Date.now();
+  const jobs = [];
+  if (hasMod('sales')) jobs.push(api('getReports', {mode:'docs', type:'DC'}), api('getReports', {mode:'docs', type:'INVOICE'}), api('quotationHistory'));
+  if (hasMod('enquiries')) jobs.push(api('getEnquiries'));
+  if (hasMod('purchase')) jobs.push(api('getPurchaseOrders'));
+  await Promise.all(jobs.map(j => j.catch(() => null)));
+}
+
+/* ---- turn text on screen into links ---- */
+const XR_TOKEN = /[A-Za-z0-9][A-Za-z0-9\-\/._]*[A-Za-z0-9]/g;
+function xrLink(t, id, text){ const a = document.createElement('span'); a.className = 'xref xr-' + t.toLowerCase(); a.dataset.t = t; a.dataset.id = id; a.textContent = text; a.title = 'Open ' + t + ' ' + id; return a; }
+function xrScanNode(root){
+  if (!root || root.nodeType !== 1 || !root.isConnected) return;
+  if (root.closest && root.closest(XR_SKIP)) return;
+  xrBuild();
+  if (!XR.idx.size && !XR.cust.size) return;
+  /* whole table cells that are exactly a customer name */
+  if (XR.cust.size) root.querySelectorAll('td,.ibx-from,.enq-cust').forEach(td => {
+    if (td.children.length || td.closest(XR_SKIP)) return;
+    const name = XR.cust.get(String(td.textContent || '').trim().toLowerCase());
+    if (name) { td.textContent = ''; td.appendChild(xrLink('Customer', name, name)); }
+  });
+  if (!XR.idx.size) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: n => (n.nodeValue && n.nodeValue.length > 2 && /\d/.test(n.nodeValue) && !(n.parentElement && n.parentElement.closest(XR_SKIP))) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT});
+  const nodes = []; let n, count = 0;
+  while ((n = walker.nextNode()) && count++ < 6000) nodes.push(n);
+  nodes.forEach(node => {
+    const txt = node.nodeValue; let m, last = 0, frag = null;
+    XR_TOKEN.lastIndex = 0;
+    while ((m = XR_TOKEN.exec(txt))) {
+      let tok = m[0], hit = XR.idx.get(xrKey(tok));
+      if (!hit && /[.\/]$/.test(tok)) { tok = tok.replace(/[.\/]+$/, ''); hit = XR.idx.get(xrKey(tok)); }
+      if (!hit) continue;
+      if (!frag) frag = document.createDocumentFragment();
+      if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+      frag.appendChild(xrLink(hit.t, hit.id, tok));
+      last = m.index + tok.length; XR_TOKEN.lastIndex = last;
+    }
+    if (frag) { if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last))); node.parentNode.replaceChild(frag, node); }
+  });
+}
+let XR_PENDING = new Set(), XR_TIMER = null;
+function xrSchedule(node){ if (node) XR_PENDING.add(node); if (XR_TIMER) return; XR_TIMER = setTimeout(xrFlush, 200); }
+function xrFlush(){
+  XR_TIMER = null; if (!S.user) { XR_PENDING.clear(); return; }
+  const list = Array.from(XR_PENDING); XR_PENDING.clear();
+  XR.busy = true;
+  try { list.forEach(el => { if (el === document.body) { ['content', 'modalBody', 'xrBody', 'mailDrawer'].forEach(id => xrScanNode(document.getElementById(id))); } else xrScanNode(el); }); }
+  finally { XR.busy = false; }
+}
+new MutationObserver(muts => {
+  if (XR.busy || !S.user) return;
+  for (const m of muts) m.addedNodes.forEach(nd => { const el = nd.nodeType === 1 ? nd : nd.parentElement; if (el && !(el.closest && el.closest('#printArea'))) xrSchedule(el); });
+}).observe(document.body, {childList:true, subtree:true});
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('.xref'); if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  xrOpen(a.dataset.t, a.dataset.id);
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('xrPanel') && $('xrPanel').classList.contains('open') && $('modal').classList.contains('hidden')) xrClose(); });
+(function xrStart(){ if (S.user && $('content') && !$('app').classList.contains('hidden')) { xrWarm(); xrSchedule(document.body); } setTimeout(xrStart, S.user && XR.warmAt ? 60000 : 1500); })();
+
+/* ---- the side panel ---- */
+function xrOpen(t, id, fromBack){
+  let p = $('xrPanel');
+  if (!p) { p = document.createElement('div'); p.id = 'xrPanel'; p.className = 'no-dirty-track'; p.innerHTML = '<div class="xr-head"><button type="button" class="btn small" id="xrBack" onclick="xrBack()">← Back</button><b id="xrTitle"></b><button type="button" class="btn small" onclick="xrClose()" title="Close">✕</button></div><div id="xrBody"></div>'; document.body.appendChild(p); }
+  if (!fromBack) XR.stack.push({t:t, id:id});
+  $('xrBack').style.visibility = XR.stack.length > 1 ? 'visible' : 'hidden';
+  $('xrTitle').textContent = t + ' ' + (t === 'Customer' ? '' : id);
+  p.style.zIndex = '1100'; p.classList.add('open'); document.body.classList.add('xr-open');
+  xrRender(t, id);
+}
+function xrLower(){ const p = $('xrPanel'); if (p) p.style.zIndex = ''; }
+function xrBack(){ XR.stack.pop(); const last = XR.stack[XR.stack.length - 1]; if (last) xrOpen(last.t, last.id, true); else xrClose(); }
+function xrClose(){ const p = $('xrPanel'); if (p) p.classList.remove('open'); document.body.classList.remove('xr-open'); XR.stack = []; }
+function xrC(n){ n = String(n || '').trim(); return n && !/^\(/.test(n) ? '<span class="xref xr-customer" data-t="Customer" data-id="' + esc(n) + '">' + esc(n) + '</span>' : esc(n); }
+async function xrRender(t, id){
+  const body = $('xrBody'); if (!body) return;
+  let d = t === 'Model' || t === 'Customer' ? true : XR.docs[t] && XR.docs[t].get(xrKey(id));
+  if (!d) { body.innerHTML = '<div class="muted" style="padding:20px">Loading…</div>'; await xrWarm(true); d = XR.docs[t] && XR.docs[t].get(xrKey(id)); }
+  if (!d) { body.innerHTML = '<div class="muted" style="padding:20px">' + esc(t + ' ' + id) + ' could not be found (or you do not have access to it).</div>'; return; }
+  const kv = (k, v) => v === '' || v == null ? '' : '<div class="xr-kv"><span>' + esc(k) + '</span><b>' + v + '</b></div>';
+  const items = (list, withRate) => '<table class="xr-items"><thead><tr><th>Item</th><th class="r">Qty</th>' + (withRate ? '<th class="r">Rate</th>' : '') + '</tr></thead><tbody>'
+    + (list || []).map(x => '<tr><td><b>' + esc(x.model && x.model !== '-' ? x.model : '') + '</b><div class="muted small">' + esc(x.desc || '') + '</div></td><td class="r">' + esc(x.qty) + ' ' + esc(x.unit || '') + '</td>' + (withRate ? '<td class="r">' + money(x.rate || x.price) + '</td>' : '') + '</tr>').join('') + '</tbody></table>';
+  const btn = (label, js, primary) => '<button type="button" class="btn small' + (primary ? ' primary' : '') + '" onclick="xrLower();' + js + '">' + label + '</button>';
+  const hasItem = (doc, m) => (doc.items || []).some(x => xrKey(x.model) === xrKey(m));
+  let h = '';
+  if (t === 'Model') {
+    const p = findProd(id) || {}, img = p['Product Image'] ? qtDriveThumb(p['Product Image']) : '';
+    const dcs = Array.from(XR.docs.DC.values()).filter(dc => hasItem(dc, id)).slice(0, 8);
+    const qts = Array.from(XR.docs.Quotation.values()).filter(q => hasItem(q, id)).slice(0, 6);
+    const pos = Array.from(XR.docs.PO.values()).filter(o => o.status !== 'Closed' && o.status !== 'Cancelled' && hasItem(o, id));
+    const seeCost = isAdmin() || hasMod('imports') || hasMod('stockvalue');
+    h = (img ? '<img class="xr-img" src="' + esc(img) + '" alt="">' : '')
+      + '<div class="xr-big">' + esc(p.Description || '') + '</div>'
+      + kv('Brand', esc(p.Brand || '')) + kv('Category', esc(p.Category || '')) + kv('Stock', '<span class="' + ((Number(p.currentStock) || 0) <= 0 ? 'dn' : '') + '">' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + ' ' + esc(p.Unit || '') + '</span>')
+      + kv('Sale price', p['Sale Price'] ? 'Rs. ' + money(p['Sale Price']) : '') + (seeCost ? kv('Cost price', p['Cost Price'] ? 'Rs. ' + money(p['Cost Price']) : '') : '') + kv('Location', esc(p.Location || ''))
+      + (pos.length ? '<h4>On order</h4>' + pos.map(o => { const it = o.items.find(x => xrKey(x.model) === xrKey(id)); return '<div class="xr-row">' + esc(o.no) + ' · ' + esc(o.status) + ' · ' + esc((Number(it.qty) || 0) - (Number(it.received) || 0)) + ' pcs' + (o.eta ? ' · ETA ' + fmtDate(o.eta) : '') + '</div>'; }).join('') : '')
+      + (dcs.length ? '<h4>Recent deliveries</h4>' + dcs.map(dc => '<div class="xr-row">' + esc(dc.no) + ' · ' + fmtDate(dc.date) + ' · ' + esc(dc.customer) + ' · ' + esc((dc.items.find(x => xrKey(x.model) === xrKey(id)) || {}).qty) + '</div>').join('') : '')
+      + (qts.length ? '<h4>Recent quotations</h4>' + qts.map(q => { const it = q.items.find(x => xrKey(x.model) === xrKey(id)) || {}; return '<div class="xr-row">' + esc(q.no) + ' · ' + fmtDate(q.date) + ' · ' + esc(q.customer) + ' · Rs. ' + money(it.rate) + '</div>'; }).join('') : '')
+      + '<div class="xr-btns">' + (findProd(id) ? btn('Full details', "productDetail('" + encA(id) + "')", true) + btn('Product history', "showProductHistory('" + encA(id) + "')") : '') + '</div>';
+  } else if (t === 'Customer') {
+    const c = (S.customers || []).find(x => String(x['Customer Name']).toLowerCase() === String(id).toLowerCase()) || {};
+    const mine = k => Array.from(XR.docs[k].values()).filter(x => String(x.customer || x.customerName || '').toLowerCase() === String(id).toLowerCase());
+    const dc = mine('DC').slice(0, 5), iv = mine('Invoice').slice(0, 5), qt = mine('Quotation').slice(0, 5);
+    h = '<div class="xr-big">' + esc(id) + '</div>' + kv('Contact', esc(c['Contact Person'] || '')) + kv('Phone', esc(c.Phone || '')) + kv('Email', esc(c.Email || '')) + kv('Address', esc(c.Address || '')) + kv('NTN', esc(c['NTN/Tax ID'] || ''))
+      + (iv.length ? '<h4>Recent invoices</h4>' + iv.map(x => '<div class="xr-row">' + esc(x.no) + ' · ' + fmtDate(x.date) + ' · Rs. ' + money(x.subtotal) + '</div>').join('') : '')
+      + (dc.length ? '<h4>Recent DCs</h4>' + dc.map(x => '<div class="xr-row">' + esc(x.no) + ' · ' + fmtDate(x.date) + '</div>').join('') : '')
+      + (qt.length ? '<h4>Recent quotations</h4>' + qt.map(x => '<div class="xr-row">' + esc(x.no) + ' · ' + fmtDate(x.date) + ' · ' + esc(qtStatusLabel(x.status, x.stage)) + '</div>').join('') : '')
+      + '<div class="xr-btns">' + (hasMod('accounts') || hasMod('sales') || isAdmin() ? btn('Open ledger', "ledger('Customer','" + encA(id) + "')", true) : '') + '</div>';
+  } else if (t === 'DC') {
+    const invs = Array.from(XR.docs.Invoice.values()).filter(x => String(x.dc || '').split(/\s*,\s*/).some(n => xrKey(n) === xrKey(d.no)));
+    h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customer)) + kv('PO #', esc(d.po || '')) + kv('Invoice', invs.map(x => esc(x.no)).join(', ') || '<span class="muted">not invoiced yet</span>')
+      + items(d.items, false) + '<div class="xr-btns">' + btn('🖨 Print', "xrPrint('DC','" + encA(d.no) + "')", true) + '</div>';
+  } else if (t === 'Invoice') {
+    const gst = Number(d.gstPercent == null ? 18 : d.gstPercent), sub = Number(d.subtotal) || 0;
+    h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customer)) + kv('DC #', esc(d.dc || '')) + kv('PO #', esc(d.po || ''))
+      + items(d.items, true) + kv('Subtotal', 'Rs. ' + money(sub)) + kv('GST ' + gst + '%', 'Rs. ' + money(sub * gst / 100)) + kv('Total', 'Rs. ' + money(d.grandTotal != null ? d.grandTotal : sub * (1 + gst / 100)))
+      + '<div class="xr-btns">' + btn('🖨 Print', "xrPrint('Invoice','" + encA(d.no) + "')", true) + '</div>';
+  } else if (t === 'Quotation') {
+    h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customer)) + kv('Ref #', esc(d.ref || d.po || '')) + kv('Status', statusBadge(d.status, d.stage)) + kv('Enquiry', esc(d.enquiryId || ''))
+      + items(d.items, true) + kv('Total', 'Rs. ' + money(d.subtotal))
+      + '<div class="xr-btns">' + btn('🖨 View / Print', "xrPrint('Quotation','" + encA(d.no) + "')", true) + btn('🔒 Source', "xrQtSource('" + encA(d.no) + "')") + '</div>';
+  } else if (t === 'PO') {
+    h = kv('Date', fmtDate(d.date)) + kv('Supplier', esc(d.supplier)) + kv('Status', esc(d.status) + (d.statusNote ? ' — ' + esc(d.statusNote) : '')) + kv('ETA', d.eta ? fmtDate(d.eta) : '')
+      + items(d.items, true) + kv('Total', esc(d.currency) + ' ' + money(d.total))
+      + '<div class="xr-btns">' + btn('🖨 Print', "xrPrint('PO','" + encA(d.no) + "')", true) + '</div>';
+  } else if (t === 'Enquiry') {
+    h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customerName)) + kv('Status', esc(d.status || 'New')) + kv('Quotation', esc(d.quotationNo || ''))
+      + (d.requirement ? '<div class="xr-text">' + esc(String(d.requirement).slice(0, 1200)) + '</div>' : '') + ((d.items || []).length ? items(d.items, false) : '')
+      + '<div class="xr-btns">' + btn('Open enquiry', "xrEnquiry('" + encA(d.id) + "')", true) + '</div>';
+  }
+  body.innerHTML = h;
+  xrSchedule(body);
+}
+function xrPrint(t, idEnc){
+  const d = XR.docs[t].get(xrKey(decodeURIComponent(idEnc))); if (!d) return;
+  if (t === 'DC') printDC(d);
+  else if (t === 'Invoice') { const g = Number(d.gstPercent == null ? 18 : d.gstPercent); printInvoice(Object.assign({}, d, {total:d.grandTotal != null ? d.grandTotal : (Number(d.subtotal) || 0) * (1 + g / 100)})); }
+  else if (t === 'Quotation') printQuotation(d);
+  else if (t === 'PO') { if (!PO.list.some(x => x.no === d.no)) PO.list = Array.from(XR.docs.PO.values()); poPrint(encA(d.no)); }
+}
+function xrQtSource(idEnc){ if (!QT_CACHE.some(x => x.no === decodeURIComponent(idEnc))) QT_CACHE = Array.from(XR.docs.Quotation.values()); qtSourcesView(idEnc); }
+function xrEnquiry(idEnc){ if (!ENQ_CACHE.some(x => x.id === decodeURIComponent(idEnc))) ENQ_CACHE = Array.from(XR.docs.Enquiry.values()); enqViewFull(idEnc); }
+Object.assign(window, {xrLower, xrOpen, xrBack, xrClose, xrPrint, xrQtSource, xrEnquiry, xrWarm, XR});
+
+/* every successful read feeds the index */
+const xrPrevApi = api;
+api = async function(action, data){ const r = await xrPrevApi(action, data); try { xrIngest(action, data || {}, r); } catch (e) {} return r; };
+window.api = api;
