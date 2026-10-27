@@ -1630,3 +1630,31 @@ body.off-on{padding-top:36px}
 @media print{#xrPanel{display:none!important}.xref{color:inherit!important;text-decoration:none!important;background:none!important}}
 span.xref{display:inline!important;font:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;margin:0!important;padding:0!important;color:#1d4ed8!important}
 @media print{span.xref{color:inherit!important}}
+
+/* ---- Market Rates ---- */
+.mr-item{border:1px solid #e3e8f0;border-radius:12px;padding:12px;margin:0 0 12px;background:#fff}
+.mr-item-top{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.mr-item-top label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#64748b;min-width:120px;flex:1}
+.mr-item-top label.mr-desc{flex:3;min-width:240px}
+.mr-item-top label.mr-s{flex:0 0 90px;min-width:80px}
+.mr-no{width:28px;height:28px;border-radius:50%;background:#eef2f7;color:#1f3b63;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 28px;margin-bottom:6px}
+.mr-del{margin-bottom:4px}
+table.mr-offers{width:100%;border-collapse:collapse;margin:10px 0 6px}
+table.mr-offers th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;text-align:left;padding:4px;font-weight:700}
+table.mr-offers td{padding:3px 4px}
+table.mr-offers td input{width:100%}
+table.mr-offers .c{text-align:center;width:44px}
+table.mr-offers tr.mr-pick td{background:#f0fdf4}
+.mr-item-bot{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px}
+.mr-calc{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.mr-calc label{display:flex;align-items:center;gap:6px;font-weight:600;color:#475569}
+.mr-calc label input{width:110px}
+.mr-inprod{color:#15803d;font-weight:700;font-size:12.5px}
+.mr-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:6px;font-size:13px}
+.mr-age{font-size:11px;color:#15803d}.mr-age.mid{color:#b45309}.mr-age.old{color:#c8102e;font-weight:700}
+.mr-hist tr.mr-other td{color:#94a3b8}
+@media (max-width:760px){.mr-calc{margin-left:0}table.mr-offers thead{display:none}table.mr-offers tr{display:grid;grid-template-columns:40px 1fr 1fr;gap:4px;padding:6px 0;border-bottom:1px solid #eef2f7}}
+.mr-item input,.mr-foot input{border:1px solid #d5dce8;border-radius:8px;background:#fff;padding:7px 9px;font-size:13px;color:var(--ink,#1e293b);box-shadow:none;margin:0}
+.mr-item input:focus,.mr-foot input:focus{border-color:#4472C4;box-shadow:0 0 0 3px rgba(68,114,196,.15);outline:none}
+.mr-item input[type=radio]{width:auto;padding:0;accent-color:#15803d;transform:scale(1.15)}
+.mr-item-top label small{font-weight:500;color:#94a3b8}
