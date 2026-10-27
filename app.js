@@ -32,7 +32,8 @@ const ALL_MODULES = [
   {id:'imports', label:'Imports (confidential costing)'},
   {id:'stockvalue', label:'Stock Value (special permission — dashboard)'},
   {id:'setstock', label:'Set Stock (special permission — correct product quantity)'},
-  {id:'purchase', label:'Purchase Orders (foreign orders to suppliers)'}
+  {id:'purchase', label:'Purchase Orders (foreign orders to suppliers)'},
+  {id:'marketrates', label:'Market Rates (local market buying rates — confidential)'}
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -87,6 +88,7 @@ function nav(){
     {id:'qthistory', label:'Quotation History', mod:'sales', section:'Sales'},
     {id:'inbox',     label:'Inbox',     mod:'enquiries', section:'Sales'},
     {id:'enquiries', label:'Enquiries', mod:'enquiries', section:'Sales'},
+    {id:'marketrates', label:'Market Rates', mod:'marketrates', section:'Sales'},
     {id:'accounts',  label:'Accounts / Payments', mod:'accounts', section:'Accounts'},
     {id:'customers', label:'Customers',   mod:'parties',  section:'Parties'},
     {id:'suppliers', label:'Suppliers',   mod:'parties',  section:'Parties'},
@@ -116,6 +118,7 @@ function nav(){
     ivhistory:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
     quotations:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M14 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>',
     enquiries:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>',
+    marketrates:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
     inbox:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
     qthistory:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
     accounts:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
@@ -380,7 +383,7 @@ function showPage(p, btn){
   $('pageTitle').textContent = label;
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
-  if ((p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
+  if ((p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
@@ -395,6 +398,14 @@ function showPage(p, btn){
   if (p === 'inbox')      renderInbox();
   if (p === 'imports')    renderImports();
   if (p === 'purchaseorders') { PO.view = 'list'; PO.f = null; renderPurchaseOrders(); }
+  if (p === 'marketrates') {
+    const pend = MR.pending && Date.now() - MR.pending.at < 120000 ? MR.pending : null; MR.pending = null;
+    MR.view = 'list'; MR.f = null;
+    if (pend && pend.enq) { MR.f = {no:'', date:todayStr(), customer:'', enquiryId:'', ref:'', notes:'', items:[]}; MR.view = 'form'; }
+    renderMarketRates();
+    if (pend && pend.enq) mrUseEnquiry(encA(pend.enq));
+    if (pend && pend.open) mrOpen(encA(pend.open));
+  }
   if (p === 'ivhistory')  renderIVHistory();
   if (p === 'accounts')   renderAccounts();
   if (p === 'customers')  renderCustomers();
@@ -410,6 +421,7 @@ const pages = {
   products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button>${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   imports:()=>impPageHtml(),
   purchaseorders:()=>`<div class="wrap" id="poPage"></div>`,
+  marketrates:()=>`<div class="wrap" id="mrPage"></div>`,
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
@@ -2334,7 +2346,7 @@ function enqViewFull(en){
     + (d.items && d.items.length ? '<h4 style="margin:6px 0 8px">Requested items' + (d.customerRef ? ' — Ref ' + esc(d.customerRef) : '') + '</h4><div class="table-wrap"><table><thead><tr><th>#</th><th>Description</th><th class="right">Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody>'
         + d.items.map((it, i) => '<tr><td>' + esc(it.sn || i + 1) + '</td><td>' + esc(it.desc) + '</td><td class="right"><b>' + esc(it.qty) + '</b></td><td>' + esc(it.unit) + '</td><td class="muted small">' + esc(it.note) + '</td></tr>').join('') + '</tbody></table></div>' : '')
     + '<details style="margin-top:12px"' + (d.items && d.items.length ? '' : ' open') + '><summary style="cursor:pointer;font-weight:600">Original mail text</summary><div style="white-space:pre-wrap;max-height:40vh;overflow:auto;margin-top:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafbff">' + esc(d.requirement) + '</div></details>'
-    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="enquiryForm(\'' + encA(d.id) + '\')">✎ Edit</button>' + (d.status === 'New' ? '<button class="btn primary" onclick="closeModal();makeQuotationFromEnquiry(\'' + encA(d.id) + '\')">Make Quotation</button>' : '') + '</div>');
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="enquiryForm(\'' + encA(d.id) + '\')">✎ Edit</button>' + (hasMod('marketrates') ? '<button class="btn" title="Collect local market rates for these items" onclick="closeModal();mrFromEnquiry(\'' + encA(d.id) + '\')">💲 Market rates</button>' : '') + (d.status === 'New' ? '<button class="btn primary" onclick="closeModal();makeQuotationFromEnquiry(\'' + encA(d.id) + '\')">Make Quotation</button>' : '') + '</div>');
 }
 window.enqViewFull = enqViewFull;
 
@@ -6641,7 +6653,7 @@ window.qtSearchHit = qtSearchHit;
    side panel. Works for old and new data: nothing is saved, the links
    are made while the screen is shown. Not inside input boxes.
    ============================================================ */
-const XR = {idx:new Map(), cust:new Map(), docs:{DC:new Map(), Invoice:new Map(), Quotation:new Map(), PO:new Map(), Enquiry:new Map()}, stack:[], warmAt:0, dirty:true, busy:false};
+const XR = {idx:new Map(), cust:new Map(), docs:{DC:new Map(), Invoice:new Map(), Quotation:new Map(), PO:new Map(), Enquiry:new Map(), MR:new Map()}, stack:[], warmAt:0, dirty:true, busy:false};
 const XR_SKIP = 'input,textarea,select,option,button,a,script,style,svg,datalist,.xref,.no-xref,#printArea,[contenteditable],.model-link,[onclick]:not(#modal):not(.modal):not(#mailDrawer),.modal-head,#xrPanel .xr-head,.navbtn,#pwaBar,#offBar';
 function xrKey(s){ return String(s || '').trim().toUpperCase(); }
 
@@ -6653,6 +6665,7 @@ function xrIngest(action, data, r){
   else if (action === 'quotationHistory') put('Quotation', r.documents, 'no');
   else if (action === 'getEnquiries') put('Enquiry', r.documents, 'id');
   else if (action === 'getPurchaseOrders') put('PO', r.orders, 'no');
+  else if (action === 'getMarketRates') put('MR', r.sheets, 'no');
   else if (action === 'bootstrap') XR.dirty = true;
   if (XR.dirty) xrSchedule(document.body);
 }
@@ -6674,6 +6687,7 @@ async function xrWarm(force){
   if (hasMod('sales')) jobs.push(api('getReports', {mode:'docs', type:'DC'}), api('getReports', {mode:'docs', type:'INVOICE'}), api('quotationHistory'));
   if (hasMod('enquiries')) jobs.push(api('getEnquiries'));
   if (hasMod('purchase')) jobs.push(api('getPurchaseOrders'));
+  if (hasMod('marketrates')) jobs.push(api('getMarketRates'));
   await Promise.all(jobs.map(j => j.catch(() => null)));
 }
 
@@ -6737,7 +6751,7 @@ function xrOpen(t, id, fromBack){
   if (!p) { p = document.createElement('div'); p.id = 'xrPanel'; p.className = 'no-dirty-track'; p.innerHTML = '<div class="xr-head"><button type="button" class="btn small" id="xrBack" onclick="xrBack()">← Back</button><b id="xrTitle"></b><button type="button" class="btn small" onclick="xrClose()" title="Close">✕</button></div><div id="xrBody"></div>'; document.body.appendChild(p); }
   if (!fromBack) XR.stack.push({t:t, id:id});
   $('xrBack').style.visibility = XR.stack.length > 1 ? 'visible' : 'hidden';
-  $('xrTitle').textContent = t + ' ' + (t === 'Customer' ? '' : id);
+  $('xrTitle').textContent = (t === 'MR' ? 'Rate sheet' : t) + ' ' + (t === 'Customer' ? '' : id);
   p.style.zIndex = '1100'; p.classList.add('open'); document.body.classList.add('xr-open');
   xrRender(t, id);
 }
@@ -6768,6 +6782,7 @@ async function xrRender(t, id){
       + kv('Sale price', p['Sale Price'] ? 'Rs. ' + money(p['Sale Price']) : '') + (seeCost ? kv('Cost price', p['Cost Price'] ? 'Rs. ' + money(p['Cost Price']) : '') : '') + kv('Location', esc(p.Location || ''))
       + (pos.length ? '<h4>On order</h4>' + pos.map(o => { const it = o.items.find(x => xrKey(x.model) === xrKey(id)); return '<div class="xr-row">' + esc(o.no) + ' · ' + esc(o.status) + ' · ' + esc((Number(it.qty) || 0) - (Number(it.received) || 0)) + ' pcs' + (o.eta ? ' · ETA ' + fmtDate(o.eta) : '') + '</div>'; }).join('') : '')
       + (dcs.length ? '<h4>Recent deliveries</h4>' + dcs.map(dc => '<div class="xr-row">' + esc(dc.no) + ' · ' + fmtDate(dc.date) + ' · ' + esc(dc.customer) + ' · ' + esc((dc.items.find(x => xrKey(x.model) === xrKey(id)) || {}).qty) + '</div>').join('') : '')
+      + (function(){ const mr = []; XR.docs.MR.forEach(sh => (sh.items || []).forEach(it => { if (xrKey(it.model) === xrKey(id) || xrKey(it.product) === xrKey(id)) { const o = (it.offers || [])[it.pick || 0]; if (o && Number(o.rate)) mr.push('<div class="xr-row">' + esc(sh.no) + ' · ' + esc(o.shop || '') + (o.person ? ' / ' + esc(o.person) : '') + ' · Rs. ' + money(o.rate) + ' · ' + fmtDate(o.date || sh.date) + '</div>'); } })); return mr.length ? '<h4>Local market rates</h4>' + mr.slice(0, 6).join('') : ''; })()
       + (qts.length ? '<h4>Recent quotations</h4>' + qts.map(q => { const it = q.items.find(x => xrKey(x.model) === xrKey(id)) || {}; return '<div class="xr-row">' + esc(q.no) + ' · ' + fmtDate(q.date) + ' · ' + esc(q.customer) + ' · Rs. ' + money(it.rate) + '</div>'; }).join('') : '')
       + '<div class="xr-btns">' + (findProd(id) ? btn('Full details', "productDetail('" + encA(id) + "')", true) + btn('Product history', "showProductHistory('" + encA(id) + "')") : '') + '</div>';
   } else if (t === 'Customer') {
@@ -6796,6 +6811,11 @@ async function xrRender(t, id){
     h = kv('Date', fmtDate(d.date)) + kv('Supplier', esc(d.supplier)) + kv('Status', esc(d.status) + (d.statusNote ? ' — ' + esc(d.statusNote) : '')) + kv('ETA', d.eta ? fmtDate(d.eta) : '')
       + items(d.items, true) + kv('Total', esc(d.currency) + ' ' + money(d.total))
       + '<div class="xr-btns">' + btn('🖨 Print', "xrPrint('PO','" + encA(d.no) + "')", true) + '</div>';
+  } else if (t === 'MR') {
+    h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customer)) + kv('Enquiry', esc(d.enquiryId || '')) + kv('Ref', esc(d.ref || ''))
+      + '<table class="xr-items"><thead><tr><th>Item</th><th>Rate from</th><th class="r">Cost</th><th class="r">Customer</th></tr></thead><tbody>'
+      + (d.items || []).map(it => { const o = (it.offers || [])[it.pick || 0] || {}; return '<tr><td><b>' + esc(it.desc || it.model) + '</b>' + (it.model && it.desc ? '<div class="muted small">' + esc(it.model) + '</div>' : '') + '<div class="muted small">' + esc(it.qty || '') + ' ' + esc(it.unit || '') + '</div></td><td>' + esc(o.shop || '—') + (o.person ? '<div class="muted small">' + esc(o.person) + '</div>' : '') + (o.date ? '<div class="muted small">' + fmtDate(o.date) + '</div>' : '') + '</td><td class="r">' + (Number(o.rate) ? money(o.rate) : '—') + '</td><td class="r">' + (Number(it.sale) ? money(it.sale) : '—') + '</td></tr>'; }).join('')
+      + '</tbody></table><div class="xr-btns">' + btn('Open rate sheet', "xrMR('" + encA(d.no) + "')", true) + '</div>';
   } else if (t === 'Enquiry') {
     h = kv('Date', fmtDate(d.date)) + kv('Customer', xrC(d.customerName)) + kv('Status', esc(d.status || 'New')) + kv('Quotation', esc(d.quotationNo || ''))
       + (d.requirement ? '<div class="xr-text">' + esc(String(d.requirement).slice(0, 1200)) + '</div>' : '') + ((d.items || []).length ? items(d.items, false) : '')
@@ -6811,11 +6831,350 @@ function xrPrint(t, idEnc){
   else if (t === 'Quotation') printQuotation(d);
   else if (t === 'PO') { if (!PO.list.some(x => x.no === d.no)) PO.list = Array.from(XR.docs.PO.values()); poPrint(encA(d.no)); }
 }
+function xrMR(idEnc){ const no = decodeURIComponent(idEnc), d = XR.docs.MR.get(xrKey(no)); xrClose(); if (d && !MR.list.some(x => x.no === no)) MR.list = Array.from(XR.docs.MR.values()); MR.pending = {open:no, at:Date.now()}; showPage('marketrates', document.querySelector(".navbtn[onclick*=\"'marketrates'\"]") || undefined); }
 function xrQtSource(idEnc){ if (!QT_CACHE.some(x => x.no === decodeURIComponent(idEnc))) QT_CACHE = Array.from(XR.docs.Quotation.values()); qtSourcesView(idEnc); }
 function xrEnquiry(idEnc){ if (!ENQ_CACHE.some(x => x.id === decodeURIComponent(idEnc))) ENQ_CACHE = Array.from(XR.docs.Enquiry.values()); enqViewFull(idEnc); }
-Object.assign(window, {xrLower, xrOpen, xrBack, xrClose, xrPrint, xrQtSource, xrEnquiry, xrWarm, XR});
+Object.assign(window, {xrMR, xrLower, xrOpen, xrBack, xrClose, xrPrint, xrQtSource, xrEnquiry, xrWarm, XR});
 
 /* every successful read feeds the index */
 const xrPrevApi = api;
 api = async function(action, data){ const r = await xrPrevApi(action, data); try { xrIngest(action, data || {}, r); } catch (e) {} return r; };
 window.api = api;
+
+
+/* ============================================================
+   MARKET RATES — rates collected from the local market for items that are not in our list.
+   Paste the enquiry -> write each shop's rate + date -> markup % per item -> Make Quotation
+   (the quotation's internal Price Source is filled automatically) -> later "Add to Products".
+   Internal only (module "marketrates"); nothing here is ever printed.
+   ============================================================ */
+const MR = {list:[], loaded:false, tab:'sheets', view:'list', f:null, pending:null};
+const MR_UNITS = ['Pcs', 'Nos', 'Set', 'Mtr', 'Kg', 'Roll', 'Pair', 'Lot', 'Ft', 'Box'];
+
+function mrNum(v){ const n = Number(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function mrBlankOffer(){ return {shop:'', person:'', rate:'', date:todayStr(), note:''}; }
+function mrBlankItem(){ return {desc:'', model:'', make:'', qty:'', unit:'Pcs', offers:[mrBlankOffer()], pick:0, markup:'', sale:'', product:''}; }
+function mrOffer(it){ const o = (it.offers || [])[it.pick || 0]; return o && mrNum(o.rate) > 0 ? o : null; }
+function mrCost(it){ const o = mrOffer(it); return o ? mrNum(o.rate) : 0; }
+function mrDays(d){ const t = new Date(d).getTime(); return isNaN(t) ? null : Math.floor((Date.now() - t) / 864e5); }
+function mrAge(d){ const n = mrDays(d); if (n == null) return ''; const c = n > 60 ? 'old' : n > 20 ? 'mid' : ''; return '<span class="mr-age ' + c + '">' + (n <= 0 ? 'today' : n === 1 ? '1 day old' : n + ' days old') + '</span>'; }
+function mrQuotes(no){ const k = String(no || '').toUpperCase(); return k ? (QT_CACHE || []).filter(q => (q.items || []).some(x => String(x.srcRef || '').toUpperCase().indexOf(k) !== -1)) : []; }
+function mrStatus(sh){
+  const qs = mrQuotes(sh.no), items = sh.items || [];
+  if (qs.some(q => q.status === 'Won')) return ['Order received', 'grn'];
+  if (qs.length) return ['Quoted', 'blu'];
+  const miss = items.filter(it => !mrCost(it)).length;
+  return miss ? ['Waiting for rates' + (miss < items.length ? ' (' + miss + ')' : ''), 'amb'] : ['Rates ready', 'vio'];
+}
+function mrShops(){ const set = new Set(); (S.suppliers || []).forEach(s => s['Supplier Name'] && set.add(s['Supplier Name'])); MR.list.forEach(sh => (sh.items || []).forEach(it => (it.offers || []).forEach(o => o.shop && set.add(o.shop)))); return Array.from(set).sort(); }
+function mrPeople(){ const set = new Set(); MR.list.forEach(sh => (sh.items || []).forEach(it => (it.offers || []).forEach(o => o.person && set.add(o.person)))); return Array.from(set).sort(); }
+
+async function renderMarketRates(){
+  const host = $('mrPage'); if (!host) return;
+  if (MR.view === 'form' && MR.f) mrRenderForm(); else { MR.view = 'list'; host.innerHTML = '<div class="muted" style="padding:20px">Loading…</div>'; }
+  const jobs = [api('getMarketRates')];
+  if (hasMod('sales') && !(QT_CACHE || []).length) jobs.push(api('quotationHistory').then(r => { if (r && r.ok) QT_CACHE = r.documents || []; }).catch(() => null));
+  const [r] = await Promise.all(jobs);
+  if (!r || !r.ok) {
+    if (MR.view === 'list') host.innerHTML = '<div class="panel">' + esc((r && /unknown action/i.test(r.error || '')) ? 'Market Rates need the new Code.gs — paste it in Apps Script and deploy a New version.' : ((r && r.error) || 'Could not load market rates.')) + '</div>';
+    return;
+  }
+  MR.list = r.sheets || []; MR.loaded = true;
+  if (MR.view === 'list') mrRenderList();
+}
+
+/* ---------- list + item rate history ---------- */
+function mrRenderList(){
+  const host = $('mrPage'); if (!host) return;
+  const keepQ = ($('mrSearch') || {}).value || '', q = norm(keepQ);
+  const tabs = [['sheets', 'Rate sheets', MR.list.length], ['history', 'Item rate history', MR.list.reduce((a, sh) => a + (sh.items || []).reduce((b, it) => b + (it.offers || []).filter(o => mrNum(o.rate) > 0).length, 0), 0)]];
+  let body = '';
+  if (MR.tab === 'sheets') {
+    const hit = sh => !q || [sh.no, sh.customer, sh.enquiryId, sh.ref, sh.notes].concat((sh.items || []).map(it => [it.desc, it.model, it.make].concat((it.offers || []).map(o => o.shop + ' ' + o.person)).join(' '))).some(v => norm(v).includes(q));
+    const rows = MR.list.filter(hit);
+    body = '<div class="panel table-wrap"><table class="po-list"><thead><tr><th>MR #</th><th>Date</th><th>Customer</th><th class="r">Items</th><th>Quotation</th><th>Status</th><th></th></tr></thead><tbody>'
+      + (rows.map(sh => {
+          const id = encA(sh.no), st = mrStatus(sh), qs = mrQuotes(sh.no);
+          return '<tr><td><a class="model-link" onclick="mrOpen(\'' + id + '\')"><b>' + esc(sh.no) + '</b></a>' + (sh.ref ? '<div class="muted small">Ref ' + esc(sh.ref) + '</div>' : '') + '</td>'
+            + '<td>' + fmtDate(sh.date) + '</td><td>' + esc(sh.customer || '—') + (sh.enquiryId ? '<div class="muted small">' + esc(sh.enquiryId) + '</div>' : '') + '</td>'
+            + '<td class="r">' + (sh.items || []).length + '<div class="muted small">' + esc((sh.items || []).slice(0, 2).map(it => it.desc || it.model).join(', ').slice(0, 60)) + '</div></td>'
+            + '<td>' + (qs.map(x => esc(x.no)).join(', ') || '<span class="muted">—</span>') + '</td>'
+            + '<td><span class="po-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>'
+            + '<td class="po-act"><button class="btn small" onclick="mrOpen(\'' + id + '\')">Open</button>'
+            + (hasMod('sales') ? '<button class="btn small" onclick="mrQuotation(\'' + id + '\')">Make Quotation</button>' : '')
+            + (isAdmin() ? '<button class="btn small danger" title="Delete (Admin)" onclick="mrDelete(\'' + id + '\')">×</button>' : '') + '</td></tr>';
+        }).join('') || '<tr><td colspan="7" class="empty">' + (MR.list.length ? 'Nothing found.' : 'No rate sheets yet — press “+ New rate sheet”.') + '</td></tr>')
+      + '</tbody></table></div>';
+  } else {
+    const flat = [];
+    MR.list.forEach(sh => (sh.items || []).forEach(it => (it.offers || []).forEach((o, k) => { if (mrNum(o.rate) > 0) flat.push({sh:sh, it:it, o:o, picked:k === (it.pick || 0)}); })));
+    const rows = flat.filter(x => !q || [x.it.desc, x.it.model, x.it.make, x.o.shop, x.o.person, x.o.note, x.sh.no, x.sh.customer].some(v => norm(v).includes(q)))
+      .sort((a, b) => String(b.o.date || b.sh.date).localeCompare(String(a.o.date || a.sh.date))).slice(0, 400);
+    body = '<div class="panel table-wrap"><table class="po-list mr-hist"><thead><tr><th>Rate date</th><th>Item</th><th>Shop / Supplier</th><th>Person</th><th class="r">Rate</th><th class="r">Given to customer</th><th>Sheet</th></tr></thead><tbody>'
+      + (rows.map(x => '<tr' + (x.picked ? '' : ' class="mr-other"') + '><td>' + fmtDate(x.o.date || x.sh.date) + '<div>' + mrAge(x.o.date || x.sh.date) + '</div></td>'
+          + '<td><b>' + esc(x.it.desc || x.it.model) + '</b>' + (x.it.model && x.it.desc ? '<div class="muted small">' + esc(x.it.model) + '</div>' : '') + '</td>'
+          + '<td>' + esc(x.o.shop) + (x.o.note ? '<div class="muted small">' + esc(x.o.note) + '</div>' : '') + '</td><td>' + esc(x.o.person) + '</td>'
+          + '<td class="r"><b>' + money(x.o.rate) + '</b>' + (x.picked ? '' : '<div class="muted small">not used</div>') + '</td>'
+          + '<td class="r">' + (x.picked && mrNum(x.it.sale) ? money(x.it.sale) + (x.it.markup !== '' && x.it.markup != null ? '<div class="muted small">+' + esc(x.it.markup) + '%</div>' : '') : '<span class="muted">—</span>') + '</td>'
+          + '<td><a class="model-link" onclick="mrOpen(\'' + encA(x.sh.no) + '\')">' + esc(x.sh.no) + '</a><div class="muted small">' + esc(x.sh.customer || '') + '</div></td></tr>').join('')
+        || '<tr><td colspan="7" class="empty">' + (q ? 'No rate found for “' + esc(keepQ) + '”.' : 'No rates yet.') + '</td></tr>')
+      + '</tbody></table></div>';
+  }
+  host.innerHTML = '<div class="toolbar no-dirty-track"><button class="btn primary" onclick="mrNew()">+ New rate sheet</button>'
+    + '<input id="mrSearch" placeholder="Search item, part #, shop, person, customer, MR #…" oninput="mrRenderList()" style="flex:1;min-width:240px" value="' + esc(keepQ) + '"><button class="btn" onclick="renderMarketRates()">↻ Refresh</button></div>'
+    + '<div class="enq-tabs no-dirty-track" style="margin:0 0 12px">' + tabs.map(t => '<button type="button" class="' + (MR.tab === t[0] ? 'on' : '') + '" onclick="MR.tab=\'' + t[0] + '\';mrRenderList()">' + t[1] + '<i>' + t[2] + '</i></button>').join('') + '</div>'
+    + body;
+  const s = $('mrSearch'); if (s && keepQ) { s.focus(); s.setSelectionRange(keepQ.length, keepQ.length); }
+}
+
+/* ---------- form ---------- */
+function mrNew(seed){
+  MR.f = Object.assign({no:'', date:todayStr(), customer:'', enquiryId:'', ref:'', notes:'', items:[mrBlankItem()]}, seed || {});
+  MR.view = 'form'; mrRenderForm();
+}
+function mrOpen(idEnc){
+  const sh = MR.list.find(x => x.no === decodeURIComponent(idEnc)); if (!sh) return;
+  MR.f = JSON.parse(JSON.stringify({no:sh.no, date:toInputDate(sh.date) || todayStr(), customer:sh.customer, enquiryId:sh.enquiryId, ref:sh.ref, notes:sh.notes, items:sh.items || []}));
+  MR.f.items.forEach(it => { if (!(it.offers || []).length) it.offers = [mrBlankOffer()]; });
+  MR.view = 'form'; mrRenderForm();
+}
+function mrBack(){
+  if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.isDirty && window.SFSUnsavedChanges.isDirty() && !confirm('Leave this rate sheet without saving?')) return;
+  MR.view = 'list'; MR.f = null; if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.markClean) window.SFSUnsavedChanges.markClean(); mrRenderList();
+}
+function mrRenderForm(){
+  const host = $('mrPage'), f = MR.f; if (!host || !f) return;
+  const inp = (k, label, extra, cls) => '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + label + '<input id="mr_' + k + '" value="' + esc(f[k] || '') + '" oninput="MR.f.' + k + '=this.value"' + (extra || '') + '></label>';
+  host.innerHTML = '<div class="toolbar no-dirty-track"><button class="btn" onclick="mrBack()">← Market Rates</button><b style="font-size:16px;margin-left:6px">' + (f.no ? esc(f.no) : 'New rate sheet') + '</b>'
+    + '<span class="muted small" style="margin-left:auto">🔒 Internal — never printed</span></div>'
+    + '<div class="panel"><div class="form-grid">'
+    + '<label>Date<input id="mr_date" type="date" value="' + esc(f.date) + '" oninput="MR.f.date=this.value"></label>'
+    + inp('customer', 'Customer', ' list="clist" autocomplete="off" placeholder="Who asked for these items"')
+    + inp('enquiryId', 'Enquiry #', ' placeholder="e.g. ENQ-000123"')
+    + inp('ref', 'Customer ref', ' placeholder="e.g. RFQ / PR number"')
+    + inp('notes', 'Notes', ' placeholder="Anything to remember"', 'wide')
+    + '</div></div>'
+    + '<div class="panel"><div class="panel-head"><h3>Items</h3><span style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button class="btn small" onclick="mrPasteForm()">📋 Paste enquiry / list</button>'
+    + (hasMod('enquiries') ? '<button class="btn small" onclick="mrPickEnquiry()">From an enquiry</button>' : '')
+    + '<button class="btn small" onclick="mrAddItem()">+ Add item</button></span></div>'
+    + '<datalist id="mrShopList">' + mrShops().map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>'
+    + '<datalist id="mrPersonList">' + mrPeople().map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>'
+    + '<datalist id="mrUnits">' + MR_UNITS.map(x => '<option value="' + x + '">').join('') + '</datalist>'
+    + '<div id="mrItems"></div>'
+    + '<div class="mr-foot no-dirty-track"><span>Markup for all items without one: <input id="mrAllPct" type="number" step="any" style="width:80px" placeholder="%"> <button class="btn small" onclick="mrApplyAll()">Apply</button></span><span id="mrTotals"></span></div>'
+    + '</div>'
+    + '<div class="imp-actions"><button class="btn" onclick="mrBack()">Cancel</button><button class="btn" id="mrSave1" onclick="mrSave()">Save</button>'
+    + (hasMod('sales') ? '<button class="btn primary" id="mrSave2" onclick="mrSave(true)">Save &amp; Make Quotation</button>' : '') + '</div>';
+  mrRenderItems();
+}
+function mrRenderItems(){
+  const h = $('mrItems'), f = MR.f; if (!h || !f) return;
+  h.innerHTML = f.items.map((it, i) => {
+    const inProd = it.product || (it.model && findProd(it.model) ? findProd(it.model)['Model / Part No.'] : '');
+    const offers = (it.offers || []).map((o, k) => '<tr class="' + (k === (it.pick || 0) ? 'mr-pick' : '') + '">'
+      + '<td class="c"><input type="radio" name="mrp' + i + '" title="Use this rate" ' + (k === (it.pick || 0) ? 'checked' : '') + ' onchange="mrPick(' + i + ',' + k + ')"></td>'
+      + '<td><input list="mrShopList" value="' + esc(o.shop) + '" placeholder="Shop / supplier" oninput="MR.f.items[' + i + '].offers[' + k + '].shop=this.value"></td>'
+      + '<td><input list="mrPersonList" value="' + esc(o.person) + '" placeholder="Who gave the rate" oninput="MR.f.items[' + i + '].offers[' + k + '].person=this.value"></td>'
+      + '<td><input type="number" min="0" step="any" value="' + esc(o.rate) + '" placeholder="Rate" oninput="MR.f.items[' + i + '].offers[' + k + '].rate=this.value;mrRateChanged(' + i + ',' + k + ')"></td>'
+      + '<td><input type="date" value="' + esc(toInputDate(o.date) || '') + '" oninput="MR.f.items[' + i + '].offers[' + k + '].date=this.value"></td>'
+      + '<td><input value="' + esc(o.note) + '" placeholder="Note (brand, delivery…)" oninput="MR.f.items[' + i + '].offers[' + k + '].note=this.value"></td>'
+      + '<td>' + ((it.offers || []).length > 1 ? '<button class="btn small danger" title="Remove this rate" onclick="mrDelOffer(' + i + ',' + k + ')">×</button>' : '') + '</td></tr>').join('');
+    return '<div class="mr-item">'
+      + '<div class="mr-item-top"><span class="mr-no">' + (i + 1) + '</span>'
+      + '<label class="mr-desc">Item<input value="' + esc(it.desc) + '" placeholder="What the customer asked for" oninput="MR.f.items[' + i + '].desc=this.value"></label>'
+      + '<label>Part # (if any)<input list="mlist" value="' + esc(it.model) + '" oninput="MR.f.items[' + i + '].model=this.value"></label>'
+      + '<label>Make<input value="' + esc(it.make) + '" oninput="MR.f.items[' + i + '].make=this.value"></label>'
+      + '<label class="mr-s">Qty<input type="number" min="0" step="any" value="' + esc(it.qty) + '" oninput="MR.f.items[' + i + '].qty=this.value;mrTotals()"></label>'
+      + '<label class="mr-s">Unit<input list="mrUnits" value="' + esc(it.unit) + '" oninput="MR.f.items[' + i + '].unit=this.value"></label>'
+      + '<button class="btn small danger mr-del" title="Remove item" onclick="mrDelItem(' + i + ')">×</button></div>'
+      + '<table class="mr-offers"><thead><tr><th class="c">Use</th><th>Shop / Supplier</th><th>Person</th><th style="width:110px">Rate (Rs)</th><th style="width:140px">Rate date</th><th>Note</th><th style="width:34px"></th></tr></thead><tbody>' + offers + '</tbody></table>'
+      + '<div class="mr-item-bot"><a class="model-link" onclick="mrAddOffer(' + i + ')">+ rate from another shop</a>'
+      + '<span class="mr-calc"><span>Cost <b id="mr_cost_' + i + '">' + (mrCost(it) ? money(mrCost(it)) : '—') + '</b></span>'
+      + '<label>Markup %<input id="mr_pct_' + i + '" type="number" step="any" value="' + esc(it.markup) + '" oninput="MR.f.items[' + i + '].markup=this.value;mrFromPct(' + i + ')"></label>'
+      + '<label>Customer rate<input id="mr_sale_' + i + '" type="number" min="0" step="any" value="' + esc(it.sale || '') + '" oninput="MR.f.items[' + i + '].sale=this.value;mrFromSale(' + i + ')"></label>'
+      + '<span>Amount <b id="mr_amt_' + i + '"></b></span></span>'
+      + (inProd ? '<span class="mr-inprod">✓ In Products: ' + esc(inProd) + '</span>' : (hasMod('products') ? '<button class="btn small" onclick="mrToProduct(' + i + ')">+ Add to Products</button>' : ''))
+      + '</div></div>';
+  }).join('');
+  mrTotals();
+}
+function mrTotals(){
+  const f = MR.f; if (!f) return; let cost = 0, sale = 0;
+  f.items.forEach((it, i) => { const q = mrNum(it.qty), c = mrCost(it), s = mrNum(it.sale); cost += q * c; sale += q * s; const a = $('mr_amt_' + i); if (a) a.textContent = q && s ? money(q * s) : '—'; const ce = $('mr_cost_' + i); if (ce) ce.textContent = c ? money(c) : '—'; });
+  const e = $('mrTotals'); if (e) e.innerHTML = 'Cost total <b>Rs. ' + money(cost) + '</b> · Customer total <b>Rs. ' + money(sale) + '</b>' + (cost && sale ? ' · Margin <b>' + Math.round((sale - cost) / cost * 1000) / 10 + '%</b>' : '');
+}
+function mrRound(n){ return Math.round(n * 100) / 100; }
+function mrFromPct(i){ const it = MR.f.items[i], c = mrCost(it); if (c && String(it.markup).trim() !== '') { it.sale = mrRound(c * (1 + mrNum(it.markup) / 100)); const e = $('mr_sale_' + i); if (e) e.value = it.sale; } mrTotals(); }
+function mrFromSale(i){ const it = MR.f.items[i], c = mrCost(it), s = mrNum(it.sale); if (c && s) { it.markup = Math.round((s / c - 1) * 1000) / 10; const e = $('mr_pct_' + i); if (e) e.value = it.markup; } mrTotals(); }
+function mrRateChanged(i, k){ const it = MR.f.items[i]; if (k === (it.pick || 0)) { if (String(it.markup).trim() !== '') mrFromPct(i); else mrTotals(); } }
+function mrPick(i, k){ MR.f.items[i].pick = k; if (String(MR.f.items[i].markup).trim() !== '') mrFromPct(i); mrRenderItems(); }
+function mrAddOffer(i){ MR.f.items[i].offers.push(mrBlankOffer()); mrRenderItems(); }
+function mrDelOffer(i, k){ const it = MR.f.items[i]; it.offers.splice(k, 1); if (!it.offers.length) it.offers.push(mrBlankOffer()); if ((it.pick || 0) >= it.offers.length || (it.pick || 0) === k) it.pick = 0; else if (k < it.pick) it.pick--; mrRenderItems(); }
+function mrAddItem(){ MR.f.items.push(mrBlankItem()); mrRenderItems(); }
+function mrDelItem(i){ MR.f.items.splice(i, 1); if (!MR.f.items.length) MR.f.items.push(mrBlankItem()); mrRenderItems(); }
+function mrApplyAll(){ const v = ($('mrAllPct') || {}).value; if (String(v).trim() === '') return toast('Enter the markup %.', true); MR.f.items.forEach((it, i) => { if (String(it.markup == null ? '' : it.markup).trim() === '') { it.markup = mrNum(v); const c = mrCost(it); if (c) it.sale = mrRound(c * (1 + it.markup / 100)); } }); mrRenderItems(); }
+
+/* ---------- paste an enquiry / list ---------- */
+function mrParse(text){
+  const lines = String(text || '').split(/\r?\n/).map(x => x.replace(/ /g, ' ').trim()).filter(Boolean);
+  const unitRe = '(pcs|pc|nos|no|units?|sets?|mtrs?|meters?|metres?|mtr|m|kgs?|ft|feet|rolls?|pairs?|lots?|boxes|box|ltrs?|litres?|each|ea)';
+  const unitName = u => { u = String(u || '').toLowerCase(); return /^(pc|pcs|each|ea|units?)$/.test(u) ? 'Pcs' : /^(no|nos)$/.test(u) ? 'Nos' : /^set/.test(u) ? 'Set' : /^(m|mtr|mtrs|meter|meters|metre|metres)$/.test(u) ? 'Mtr' : /^kg/.test(u) ? 'Kg' : /^(ft|feet)$/.test(u) ? 'Ft' : /^roll/.test(u) ? 'Roll' : /^pair/.test(u) ? 'Pair' : /^lot/.test(u) ? 'Lot' : /^box/.test(u) ? 'Box' : /^l/.test(u) ? 'Ltr' : 'Pcs'; };
+  const out = [];
+  lines.forEach(line => {
+    if (/^(s\.?\s*no|sr\.?\s*#?|item|description|#)\b.*\b(qty|quantity)\b/i.test(line)) return;          /* header row */
+    if (line.indexOf('\t') !== -1) {
+      let cells = line.split('\t').map(x => x.trim());
+      if (/^\d{1,3}[.)]?$/.test(cells[0]) && cells.length > 2) cells = cells.slice(1);
+      let qi = -1; for (let c = cells.length - 1; c >= 1; c--) if (/^\d+(\.\d+)?$/.test(cells[c].replace(/,/g, ''))) { qi = c; break; }
+      const texts = cells.filter((c, ix) => ix !== qi && c && !/^\d+(\.\d+)?$/.test(c));
+      const unitCell = texts.find(t => new RegExp('^' + unitRe + '\\.?$', 'i').test(t));
+      const rest = texts.filter(t => t !== unitCell);
+      let model = '', desc = rest.join(' — ');
+      if (rest.length >= 2 && /\d/.test(rest[0]) && !/\s/.test(rest[0]) && rest[0].length <= 30) { model = rest[0]; desc = rest.slice(1).join(' — '); }
+      if (desc || model) out.push({desc:desc, model:model, qty:qi >= 0 ? mrNum(cells[qi]) : '', unit:unitCell ? unitName(unitCell.replace('.', '')) : 'Pcs'});
+      return;
+    }
+    let t = line.replace(/^(\d{1,3}\s*[.)\-:]|[-•*▪●]|\(\d{1,3}\))\s*/, '').trim(), qty = '', unit = 'Pcs', m;
+    if ((m = t.match(new RegExp('^(.*?)[\\s,;:\\-–]*(?:qty|quantity)\\s*[:=\\-]?\\s*(\\d+(?:\\.\\d+)?)\\s*' + unitRe + '?\\.?\\s*$', 'i')))) { t = m[1]; qty = mrNum(m[2]); unit = unitName(m[3]); }
+    else if ((m = t.match(new RegExp('^(.*?)[\\s,;:\\-–=]+(\\d+(?:\\.\\d+)?)\\s*' + unitRe + '\\.?\\s*$', 'i')))) { t = m[1]; qty = mrNum(m[2]); unit = unitName(m[3]); }
+    else if ((m = t.match(new RegExp('^(.*?)\\s+[-–=x×]\\s*(\\d+(?:\\.\\d+)?)\\s*$', 'i')))) { t = m[1]; qty = mrNum(m[2]); }
+    else if ((m = t.match(new RegExp('^(\\d+(?:\\.\\d+)?)\\s*' + unitRe + '\\.?\\s+(?:of\\s+)?(.+)$', 'i')))) { qty = mrNum(m[1]); unit = unitName(m[2]); t = m[3]; }
+    if (qty === '' && (/:\s*$/.test(line) || /^(dear|hi|hello|salam|aoa|please|pls|kindly|thanks|thank you|regards|best regards|warm regards|sincerely|sent from|from:|to:|subject:|date:)\b/i.test(t))) return;   /* greetings / signature */
+    t = t.replace(/[\s,;:\-–]+$/, '').trim();
+    if (t) out.push({desc:t, model:'', qty:qty, unit:unit});
+  });
+  return out;
+}
+function mrPasteForm(){
+  modal('Paste the enquiry or item list', '<div class="muted" style="margin-bottom:10px">Paste the customer\'s items — one item per line, straight from the email, WhatsApp or Excel. Quantities like “10 pcs”, “Qty: 5” or a quantity column are picked up by themselves. You can correct everything afterwards.</div>'
+    + '<textarea id="mrPasteText" style="width:100%;min-height:220px;font-family:inherit" placeholder="1. Ball valve 1/2&quot; brass  10 pcs&#10;2. PU tube 8mm blue - 50 mtr&#10;3. Pressure gauge 0-10 bar 63mm  Qty: 4"></textarea>'
+    + '<div id="mrPastePrev" class="muted small" style="margin-top:6px"></div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="mrPasteApply()">Add items</button></div>');
+  setTimeout(() => { const t = $('mrPasteText'); if (t) { t.focus(); t.oninput = () => { const n = mrParse(t.value).length; $('mrPastePrev').textContent = n ? n + ' item(s) found' : ''; }; } }, 30);
+}
+function mrPasteApply(){
+  const rows = mrParse(($('mrPasteText') || {}).value || '');
+  if (!rows.length) return toast('Nothing to add.', true);
+  mrAddRows(rows); closeModal(); toast(rows.length + ' item(s) added — now write the shop rates.');
+}
+function mrAddRows(rows){
+  const f = MR.f; f.items = f.items.filter(it => String(it.desc).trim() || String(it.model).trim() || (it.offers || []).some(o => mrNum(o.rate) > 0));
+  rows.forEach(r => { const it = mrBlankItem(); it.desc = r.desc || ''; it.model = r.model || ''; it.qty = r.qty || ''; it.unit = r.unit || 'Pcs'; if (r.note) it.offers[0].note = ''; f.items.push(it); });
+  if (!f.items.length) f.items.push(mrBlankItem());
+  mrRenderItems();
+}
+async function mrPickEnquiry(){
+  if (!(ENQ_CACHE || []).length) { const r = await api('getEnquiries'); if (r && r.ok) ENQ_CACHE = r.documents || []; }
+  const list = (ENQ_CACHE || []).slice(0, 80);
+  if (!list.length) return toast('No enquiries found.', true);
+  modal('Take items from an enquiry', '<div class="table-wrap" style="max-height:60vh;overflow:auto"><table><thead><tr><th>Enquiry</th><th>Customer</th><th class="r">Items</th><th></th></tr></thead><tbody>'
+    + list.map(d => '<tr><td><b>' + esc(d.id) + '</b><div class="muted small">' + fmtDate(d.date) + '</div></td><td>' + esc(d.customerName || '') + '<div class="muted small">' + esc(String(d.subject || d.requirement || '').slice(0, 70)) + '</div></td><td class="r">' + (d.items || []).length + '</td><td><button class="btn small primary" onclick="closeModal();mrUseEnquiry(\'' + encA(d.id) + '\')">Use</button></td></tr>').join('')
+    + '</tbody></table></div><div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>');
+}
+function mrUseEnquiry(idEnc){
+  const d = (ENQ_CACHE || []).find(x => x.id === decodeURIComponent(idEnc)); if (!d || !MR.f) return;
+  const cn = /^\(/.test(String(d.customerName || '')) ? '' : (d.customerName || '');
+  MR.f.enquiryId = d.id; if (cn) MR.f.customer = cn; if (d.customerRef) MR.f.ref = d.customerRef;
+  const rows = (d.items || []).length ? d.items.map(x => ({desc:x.desc, qty:x.qty, unit:x.unit || 'Pcs'})) : mrParse(d.requirement || '');
+  ['customer', 'enquiryId', 'ref'].forEach(k => { const e = $('mr_' + k); if (e) e.value = MR.f[k] || ''; });
+  mrAddRows(rows); toast(rows.length + ' item(s) taken from ' + d.id + '.');
+}
+async function mrFromEnquiry(idEnc){
+  if (!(ENQ_CACHE || []).some(x => x.id === decodeURIComponent(idEnc))) { const r = await api('getEnquiries'); if (r && r.ok) ENQ_CACHE = r.documents || []; }
+  MR.pending = {enq:decodeURIComponent(idEnc), at:Date.now()};
+  showPage('marketrates', document.querySelector(".navbtn[onclick*=\"'marketrates'\"]") || undefined);
+}
+
+/* ---------- save / quotation / product ---------- */
+function mrPayload(){
+  const f = MR.f;
+  const items = f.items.filter(it => String(it.desc).trim() || String(it.model).trim()).map(it => ({desc:String(it.desc || '').trim(), model:String(it.model || '').trim(), make:String(it.make || '').trim(),
+    qty:mrNum(it.qty), unit:String(it.unit || 'Pcs').trim(), pick:it.pick || 0, markup:String(it.markup == null ? '' : it.markup).trim() === '' ? '' : mrNum(it.markup), sale:mrNum(it.sale), product:it.product || '',
+    offers:(it.offers || []).filter(o => String(o.shop).trim() || String(o.person).trim() || mrNum(o.rate) > 0).map(o => ({shop:String(o.shop || '').trim(), person:String(o.person || '').trim(), rate:mrNum(o.rate), date:o.date || '', note:String(o.note || '').trim()}))}));
+  items.forEach(it => { if (it.pick >= it.offers.length) it.pick = 0; });
+  return {no:f.no, date:f.date, customer:String(f.customer || '').trim(), enquiryId:String(f.enquiryId || '').trim(), ref:String(f.ref || '').trim(), notes:String(f.notes || '').trim(), items:items};
+}
+async function mrSave(thenQuote, quiet){
+  const f = MR.f; if (!f) return null;
+  const p = mrPayload();
+  if (!p.items.length) { toast('Add at least one item.', true); return null; }
+  const btns = ['mrSave1', 'mrSave2'].map(id => $(id)).filter(Boolean); btns.forEach(b => b.disabled = true);
+  try {
+    const r = await api('saveMarketRate', p);
+    if (!r || !r.ok) { toast(((r && r.error) || 'Could not save.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true); return null; }
+    if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.markClean) window.SFSUnsavedChanges.markClean();
+    const saved = Object.assign({}, p, {no:r.id, date:p.date || todayStr()});
+    MR.list = [saved].concat(MR.list.filter(x => x.no !== r.id));
+    f.no = r.id;
+    if (!quiet) toast((p.no ? 'Saved: ' : 'Rate sheet saved: ') + r.id);
+    if (thenQuote) { mrMakeQuotation(saved); return r.id; }
+    if (!quiet) { MR.view = 'list'; MR.f = null; renderMarketRates(); }
+    return r.id;
+  } finally { btns.forEach(b => b.disabled = false); }
+}
+function mrQuotation(idEnc){ const sh = MR.list.find(x => x.no === decodeURIComponent(idEnc)); if (sh) mrMakeQuotation(sh); }
+function mrMakeQuotation(sh){
+  if (!hasMod('sales')) return toast('You do not have access to quotations.', true);
+  const items = (sh.items || []).filter(it => it.desc || it.model);
+  const noRate = items.filter(it => !mrNum(it.sale)).length;
+  if (noRate && !confirm(noRate + ' item(s) have no customer rate yet. Make the quotation anyway? (You can type those rates in the quotation.)')) return;
+  const dt = d => { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'2-digit'}).replace(/ /g, '-'); };
+  const lines = items.map(it => {
+    const o = (it.offers || [])[it.pick || 0] || {}, p = findProd(it.product || it.model);
+    return {model:p ? p['Model / Part No.'] : (it.model || ''), desc:it.desc || (p && p.Description) || '', itemRemarks:'', make:it.make || (p && p.Brand) || '', qty:it.qty || '', unit:it.unit || 'Pcs',
+      rate:mrNum(it.sale) || '', rateAuto:false, deliveryStatus:'Pending', history:null,
+      srcName:o.shop || '', srcRate:mrNum(o.rate) ? 'Rs. ' + mrNum(o.rate) : '', srcPerson:o.person || '', srcRef:sh.no + (o.date ? ' (' + dt(o.date) + ')' : '')};
+  });
+  const en = (ENQ_CACHE || []).find(x => x.id === sh.enquiryId) || {id:sh.enquiryId || '', customerName:sh.customer || '', items:[], customerRef:sh.ref || ''};
+  startQuotationFromEnquiry(Object.assign({}, en, {customerName:sh.customer || en.customerName, customerRef:sh.ref || en.customerRef}), {noItems:true});
+  setTimeout(() => {
+    if (!$('qtlines')) return;
+    if (!en.subject && !en.requirement && !(en.items || []).length) renderQtEnqRef(null);
+    QTL.splice(0, QTL.length, ...lines); renderQuotationLines(); updateQuotationTotal();
+    toast(lines.length + ' item(s) copied from ' + sh.no + ' with the customer rates. The price source is filled in (internal).');
+  }, 60);
+}
+function mrToProduct(i){
+  const it = MR.f.items[i]; if (!it) return;
+  const o = mrOffer(it) || {};
+  const cats = Array.from(new Set((S.products || []).map(p => p.Category).filter(Boolean))).sort();
+  modal('Add to Products', '<div class="muted" style="margin-bottom:10px">The item becomes a normal product (stock 0). The local rate is kept as its cost price and in its remarks.</div><div class="form-grid">'
+    + '<label>Model / Part No. *<input id="mrpModel" value="' + esc(it.model) + '" placeholder="e.g. BV-BR-050"></label>'
+    + '<label class="wide">Description<input id="mrpDesc" value="' + esc(it.desc) + '"></label>'
+    + '<label>Category<input id="mrpCat" list="mrpCats" value="Others"></label><datalist id="mrpCats">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>'
+    + '<label>Brand / Make<input id="mrpBrand" value="' + esc(it.make) + '"></label>'
+    + '<label>Unit<input id="mrpUnit" list="mrUnits" value="' + esc(it.unit || 'Pcs') + '"></label>'
+    + '<label>Cost price (Rs)<input id="mrpCost" type="number" step="any" value="' + esc(mrNum(o.rate) || '') + '"></label>'
+    + '<label>Sale price (Rs)<input id="mrpSale" type="number" step="any" value="' + esc(mrNum(it.sale) || '') + '"></label>'
+    + '<label class="wide">Remarks<input id="mrpRem" value="' + esc('Local market: ' + [o.shop, o.person].filter(Boolean).join(' / ') + (mrNum(o.rate) ? ', Rs. ' + mrNum(o.rate) : '') + (o.date ? ' on ' + o.date : '') + (MR.f.no ? ' (' + MR.f.no + ')' : '')) + '"></label>'
+    + '</div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="mrpSave" onclick="mrSaveProduct(' + i + ')">Add product</button></div>');
+  setTimeout(() => { const m = $('mrpModel'); if (m) m.focus(); }, 30);
+}
+async function mrSaveProduct(i){
+  const it = MR.f && MR.f.items[i]; if (!it) return;
+  const model = String(($('mrpModel') || {}).value || '').trim();
+  if (!model) return toast('Model / Part No. is required.', true);
+  if (findProd(model)) return toast('A product with this Part No. already exists: ' + model, true);
+  const b = $('mrpSave'); if (b) b.disabled = true;
+  const p = {model:model, description:$('mrpDesc').value, category:$('mrpCat').value || 'Others', brand:$('mrpBrand').value, unit:$('mrpUnit').value || 'Pcs', location:'',
+    costPrice:$('mrpCost').value, salePrice:$('mrpSale').value, openingStock:0, reorderLevel:0, remarks:$('mrpRem').value};
+  const r = await api('saveProduct', p);
+  if (!r || !r.ok) { if (b) b.disabled = false; return toast((r && r.error) || 'Could not add the product.', true); }
+  S.products.push({'Product ID':r.id, 'Model / Part No.':model, Description:p.description, Category:p.category, Brand:p.brand, Unit:p.unit, 'Cost Price':p.costPrice, 'Sale Price':p.salePrice, currentStock:0, Remarks:p.remarks, Status:'Active', 'Reorder Level':0});
+  if (typeof syncDatalists === 'function') syncDatalists();
+  it.product = model; if (!it.model) it.model = model;
+  closeModal();
+  const no = await mrSave(false, true);
+  mrRenderItems();
+  toast('Product added: ' + model + (no ? ' — saved in ' + no : ''));
+}
+async function mrDelete(idEnc){
+  const no = decodeURIComponent(idEnc);
+  if (!confirm('Delete rate sheet ' + no + '? This cannot be undone.')) return;
+  const r = await api('deleteMarketRate', {no:no});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not delete.', true);
+  MR.list = MR.list.filter(x => x.no !== no); toast('Deleted ' + no); mrRenderList();
+}
+Object.assign(window, {MR, renderMarketRates, mrRenderList, mrNew, mrOpen, mrBack, mrRenderItems, mrTotals, mrFromPct, mrFromSale, mrRateChanged, mrPick, mrAddOffer, mrDelOffer, mrAddItem, mrDelItem, mrApplyAll,
+  mrParse, mrPasteForm, mrPasteApply, mrPickEnquiry, mrUseEnquiry, mrFromEnquiry, mrSave, mrQuotation, mrMakeQuotation, mrToProduct, mrSaveProduct, mrDelete});
