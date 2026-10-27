@@ -1658,3 +1658,13 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .mr-item input:focus,.mr-foot input:focus{border-color:#4472C4;box-shadow:0 0 0 3px rgba(68,114,196,.15);outline:none}
 .mr-item input[type=radio]{width:auto;padding:0;accent-color:#15803d;transform:scale(1.15)}
 .mr-item-top label small{font-weight:500;color:#94a3b8}
+
+/* ---- Old invoice upload ---- */
+.modal-card:has(.oi-box){max-width:980px;width:96vw}
+.oi-in{border:1px solid #d5dce8;border-radius:8px;padding:6px 8px;font-size:13px;width:150px;background:#fff}
+.oi-in.oi-desc{width:100%;min-width:260px}
+.oi-in:focus{outline:none;border-color:#4472C4;box-shadow:0 0 0 3px rgba(68,114,196,.15)}
+.oi-tot{margin:10px 0 0 auto;max-width:420px}
+.oi-tot div{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px dashed #e3e8f0}
+.oi-tot .good{color:#15803d;font-weight:700}.oi-tot .bad{color:#c8102e;font-weight:700}
+.btn.oi-up{border-color:#f0c36d;background:#fff8e6;color:#8a5a00}
