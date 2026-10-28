@@ -23,17 +23,31 @@ function mergeProductCategories(){
   } catch (e) {}
 }
 const ALL_MODULES = [
-  {id:'products', label:'Products'},
-  {id:'sales',    label:'Sales (DC / Invoice)'},
-  {id:'accounts', label:'Accounts (Payments)'},
-  {id:'parties',  label:'Parties (Customers / Suppliers)'},
-  {id:'reports',  label:'Reports'},
-  {id:'enquiries',label:'Enquiries'},
-  {id:'imports', label:'Imports (confidential costing)'},
-  {id:'stockvalue', label:'Stock Value (special permission — dashboard)'},
-  {id:'setstock', label:'Set Stock (special permission — correct product quantity)'},
-  {id:'purchase', label:'Purchase Orders (foreign orders to suppliers)'},
-  {id:'marketrates', label:'Market Rates (local market buying rates — confidential)'}
+  {id:'prodview',  group:'Inventory', label:'Products — view list & stock'},
+  {id:'prodedit',  group:'Inventory', label:'Products — add / edit (no prices)'},
+  {id:'inward',    group:'Inventory', label:'Inward — receive goods (no costs shown)'},
+  {id:'setstock',  group:'Inventory', label:'Set Stock — correct a product quantity'},
+  {id:'stockvalue',group:'Inventory', label:'Stock Value on the dashboard'},
+  {id:'costview',  group:'Costing & Pricing', label:'See cost prices'},
+  {id:'pricing',   group:'Costing & Pricing', label:'Change prices — sale & cost price, price list upload, parcel costs'},
+  {id:'imports',   group:'Costing & Pricing', label:'Imports — costing, parcel costs & profit reports'},
+  {id:'marketrates', group:'Costing & Pricing', label:'Market Rates — local market buying rates'},
+  {id:'purchase',  group:'Costing & Pricing', label:'Purchase Orders'},
+  {id:'dc',        group:'Sales', label:'Delivery Challans — new & history'},
+  {id:'invoice',   group:'Sales', label:'Invoices — new & history'},
+  {id:'quotation', group:'Sales', label:'Quotations — new & history'},
+  {id:'enquiries', group:'Sales', label:'Enquiries & Inbox'},
+  {id:'accounts',  group:'Accounts & Parties', label:'Payments / Outstanding'},
+  {id:'parties',   group:'Accounts & Parties', label:'Customers & Suppliers'},
+  {id:'reports',   group:'Accounts & Parties', label:'Reports'}
+];
+/* permissions saved before the detailed list still work: an old name means its whole group */
+const MODULE_GROUPS = {products:['prodview','prodedit','inward'], sales:['dc','invoice','quotation']};
+const MODULE_PRESETS = [
+  ['Store staff', ['prodview','inward']],
+  ['Sales staff', ['prodview','dc','invoice','quotation','enquiries']],
+  ['Accounts', ['invoice','accounts','parties','reports']],
+  ['Costing person', ['prodview','prodedit','costview','pricing','imports','marketrates','purchase','stockvalue']]
 ];
 const CHART_PALETTE = ['#3B5BDB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B'];
 
@@ -69,23 +83,26 @@ function round2(n){ return Math.round((Number(n)||0)*100)/100; }
 
 /* ---------- MODULE HELPERS ---------- */
 function isAdmin(){ return S.user && String(S.user.role||'').toUpperCase() === 'ADMIN'; }
-function userModules(){ return Array.isArray(S.user?.modules) ? S.user.modules : []; }
-function hasMod(id){ return isAdmin() || userModules().indexOf(id) !== -1; }
+function userModules(){ const raw = Array.isArray(S.user?.modules) ? S.user.modules : []; const out = []; raw.forEach(m => (MODULE_GROUPS[m] || [m]).forEach(x => { if (out.indexOf(x) === -1) out.push(x); })); return out; }
+/* hasMod('dc') · hasMod(['pricing','imports']) = any one · hasMod('sales') = any DC / Invoice / Quotation right */
+function hasMod(id){ if (isAdmin()) return true; const mine = userModules(); return [].concat(id).reduce((a, m) => a.concat(MODULE_GROUPS[m] || [m]), []).some(m => mine.indexOf(m) !== -1); }
+function canSeeCost(){ return hasMod(['costview','pricing','imports']); }
+function canPrice(){ return hasMod(['pricing','imports']); }
 
 /* ---------- NAV ---------- */
 function nav(){
   const all = [
     {id:'dashboard', label:'Dashboard',   mod:null,       section:'Main'},
-    {id:'products',  label:'Products',    mod:'products', section:'Inventory'},
-    {id:'inward',    label:'Inward',      mod:'products', section:'Inventory'},
+    {id:'products',  label:'Products',    mod:['prodview','prodedit','setstock','imports'], section:'Inventory'},
+    {id:'inward',    label:'Inward',      mod:'inward', section:'Inventory'},
     {id:'imports',   label:'Imports',     mod:'imports',  section:'Inventory'},
     {id:'purchaseorders', label:'Purchase Orders', mod:'purchase', section:'Inventory'},
-    {id:'dc',        label:'New Delivery Challan', mod:'sales', section:'Sales'},
-    {id:'dchistory', label:'DC History',  mod:'sales',    section:'Sales'},
-    {id:'invoices',  label:'New Invoice', mod:'sales',    section:'Sales'},
-    {id:'ivhistory', label:'Invoice History', mod:'sales', section:'Sales'},
-    {id:'quotations', label:'New Quotation', mod:'sales', section:'Sales'},
-    {id:'qthistory', label:'Quotation History', mod:'sales', section:'Sales'},
+    {id:'dc',        label:'New Delivery Challan', mod:'dc', section:'Sales'},
+    {id:'dchistory', label:'DC History',  mod:'dc',       section:'Sales'},
+    {id:'invoices',  label:'New Invoice', mod:'invoice',  section:'Sales'},
+    {id:'ivhistory', label:'Invoice History', mod:'invoice', section:'Sales'},
+    {id:'quotations', label:'New Quotation', mod:'quotation', section:'Sales'},
+    {id:'qthistory', label:'Quotation History', mod:'quotation', section:'Sales'},
     {id:'inbox',     label:'Inbox',     mod:'enquiries', section:'Sales'},
     {id:'enquiries', label:'Enquiries', mod:'enquiries', section:'Sales'},
     {id:'marketrates', label:'Market Rates', mod:'marketrates', section:'Sales'},
@@ -383,7 +400,9 @@ function showPage(p, btn){
   $('pageTitle').textContent = label;
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
-  if ((p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
+  const PAGE_MOD = {products:['prodview','prodedit','setstock','imports'], inward:'inward', dc:'dc', dchistory:'dc', invoices:'invoice', ivhistory:'invoice', quotations:'quotation', qthistory:'quotation',
+    inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports'};
+  if ((PAGE_MOD[p] && !hasMod(PAGE_MOD[p])) || (p === 'users' && !isAdmin()) || (p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
@@ -418,11 +437,11 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select><button class="btn primary" onclick="productForm()">+ Add Product</button>${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button></div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select>${hasMod(['prodedit','imports'])?'<button class="btn primary" onclick="productForm()">+ Add Product</button>':''}${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}${hasMod(['prodedit','imports'])?'<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button>':''}</div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   imports:()=>impPageHtml(),
   purchaseorders:()=>`<div class="wrap" id="poPage"></div>`,
   marketrates:()=>`<div class="wrap" id="mrPage"></div>`,
-  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label><label>Purchase Cost (total Rs.)<input id="icost" type="number" min="0" step="0.01"></label><label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
+  inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label>${canPrice()?'<label>Landed cost per piece (Rs.) <small class="muted">optional — or add it later in Imports → Parcels waiting for cost</small><input id="icost" type="number" min="0" step="0.01"></label>':''}<label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>Delivery Challan #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC(s)</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
@@ -440,7 +459,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${hasMod('pricing')?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -945,7 +964,7 @@ function productDetail(em){
      </div>
      <div id="pdSrc" class="pd-src muted small">Checking where this stock comes from…</div>
      <div class="actions">
-       <button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>
+       ${hasMod(['prodedit','imports'])?`<button class="btn" onclick="editProductForm('${encA(m)}')">Edit</button>`:''}
        <button class="btn" onclick="showProductHistory('${encA(m)}')">Product History</button>
        ${(isAdmin()||hasMod('setstock'))?`<button class="btn" onclick="setStockForm('${encA(m)}')">⚖ Set Stock</button>`:''}
        <button class="btn" onclick="printProductCard('${encA(m)}')">🖨 Product Card (PDF)</button>
@@ -986,8 +1005,8 @@ function editProductForm(em){
        <label>Brand<input id="epbrand" value="${esc(p.Brand||'')}"></label>
        <label>Unit<input id="epunit" value="${esc(p.Unit||'Pcs')}"></label>
        <label>Location<input id="eploc" value="${esc(p.Location||'')}"></label>
-       ${hasMod('imports') ? `<label>Cost Price<input id="epcost" type="number" value="${esc(p['Cost Price']||'')}"></label>` : `<input id="epcost" type="hidden" value="${esc(p['Cost Price']||'')}">`}
-       <label>Sale Price<input id="epprice" type="number" value="${esc(p['Sale Price']||'')}"></label>
+       ${canPrice() ? `<label>Cost Price<input id="epcost" type="number" value="${esc(p['Cost Price']||'')}"></label>` : `<input id="epcost" type="hidden" value="${esc(p['Cost Price']||'')}">`}
+       <label>Sale Price<input id="epprice" type="number" value="${esc(p['Sale Price']||'')}" ${canPrice()?'':'readonly title="Only the costing person can change prices"'}></label>
        <label>Reorder Level<input id="eprlevel" type="number" value="${reorderOf(p)}"></label>
        <label>Product Image<input id="epimg" type="file" accept="image/*"></label>
        <label class="wide">Remarks<textarea id="eprem">${esc(p.Remarks||'')}</textarea></label>
@@ -1032,8 +1051,8 @@ function productForm(){
        <label>Brand<input id="pbrand"></label>
        <label>Unit<input id="punit" value="Pcs"></label>
        <label>Location<input id="ploc"></label>
-       ${hasMod('imports') ? '<label>Cost Price<input id="pcost" type="number"></label>' : '<input id="pcost" type="hidden" value="">'}
-       <label>Sale Price<input id="pprice" type="number"></label>
+       ${canPrice() ? '<label>Cost Price<input id="pcost" type="number"></label>' : '<input id="pcost" type="hidden" value="">'}
+       ${canPrice() ? '<label>Sale Price<input id="pprice" type="number"></label>' : '<input id="pprice" type="hidden" value="">'}
        <label>Opening Stock<input id="pop" type="number" value="0"></label>
        <label>Reorder Level<input id="prlevel" type="number" value="5"></label>
        <label>Product Image<input id="pimg" type="file" accept="image/*"></label>
@@ -1155,11 +1174,11 @@ async function guardedSave(fn){ if (SFS_SAVING) return; SFS_SAVING = true; try {
 async function saveInward(){
   const prod = findProd($('imodel').value);
   const qty = Number($('iqty').value);
-  const cost = $('icost').value;
+  const cost = $('icost') ? $('icost').value : '';
   const supplier = $('isupplier').value.trim();
   if (!prod) return toast('Product is not in the product list. Please add it to Products first.', true);
   if (!(qty > 0)) return toast('Quantity must be greater than zero.', true);
-  if (cost !== '' && !(Number(cost) >= 0)) return toast('Invalid purchase cost.', true);
+  if (cost !== '' && !(Number(cost) >= 0)) return toast('Invalid cost.', true);
   if (Number(cost) > 0 && !supplier) {
     if (!confirm('Supplier is empty — this purchase amount will not be included in Supplier Payable. Save anyway?')) return;
   }
@@ -1167,10 +1186,12 @@ async function saveInward(){
     const r = await api('saveInward', {
       date:$('idate').value || todayStr(), sourceType:$('itype').value, model:prod['Model / Part No.'],
       quantity:qty, supplier:supplier,
-      supplierReference:$('iref').value, purchaseCost:cost, remarks:$('irem').value
+      supplierReference:$('iref').value, unitCost:cost, fromInwardPage:true, remarks:$('irem').value
     });
     if (!r.ok) return toast(r.error, true);
-    toast('Inward saved. Stock increased.');
+    toast('Inward saved. Stock increased.' + (Number(cost) > 0 ? ' Average cost updated.' : ''));
+    ['imodel', 'iqty', 'icost', 'irem'].forEach(id => { if ($(id)) $(id).value = ''; });
+    if (window.SFSUnsavedChanges && window.SFSUnsavedChanges.markClean) window.SFSUnsavedChanges.markClean();
     await refresh();
   });
 }
@@ -1537,7 +1558,7 @@ function filterIVHistory(){
       <td>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}')">View</button>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}',true)">Print</button>
-        ${oiIsOld(d) && hasMod('sales') ? `<button class="btn small oi-up" title="Old invoice without items — upload its Excel file" onclick="oiUpload('${encA(d.no)}')">⬆ Upload invoice</button>` : ''}
+        ${oiIsOld(d) && hasMod('invoice') ? `<button class="btn small oi-up" title="Old invoice without items — upload its Excel file" onclick="oiUpload('${encA(d.no)}')">⬆ Upload invoice</button>` : ''}
         ${d.sourceFile ? `<a class="btn small" href="${esc(d.sourceFile)}" target="_blank" rel="noopener" title="The original Excel file">📎 Original</a>` : ''}
       </td>
     </tr>`).join('');
@@ -1586,7 +1607,7 @@ function viewInvoice(noEnc, print){
        <button class="btn" onclick="closeModal()">Close</button>
        <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
        ${d.sourceFile ? '<a class="btn" href="' + esc(d.sourceFile) + '" target="_blank" rel="noopener">📎 Original file</a>' : ''}
-       ${oiIsOld(d) && hasMod('sales') ? '<button class="btn primary" onclick="closeModal();oiUpload(\'' + encA(no) + '\')">⬆ Upload invoice</button>' : ''}
+       ${oiIsOld(d) && hasMod('invoice') ? '<button class="btn primary" onclick="closeModal();oiUpload(\'' + encA(no) + '\')">⬆ Upload invoice</button>' : ''}
        ${isAdmin() && !oiIsOld(d) ? '<button class="btn" onclick="editInvoice(\'' + encA(no) + '\')">Edit Invoice</button>' : ''}
      </div>`);
 }
@@ -2184,7 +2205,7 @@ function psCsv(){
 }
 
 /* ---------- SETTINGS ---------- */
-function renderSettings(){ if (isAdmin()) { bkLoad(); plRender(); } if (typeof offPanel === 'function') offPanel(); }
+function renderSettings(){ if (hasMod('pricing')) plRender(); if (isAdmin()) { bkLoad(); } if (typeof offPanel === 'function') offPanel(); }
 async function refreshSource(){
   if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
@@ -2222,7 +2243,7 @@ async function renderUsers(){
     const modBadges = isAdminRow
       ? '<span class="badge badge-admin">All Modules</span>'
       : (mods.length
-          ? mods.map(m => `<span class="badge">${esc((ALL_MODULES.find(x=>x.id===m)||{}).label||m)}</span>`).join('')
+          ? mods.map(m => `<span class="badge" title="${esc((ALL_MODULES.find(x=>x.id===m)||{}).label||m)}">${esc(((ALL_MODULES.find(x=>x.id===m)||{}).label||m).split(' — ')[0])}</span>`).join('')
           : '<span class="badge badge-none">No modules</span>');
 
     return `<div class="kv user-row">
@@ -2256,9 +2277,10 @@ function userForm(editUsername, editName, editRole, editModules){
        </select></label>
      </div>
      <div class="modules-block">
-       <div class="modules-title">Module Access</div>
-       ${ALL_MODULES.map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" ${mods.indexOf(m.id)!==-1?'checked':''}> ${m.label}</label>`).join('')}
-       <div class="muted small">Note: the ADMIN role always has full access — modules are not required.</div>
+       <div class="modules-title">What may this person do?</div>
+       <div class="perm-presets">Quick set: ${MODULE_PRESETS.map((x,i)=>`<button type="button" class="btn small" onclick="permPreset(${i})">${esc(x[0])}</button>`).join('')}<button type="button" class="btn small ghost" onclick="permPreset(-1)">Clear all</button></div>
+       ${Array.from(new Set(ALL_MODULES.map(m=>m.group))).map(g=>`<div class="perm-group"><div class="perm-head"><b>${esc(g)}</b><a class="model-link" onclick="permGroup('${encA(g)}')">all / none</a></div>${ALL_MODULES.filter(m=>m.group===g).map(m=>`<label class="chk"><input type="checkbox" value="${m.id}" data-g="${esc(g)}" ${userModsHas(mods,m.id)?'checked':''}> ${esc(m.label)}</label>`).join('')}</div>`).join('')}
+       <div class="muted small">Note: the ADMIN role always has full access — nothing needs to be ticked. Costs and prices are only shown to people with a "Costing & Pricing" right.</div>
      </div>
      <div class="actions">
        <button class="btn" onclick="closeModal()">Cancel</button>
@@ -2266,6 +2288,9 @@ function userForm(editUsername, editName, editRole, editModules){
      </div>`);
 }
 
+function userModsHas(mods, id){ return (mods || []).some(m => m === id || (MODULE_GROUPS[m] || []).indexOf(id) !== -1); }
+function permPreset(i){ const on = i < 0 ? [] : MODULE_PRESETS[i][1]; document.querySelectorAll('.modules-block input[type=checkbox]').forEach(c => c.checked = on.indexOf(c.value) !== -1); }
+function permGroup(gEnc){ const g = decodeURIComponent(gEnc), boxes = Array.from(document.querySelectorAll('.modules-block input[type=checkbox]')).filter(c => c.dataset.g === g); const all = boxes.every(c => c.checked); boxes.forEach(c => c.checked = !all); }
 async function saveUser(editUsername){
   const isEdit = !!editUsername;
   const modules = Array.from(document.querySelectorAll('.modules-block input[type=checkbox]:checked')).map(x=>x.value);
@@ -3135,6 +3160,10 @@ function impPageHtml(){
     <section class="imp-zone z-hist" id="zHist"><div class="imp-zhead"><i>🗂</i><div><b>Past Imports</b><span>Saved costing sheets</span></div></div>
     <div class="panel" id="impHistory"></div>
     </section>
+
+    <section class="imp-zone z-parcel" id="zParcel"><div class="imp-zhead"><i>📮</i><div><b>Parcels waiting for cost</b><span>Goods received on the Inward page — add the landed cost per piece</span></div></div>
+    <div class="panel" id="impParcels"><div class="muted">Loading…</div></div>
+    </section>
   </div>`;
 }
 
@@ -3146,7 +3175,7 @@ function renderImports(){
   $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
   $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
   IMP.h = h; impSyncRateBox();
-  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab(); pcLoad();
 }
 function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
 function impHdr(){
@@ -4400,12 +4429,12 @@ function renderDashboard(){
   const hello = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   const first = String((S.user && (S.user.name || S.user.username)) || '').split(' ')[0];
   const qa = [
-    {k:'Q', label:'New Quotation', icon:'＋', color:'#2563eb', mod:'sales', go:() => db2Go('quotations')},
+    {k:'Q', label:'New Quotation', icon:'＋', color:'#2563eb', mod:'quotation', go:() => db2Go('quotations')},
     {k:'E', label:'New Enquiry', icon:'✉', color:'#7c3aed', mod:'enquiries', go:() => db2Go('enquiries', () => { if (typeof enquiryForm === 'function') enquiryForm(); })},
-    {k:'D', label:'Delivery Challan', icon:'⛟', color:'#0891b2', mod:'sales', go:() => db2Go('dc')},
-    {k:'I', label:'New Invoice', icon:'▤', color:'#1f3b63', mod:'sales', go:() => db2Go('invoices')},
+    {k:'D', label:'Delivery Challan', icon:'⛟', color:'#0891b2', mod:'dc', go:() => db2Go('dc')},
+    {k:'I', label:'New Invoice', icon:'▤', color:'#1f3b63', mod:'invoice', go:() => db2Go('invoices')},
     {k:'P', label:'Receive Payment', icon:'Rs', color:'#16a34a', mod:'accounts', go:() => db2Go('accounts')},
-    {k:'W', label:'Stock Inward', icon:'⬇', color:'#ea580c', mod:'products', go:() => db2Go('inward')}
+    {k:'W', label:'Stock Inward', icon:'⬇', color:'#ea580c', mod:'inward', go:() => db2Go('inward')}
   ].filter(x => db2Can(x.mod));
   window.DB2_QA = qa;
 
@@ -5283,7 +5312,7 @@ async function printProductCard(em){
     + '<div class="pc-head"><div class="pc-img">' + (img ? '<img src="' + esc(img) + '" alt="" onerror="this.parentNode.textContent=\'No picture\'">' : 'No picture') + '</div><div style="flex:1;min-width:0">'
     + '<div class="pc-model">' + esc(m) + '</div><div class="pc-desc">' + esc(p.Description || '') + '</div>'
     + '<div class="pc-f">' + field('Category', esc(p.Category || '')) + field('Brand', esc(p.Brand || '')) + field('Location', esc(p.Location || '')) + field('Unit', esc(p.Unit || ''))
-    + field('Sale price', Number(p['Sale Price']) ? money(p['Sale Price']) : '') + (hasMod('imports') && cost ? field('Cost price', money(cost)) : '') + field('Reorder level', esc(reorderOf(p))) + field('Status', esc(statusOk ? status : status + ' ⚠')) + '</div></div></div>'
+    + field('Sale price', Number(p['Sale Price']) ? money(p['Sale Price']) : '') + (canSeeCost() && cost ? field('Cost price', money(cost)) : '') + field('Reorder level', esc(reorderOf(p))) + field('Status', esc(statusOk ? status : status + ' ⚠')) + '</div></div></div>'
     + '<div class="pc-box"><div class="hl"><span>STOCK NOW</span><b>' + n(p.currentStock) + '</b></div>'
     + (u ? '<div><span>OLD SHEET</span><b>' + n(u.sourceQty) + '</b></div>' : '')
     + '<div><span>PURCHASED</span><b>+' + n(sumIn) + '</b></div><div><span>DELIVERED</span><b>' + n(sumOut) + '</b></div>'
@@ -5892,14 +5921,15 @@ const IMP_TABS = [
   {id:'zCalc',   cls:'z-calc',   icon:'🧮', t:'Costing Calculator', d:'Landed cost of one or more items'},
   {id:'zCost',   cls:'z-cost',   icon:'📦', t:'New Import',         d:'Shipment costing → products + stock'},
   {id:'zProfit', cls:'z-profit', icon:'📈', t:'Profit Reports',     d:'Monthly profit & profit per invoice'},
-  {id:'zHist',   cls:'z-hist',   icon:'🗂', t:'Past Imports',       d:'Saved costing sheets'}
+  {id:'zHist',   cls:'z-hist',   icon:'🗂', t:'Past Imports',       d:'Saved costing sheets'},
+  {id:'zParcel', cls:'z-parcel', icon:'📮', t:'Parcels waiting for cost', d:'Inward entries without a cost'}
 ];
 function impCurTab(){ let k = ''; try { k = localStorage.getItem('sfsImpTab') || ''; } catch (e) {} return IMP_TABS.some(x => x.id === k) ? k : 'zCalc'; }
 function impTiles(){
   const host = $('impTiles'); if (!host) return;
   const cur = impCurTab();
   const filled = (IMP.rows || []).filter(r => r.model || r.qty || r.price).length;
-  const badge = {zCost:filled ? filled + ' item' + (filled === 1 ? '' : 's') + ' in progress' : '', zHist:(IMP_HIST || []).length ? IMP_HIST.length + ' saved' : ''};
+  const badge = {zCost:filled ? filled + ' item' + (filled === 1 ? '' : 's') + ' in progress' : '', zHist:(IMP_HIST || []).length ? IMP_HIST.length + ' saved' : '', zParcel:PC.pending.length ? PC.pending.length + ' waiting' : ''};
   host.innerHTML = IMP_TABS.map(x => '<button type="button" class="imp-tile ' + x.cls + (x.id === cur ? ' on' : '') + '" onclick="impTab(\'' + x.id + '\')">'
     + '<i>' + x.icon + '</i><div><b>' + x.t + '</b><span>' + x.d + '</span>' + (badge[x.id] ? '<em>' + badge[x.id] + '</em>' : '') + '</div></button>').join('');
 }
@@ -6688,7 +6718,9 @@ async function xrWarm(force){
   if (!S.user || (!force && Date.now() - XR.warmAt < 5 * 60 * 1000)) return;
   XR.warmAt = Date.now();
   const jobs = [];
-  if (hasMod('sales')) jobs.push(api('getReports', {mode:'docs', type:'DC'}), api('getReports', {mode:'docs', type:'INVOICE'}), api('quotationHistory'));
+  if (hasMod('dc')) jobs.push(api('getReports', {mode:'docs', type:'DC'}));
+  if (hasMod('invoice')) jobs.push(api('getReports', {mode:'docs', type:'INVOICE'}));
+  if (hasMod(['quotation','enquiries'])) jobs.push(api('quotationHistory'));
   if (hasMod('enquiries')) jobs.push(api('getEnquiries'));
   if (hasMod('purchase')) jobs.push(api('getPurchaseOrders'));
   if (hasMod('marketrates')) jobs.push(api('getMarketRates'));
@@ -6779,7 +6811,7 @@ async function xrRender(t, id){
     const dcs = Array.from(XR.docs.DC.values()).filter(dc => hasItem(dc, id)).slice(0, 8);
     const qts = Array.from(XR.docs.Quotation.values()).filter(q => hasItem(q, id)).slice(0, 6);
     const pos = Array.from(XR.docs.PO.values()).filter(o => o.status !== 'Closed' && o.status !== 'Cancelled' && hasItem(o, id));
-    const seeCost = isAdmin() || hasMod('imports') || hasMod('stockvalue');
+    const seeCost = canSeeCost();
     h = (img ? '<img class="xr-img" src="' + esc(img) + '" alt="">' : '')
       + '<div class="xr-big">' + esc(p.Description || '') + '</div>'
       + kv('Brand', esc(p.Brand || '')) + kv('Category', esc(p.Category || '')) + kv('Stock', '<span class="' + ((Number(p.currentStock) || 0) <= 0 ? 'dn' : '') + '">' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + ' ' + esc(p.Unit || '') + '</span>')
@@ -6877,7 +6909,7 @@ async function renderMarketRates(){
   const host = $('mrPage'); if (!host) return;
   if (MR.view === 'form' && MR.f) mrRenderForm(); else { MR.view = 'list'; host.innerHTML = '<div class="muted" style="padding:20px">Loading…</div>'; }
   const jobs = [api('getMarketRates')];
-  if (hasMod('sales') && !(QT_CACHE || []).length) jobs.push(api('quotationHistory').then(r => { if (r && r.ok) QT_CACHE = r.documents || []; }).catch(() => null));
+  if (hasMod('quotation') && !(QT_CACHE || []).length) jobs.push(api('quotationHistory').then(r => { if (r && r.ok) QT_CACHE = r.documents || []; }).catch(() => null));
   const [r] = await Promise.all(jobs);
   if (!r || !r.ok) {
     if (MR.view === 'list') host.innerHTML = '<div class="panel">' + esc((r && /unknown action/i.test(r.error || '')) ? 'Market Rates need the new Code.gs — paste it in Apps Script and deploy a New version.' : ((r && r.error) || 'Could not load market rates.')) + '</div>';
@@ -6905,7 +6937,7 @@ function mrRenderList(){
             + '<td>' + (qs.map(x => esc(x.no)).join(', ') || '<span class="muted">—</span>') + '</td>'
             + '<td><span class="po-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>'
             + '<td class="po-act"><button class="btn small" onclick="mrOpen(\'' + id + '\')">Open</button>'
-            + (hasMod('sales') ? '<button class="btn small" onclick="mrQuotation(\'' + id + '\')">Make Quotation</button>' : '')
+            + (hasMod('quotation') ? '<button class="btn small" onclick="mrQuotation(\'' + id + '\')">Make Quotation</button>' : '')
             + (isAdmin() ? '<button class="btn small danger" title="Delete (Admin)" onclick="mrDelete(\'' + id + '\')">×</button>' : '') + '</td></tr>';
         }).join('') || '<tr><td colspan="7" class="empty">' + (MR.list.length ? 'Nothing found.' : 'No rate sheets yet — press “+ New rate sheet”.') + '</td></tr>')
       + '</tbody></table></div>';
@@ -6969,7 +7001,7 @@ function mrRenderForm(){
     + '<div class="mr-foot no-dirty-track"><span>Markup for all items without one: <input id="mrAllPct" type="number" step="any" style="width:80px" placeholder="%"> <button class="btn small" onclick="mrApplyAll()">Apply</button></span><span id="mrTotals"></span></div>'
     + '</div>'
     + '<div class="imp-actions"><button class="btn" onclick="mrBack()">Cancel</button><button class="btn" id="mrSave1" onclick="mrSave()">Save</button>'
-    + (hasMod('sales') ? '<button class="btn primary" id="mrSave2" onclick="mrSave(true)">Save &amp; Make Quotation</button>' : '') + '</div>';
+    + (hasMod('quotation') ? '<button class="btn primary" id="mrSave2" onclick="mrSave(true)">Save &amp; Make Quotation</button>' : '') + '</div>';
   mrRenderItems();
 }
 function mrRenderItems(){
@@ -6998,7 +7030,7 @@ function mrRenderItems(){
       + '<label>Markup %<input id="mr_pct_' + i + '" type="number" step="any" value="' + esc(it.markup) + '" oninput="MR.f.items[' + i + '].markup=this.value;mrFromPct(' + i + ')"></label>'
       + '<label>Customer rate<input id="mr_sale_' + i + '" type="number" min="0" step="any" value="' + esc(it.sale || '') + '" oninput="MR.f.items[' + i + '].sale=this.value;mrFromSale(' + i + ')"></label>'
       + '<span>Amount <b id="mr_amt_' + i + '"></b></span></span>'
-      + (inProd ? '<span class="mr-inprod">✓ In Products: ' + esc(inProd) + '</span>' : (hasMod('products') ? '<button class="btn small" onclick="mrToProduct(' + i + ')">+ Add to Products</button>' : ''))
+      + (inProd ? '<span class="mr-inprod">✓ In Products: ' + esc(inProd) + '</span>' : (hasMod(['prodedit','imports']) ? '<button class="btn small" onclick="mrToProduct(' + i + ')">+ Add to Products</button>' : ''))
       + '</div></div>';
   }).join('');
   mrTotals();
@@ -7119,7 +7151,7 @@ async function mrSave(thenQuote, quiet){
 }
 function mrQuotation(idEnc){ const sh = MR.list.find(x => x.no === decodeURIComponent(idEnc)); if (sh) mrMakeQuotation(sh); }
 function mrMakeQuotation(sh){
-  if (!hasMod('sales')) return toast('You do not have access to quotations.', true);
+  if (!hasMod('quotation')) return toast('You do not have access to quotations.', true);
   const items = (sh.items || []).filter(it => it.desc || it.model);
   const noRate = items.filter(it => !mrNum(it.sale)).length;
   if (noRate && !confirm(noRate + ' item(s) have no customer rate yet. Make the quotation anyway? (You can type those rates in the quotation.)')) return;
@@ -7503,3 +7535,49 @@ async function plUndo(){
   plRender();
 }
 Object.assign(window, {PL, plRender, plPick, plFindHeader, plSetHeader, plForm, plCheck, plApply, plUndo});
+
+
+/* ============================================================
+   PARCELS WAITING FOR COST (Imports page)
+   Store staff receive goods on the Inward page without seeing costs. Here the costing person
+   adds the landed cost per piece; the product's Cost Price becomes the weighted average.
+   ============================================================ */
+const PC = {pending:[], done:[]};
+async function pcLoad(){
+  const host = $('impParcels'); if (!host) return;
+  const r = await api('getPendingCosts');
+  if (!r || !r.ok) { host.innerHTML = '<div class="muted">' + esc((r && /unknown action/i.test(r.error || '')) ? 'Parcel costs need the new Code.gs — paste it in Apps Script and deploy a New version.' : ((r && r.error) || 'Could not load.')) + '</div>'; return; }
+  PC.pending = r.pending || []; PC.done = r.done || [];
+  pcRender(); if (typeof impTiles === 'function') impTiles();
+}
+function pcRender(){
+  const host = $('impParcels'); if (!host) return;
+  const cost = m => { const p = findProd(m); return p && Number(p['Cost Price']) ? Number(p['Cost Price']) : 0; };
+  host.innerHTML = '<div class="muted small" style="margin-bottom:10px">Write the <b>landed cost of one piece</b> (price + freight + duty + other charges, in Rs.). The product\'s cost price becomes the average of the stock it had before and this parcel. The supplier\'s payable is filled in too. Use “No cost” for free samples or replacements.</div>'
+    + (PC.pending.length ? '<div class="table-wrap"><table class="pc-tbl"><thead><tr><th>Inward</th><th>Item</th><th class="r">Qty</th><th>Supplier / Ref</th><th class="r">Cost now</th><th style="width:150px">Landed cost / piece</th><th class="r">New average</th><th></th></tr></thead><tbody>'
+      + PC.pending.map((x, i) => '<tr><td><b>' + esc(x.id) + '</b><div class="muted small">' + fmtDate(x.date) + ' · ' + esc(x.type) + (x.by ? ' · ' + esc(x.by) : '') + '</div></td>'
+        + '<td><b>' + esc(x.model) + '</b><div class="muted small">' + esc((findProd(x.model) || {}).Description || '') + '</div></td><td class="r">' + esc(x.qty) + '</td>'
+        + '<td>' + esc(x.supplier || '—') + (x.ref ? '<div class="muted small">' + esc(x.ref) + '</div>' : '') + '</td>'
+        + '<td class="r">' + (cost(x.model) ? money(cost(x.model)) : '—') + '<div class="muted small">' + esc(x.stockBefore) + ' in stock before</div></td>'
+        + '<td><input type="number" min="0" step="any" id="pc_u_' + i + '" placeholder="Rs." oninput="pcPreview(' + i + ')"></td>'
+        + '<td class="r" id="pc_a_' + i + '">—</td>'
+        + '<td class="pc-act"><button class="btn small primary" onclick="pcSave(' + i + ')">Save</button><button class="btn small" title="Free sample / replacement — no cost" onclick="pcSave(' + i + ',true)">No cost</button></td></tr>').join('')
+      + '</tbody></table></div>' : '<div class="ok-box">✓ Nothing waiting — every parcel has its cost.</div>')
+    + (PC.done.length ? '<details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">Recently costed (' + PC.done.length + ')</summary><div class="table-wrap"><table class="pc-tbl"><thead><tr><th>Inward</th><th>Item</th><th class="r">Qty</th><th class="r">Cost / piece</th><th class="r">New average</th><th>By</th></tr></thead><tbody>'
+      + PC.done.map(x => '<tr><td>' + esc(x.id) + '<div class="muted small">' + fmtDate(x.date) + '</div></td><td>' + esc(x.model) + '</td><td class="r">' + esc(x.qty) + '</td><td class="r">' + (x.status === 'Skipped' ? 'no cost' : money(x.unit)) + '</td><td class="r">' + (x.avg ? money(x.avg) : '—') + '</td><td>' + esc(x.by) + '</td></tr>').join('')
+      + '</tbody></table></div></details>' : '');
+}
+function pcAvg(x, unit){ const p = findProd(x.model) || {}, old = Number(p['Cost Price']) || 0, b = Math.max(0, Number(x.stockBefore) || 0); return old > 0 && b > 0 ? (b * old + x.qty * unit) / (b + x.qty) : unit; }
+function pcPreview(i){ const x = PC.pending[i], u = Number(($('pc_u_' + i) || {}).value), el = $('pc_a_' + i); if (el) el.textContent = u > 0 ? money(pcAvg(x, u)) : '—'; }
+async function pcSave(i, skip){
+  const x = PC.pending[i]; if (!x) return;
+  const u = Number(($('pc_u_' + i) || {}).value);
+  if (!skip && !(u > 0)) return toast('Write the landed cost of one piece.', true);
+  if (skip && !confirm('Mark ' + x.id + ' (' + x.model + ') as “no cost”? The average cost will not change.')) return;
+  const r = await api('setInwardCost', skip ? {id:x.id, skip:true} : {id:x.id, unitCost:u});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not save.', true);
+  if (!skip) { const p = findProd(x.model); if (p) p['Cost Price'] = r.avg; }
+  toast(skip ? x.id + ': marked as no cost.' : x.model + ': new average cost Rs. ' + money(r.avg));
+  pcLoad();
+}
+Object.assign(window, {pcLoad, pcRender, pcPreview, pcSave});
