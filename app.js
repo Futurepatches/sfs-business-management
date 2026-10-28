@@ -445,7 +445,7 @@ const pages = {
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>Delivery Challan #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC(s)</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
-  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
+  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button>${hasMod('invoice')?'<button class="btn" title="Upload many old Excel invoices at once" onclick="obPick()">⬆ Upload old invoices</button>':''}</div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div id="qtEnqRef"></div><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description / Item Remarks</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button id="qtsavebtn" class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
   qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search Quotation #, Customer, Ref #, Model, Description..." oninput="filterQTHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option value="Pending">Open — sent / waiting</option><option value="Won">Won — PO received</option><option value="Lost">Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  inbox:()=>`<div class="wrap ibx-page"><div class="toolbar no-dirty-track"><div id="ibxTabs" class="enq-tabs"></div><input id="ibxSearch" placeholder="Search sender, subject, attachment, enquiry #…" oninput="ibxRenderList()" style="flex:1;min-width:220px"></div><div class="ibx" id="ibx"><div class="ibx-list" id="ibxList"><div class="muted" style="padding:16px">Loading…</div></div><div class="ibx-read" id="ibxRead"><div class="ibx-empty">✉<div>Select a mail to read it</div></div></div></div></div>`,
@@ -7598,3 +7598,90 @@ async function pcSave(i, skip){
   pcLoad();
 }
 Object.assign(window, {pcLoad, pcRender, pcPreview, pcSave});
+
+
+/* ============================================================
+   OLD INVOICES — BULK UPLOAD
+   Choose many old Excel invoices at once. Each file is matched to its invoice by the
+   invoice number written in the file (or at the start of the file name), checked against
+   the ERP amount, and the ready ones are saved one after the other.
+   ============================================================ */
+let OB = null;
+async function oiBook(buf){
+  let wb = null;
+  try { wb = await oiReadXlsx(buf); } catch (e) { wb = null; }
+  if (wb) return wb;
+  const XL = await oiLoadXlsx();
+  const w = XL.read(buf, {type:'array', cellDates:true}); wb = {SheetNames:w.SheetNames, rows:{}};
+  w.SheetNames.forEach(n => wb.rows[n] = XL.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''}));
+  return wb;
+}
+function obKey(v){ return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+(?=\d)/, ''); }
+function obPick(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.xlsx,.xls,.xlsm,.ods';
+  inp.onchange = () => { const fs = Array.from(inp.files || []); if (fs.length) obRead(fs); };
+  inp.click();
+}
+async function obRead(files){
+  if (!IVH_CACHE.length) await loadIVHistory();
+  OB = {rows:files.map(f => ({file:f, st:'reading'})), busy:false};
+  obRender();
+  const byKey = {}; IVH_CACHE.forEach(d => { byKey[obKey(d.no)] = d; const n = String(d.no).match(/(\d+)\s*$/); if (n && !byKey[obKey(n[1])]) byKey[obKey(n[1])] = d; });
+  for (const r of OB.rows) {
+    try {
+      const wb = await oiBook(await r.file.arrayBuffer());
+      const res = oiParse(wb); res.items.forEach(it => { if (!it.model) it.model = oiGuessModel(it.desc); });
+      r.res = res;
+      const fromName = (r.file.name.match(/^\D*?(\d{2,})/) || [])[1] || '';
+      const d = byKey[obKey(res.no)] || (fromName ? byKey[obKey(fromName)] : null);
+      r.d = d || null;
+      const gross = Math.round(res.items.reduce((a, x) => a + (Number(x.amount) || x.qty * x.rate), 0) * 100) / 100;
+      r.total = Math.round((gross - (Number(res.discount) || 0)) * 100) / 100;
+      if (!res.items.length) { r.st = 'bad'; r.msg = 'No item lines found'; }
+      else if (!d) { r.st = 'bad'; r.msg = 'Invoice ' + (res.no || fromName || '?') + ' is not in the ERP'; }
+      else if (!oiIsOld(d)) { r.st = 'skip'; r.msg = 'Already has items'; }
+      else if (Math.abs(r.total - (Number(d.subtotal) || 0)) > 1) { r.st = 'diff'; r.msg = 'Difference ' + money(r.total - (Number(d.subtotal) || 0)); r.on = false; }
+      else { r.st = 'ok'; r.msg = 'Ready'; r.on = true; }
+    } catch (e) { r.st = 'bad'; r.msg = 'Could not read the file'; }
+    obRender();
+  }
+  const dup = {}; OB.rows.forEach(r => { if (r.d) { if (dup[r.d.no]) { r.st = 'bad'; r.msg = 'Same invoice as another file'; r.on = false; } dup[r.d.no] = 1; } });
+  obRender();
+}
+function obRender(){
+  if (!OB) return;
+  const n = OB.rows.length, ready = OB.rows.filter(r => r.on && (r.st === 'ok' || r.st === 'diff')).length, reading = OB.rows.some(r => r.st === 'reading');
+  const pill = r => '<span class="ob-st ' + r.st + '">' + esc(r.st === 'reading' ? 'Reading…' : r.st === 'saving' ? 'Saving…' : r.msg || '') + '</span>';
+  modal('Upload old invoices — ' + n + ' file(s)', '<div class="oi-box"></div>'
+    + '<div class="muted small" style="margin-bottom:10px">Each file is matched to its invoice by the invoice number inside the file. Only invoices without items are filled in; nothing else is changed and stock is not touched. Files with a difference are not ticked — tick them only if the file is right.</div>'
+    + '<div class="table-wrap" style="max-height:60vh;overflow:auto"><table class="doc-table ob-tbl"><thead><tr><th></th><th>File</th><th>Invoice</th><th>Customer (ERP)</th><th class="right">Items</th><th class="right">File total</th><th class="right">ERP amount</th><th>Status</th></tr></thead><tbody>'
+    + OB.rows.map((r, i) => '<tr><td>' + ((r.st === 'ok' || r.st === 'diff') ? '<input type="checkbox" ' + (r.on ? 'checked' : '') + (OB.busy ? ' disabled' : '') + ' onchange="OB.rows[' + i + '].on=this.checked;obRender()">' : '') + '</td>'
+      + '<td>' + esc(r.file.name) + '</td><td><b>' + esc(r.d ? r.d.no : (r.res && r.res.no) || '—') + '</b>' + (r.d ? '<div class="muted small">' + fmtDate(r.d.date) + '</div>' : '') + '</td>'
+      + '<td>' + esc(r.d ? r.d.customer : '') + '</td><td class="right">' + (r.res ? r.res.items.length : '') + (r.res && r.res.discount ? '<div class="muted small">− disc. ' + money(r.res.discount) + '</div>' : '') + '</td>'
+      + '<td class="right">' + (r.res ? money(r.total) : '') + '</td><td class="right">' + (r.d ? money(r.d.subtotal) : '') + '</td><td>' + pill(r) + '</td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal();OB=null;loadIVHistory()"' + (OB.busy ? ' disabled' : '') + '>Close</button>'
+    + '<button class="btn primary" id="obGo" onclick="obSave()"' + (OB.busy || reading || !ready ? ' disabled' : '') + '>' + (OB.busy ? 'Saving…' : 'Save ' + ready + ' invoice(s)') + '</button></div>');
+}
+async function obSave(){
+  if (!OB || OB.busy) return;
+  const list = OB.rows.filter(r => r.on && (r.st === 'ok' || r.st === 'diff'));
+  if (list.some(r => r.st === 'diff') && !confirm('Some ticked invoices do not match the ERP amount. Their amount (and outstanding) will change to the file total. Continue?')) return;
+  OB.busy = true; obRender();
+  let done = 0;
+  for (const r of list) {
+    r.st = 'saving'; obRender();
+    try {
+      const items = r.res.items.map(x => ({model:String(x.model || '').trim(), desc:String(x.desc || '').trim(), qty:x.qty, rate:x.rate, amount:x.amount || x.qty * x.rate}));
+      if (r.res.discount) items.push({model:'', desc:'Less: Discount' + (r.res.discountPct ? ' @ ' + r.res.discountPct + '%' : ''), qty:1, rate:-r.res.discount, amount:-r.res.discount});
+      const dataUrl = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(r.file); });
+      const res = await api('oldInvoiceItems', {no:r.d.no, items:items, po:r.res.po, dc:r.res.dc, fileBase64:dataUrl, fileName:r.file.name, allowDiff:r.st === 'diff'});
+      if (res && res.ok) { r.st = 'done'; r.msg = '✓ Saved (' + res.lines + ' line' + (res.lines === 1 ? '' : 's') + ')'; r.on = false; done++; }
+      else { r.st = 'bad'; r.msg = (res && res.error) || 'Could not save'; r.on = false; }
+    } catch (e) { r.st = 'bad'; r.msg = 'Could not save'; r.on = false; }
+    obRender();
+  }
+  OB.busy = false; obRender();
+  toast(done + ' old invoice(s) saved.');
+}
+Object.assign(window, {obPick, obRead, obRender, obSave});
