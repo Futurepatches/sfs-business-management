@@ -1692,3 +1692,9 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .pc-act{white-space:nowrap}.pc-act .btn{margin-left:4px}
 .ok-box{background:#e8f6ee;color:#15803d;border-radius:10px;padding:12px 14px;font-weight:600}
 @media(min-width:901px){.imp-tiles{grid-template-columns:repeat(5,minmax(0,1fr))}}
+
+/* ---- Bulk old invoice upload ---- */
+.ob-tbl td{vertical-align:top;font-size:13px}
+.ob-st{display:inline-block;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700;background:#f1f5f9;color:#64748b}
+.ob-st.ok{background:#e8f6ee;color:#15803d}.ob-st.done{background:#15803d;color:#fff}
+.ob-st.diff{background:#fff4e0;color:#b45309}.ob-st.bad{background:#fdecea;color:#c8102e}.ob-st.saving{background:#e0f2fe;color:#0369a1}
