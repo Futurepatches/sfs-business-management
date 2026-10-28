@@ -7349,6 +7349,12 @@ function oiParse(wb){
     const r = rows[i], line = r.map(String).join(' ').trim(), low = line.toLowerCase();
     if (/sub\s*total/.test(low)) { push(); const c = r.findIndex(x => /sub\s*total/i.test(String(x))); out.subtotal = oiNum(right(r, c)); continue; }
     if (out.items.length || cur) {
+      if (/disc|less\b/.test(low) && !/aft|after/.test(low) && !isNaN(out.subtotal) && !out.discount) {   /* "DISCOUNT @ 15%   20,120" */
+        const nums = r.filter(x => x !== '' && !isNaN(oiNum(x))), pm = line.match(/(\d+(?:\.\d+)?)\s*%/);
+        const v = nums.length ? Math.abs(oiNum(nums[nums.length - 1])) : 0;
+        if (v > 0) { out.discount = v; out.discountPct = pm ? Number(pm[1]) : 0; }
+        continue;
+      }
       if (/gst|sales tax/.test(low) && !isNaN(out.subtotal)) { const nums = r.filter(x => !isNaN(oiNum(x)) && x !== ''); out.gst = nums.length ? oiNum(nums[nums.length - 1]) : NaN; continue; }
       if (!isNaN(out.subtotal)) continue;
     }
@@ -7373,7 +7379,8 @@ function oiParse(wb){
 function oiPreview(){
   const o = OI; if (!o) return;
   const d = IVH_CACHE.find(x => x.no === o.no) || {};
-  const r = o.res, sum = Math.round(r.items.reduce((a, x) => a + (Number(x.amount) || x.qty * x.rate), 0) * 100) / 100;
+  const r = o.res, gross = Math.round(r.items.reduce((a, x) => a + (Number(x.amount) || x.qty * x.rate), 0) * 100) / 100;
+  const disc = r.useDiscount === false ? 0 : (Number(r.discount) || 0), sum = Math.round((gross - disc) * 100) / 100;
   const erpSub = Number(d.subtotal) || 0, diff = Math.abs(sum - erpSub) > 1;
   const noDiff = r.no && String(r.no).replace(/\s/g, '').toUpperCase() !== String(o.no).replace(/\s/g, '').toUpperCase();
   modal('Upload old invoice — ' + o.no,
@@ -7385,7 +7392,10 @@ function oiPreview(){
     + '<div class="table-wrap"><table class="doc-table"><thead><tr><th>#</th><th>Model / Part No.</th><th>Description</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amount</th></tr></thead><tbody>'
     + r.items.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><input class="oi-in" value="' + esc(x.model) + '" placeholder="—" oninput="OI.res.items[' + i + '].model=this.value"></td><td><input class="oi-in oi-desc" value="' + esc(x.desc) + '" oninput="OI.res.items[' + i + '].desc=this.value"></td><td class="right">' + esc(x.qty) + '</td><td class="right">' + money(x.rate) + '</td><td class="right">' + money(x.amount || x.qty * x.rate) + '</td></tr>').join('')
     + '</tbody></table></div>'
-    + '<div class="oi-tot"><div><span>Items total (file)</span><b>' + money(sum) + '</b></div><div><span>Invoice amount in ERP (before GST)</span><b>' + money(erpSub) + '</b></div>'
+    + '<div class="oi-tot"><div><span>Items total (file)</span><b>' + money(gross) + '</b></div>'
+    + (r.discount ? '<div><label class="chk" style="margin:0"><input type="checkbox" ' + (r.useDiscount === false ? '' : 'checked') + ' onchange="OI.res.useDiscount=this.checked;oiPreview()"> Less: discount' + (r.discountPct ? ' @ ' + r.discountPct + '%' : '') + ' (file)</label><b>− ' + money(r.discount) + '</b></div>'
+      + '<div><span>Total after discount</span><b>' + money(sum) + '</b></div>' : '')
+    + '<div><span>Invoice amount in ERP (before GST)</span><b>' + money(erpSub) + '</b></div>'
     + '<div class="' + (diff ? 'bad' : 'good') + '"><span>' + (diff ? '⚠ Difference' : '✓ Matches') + '</span><b>' + (diff ? money(sum - erpSub) : '') + '</b></div></div>'
     + (diff ? '<div class="imp-warn" style="margin-top:8px">The items do not add up to the amount saved in the ERP. If you save anyway, the invoice amount (and the outstanding) will change to the items total.</div>' : '')
     + '<div class="actions"><button class="btn" onclick="closeModal();OI=null">Cancel</button><button class="btn primary" id="oiSave" onclick="oiSave(' + (diff ? 'true' : 'false') + ')">Save items' + (diff ? ' anyway' : '') + '</button></div>');
@@ -7395,6 +7405,8 @@ async function oiSave(allowDiff){
   if (allowDiff && !confirm('The invoice amount will change to the items total. Continue?')) return;
   const b = $('oiSave'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
   const items = o.res.items.map(x => ({model:String(x.model || '').trim(), desc:String(x.desc || '').trim(), qty:x.qty, rate:x.rate, amount:x.amount || x.qty * x.rate}));
+  /* the discount is kept as its own line, so the invoice total is exactly the printed one */
+  if (o.res.discount && o.res.useDiscount !== false) items.push({model:'', desc:'Less: Discount' + (o.res.discountPct ? ' @ ' + o.res.discountPct + '%' : ''), qty:1, rate:-o.res.discount, amount:-o.res.discount});
   const r = await api('oldInvoiceItems', {no:o.no, items:items, po:o.res.po, dc:o.res.dc, fileBase64:o.dataUrl, fileName:o.file.name, allowDiff:!!allowDiff});
   if (!r || !r.ok) {
     if (b) { b.disabled = false; b.textContent = 'Save items'; }
