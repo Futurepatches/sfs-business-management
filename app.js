@@ -440,7 +440,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -2184,7 +2184,7 @@ function psCsv(){
 }
 
 /* ---------- SETTINGS ---------- */
-function renderSettings(){ if (isAdmin()) bkLoad(); if (typeof offPanel === 'function') offPanel(); }
+function renderSettings(){ if (isAdmin()) { bkLoad(); plRender(); } if (typeof offPanel === 'function') offPanel(); }
 async function refreshSource(){
   if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
@@ -7373,3 +7373,133 @@ async function oiSave(allowDiff){
   if (typeof loadIVHistory === 'function' && $('ivhRows')) await loadIVHistory();
 }
 Object.assign(window, {oiIsOld, oiUpload, oiRead, oiReadXlsx, oiParse, oiPreview, oiSave});
+
+
+/* ============================================================
+   PRICE LIST UPLOAD (Settings, Admin only)
+   Excel price list -> sale price and/or cost price of the products already in the ERP.
+   Nothing is saved before the admin has seen every change; the last upload can be undone.
+   ============================================================ */
+let PL = {book:null, file:null, sheet:'', hdr:0, cModel:-1, cSale:-1, cCost:-1, doSale:true, doCost:true, preview:null, last:null};
+async function plRender(){
+  const host = $('plPanel'); if (!host) return;
+  if (!PL.book) host.innerHTML = '<h3>💲 Price list upload</h3><div class="muted small" style="margin-bottom:10px">Upload your Excel price list. The <b>sale price</b> and/or <b>cost price</b> of products that are already in the ERP are updated in the product list, so new quotations and invoices use them. Documents already made are not changed. New products are not created and blank prices are skipped. You see every change before it is saved, and the last upload can be undone.</div>'
+    + '<div id="plLast" class="muted small" style="margin-bottom:10px"></div>'
+    + '<div class="actions" style="justify-content:flex-start"><button class="btn primary" onclick="plPick()">Choose Excel price list</button></div>';
+  const r = await api('priceListLast');
+  const el = $('plLast'); if (!el) return;
+  if (!r || !r.ok) { el.textContent = r && /unknown action/i.test(r.error || '') ? 'Price list upload needs the new Code.gs — paste it in Apps Script and deploy a New version.' : ''; return; }
+  PL.last = r.last;
+  el.innerHTML = r.last ? 'Last upload: <b>' + fmtDate(r.last.date) + '</b> by ' + esc(r.last.by) + (r.last.file ? ' · ' + esc(r.last.file) : '') + ' · ' + r.last.count + ' product(s) changed'
+    + (r.last.undone ? ' · <span class="dn">undone</span>' : ' · <a class="model-link" onclick="plUndo()">Undo this upload</a>') : 'No price list uploaded yet.';
+}
+function plPick(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm,.ods,.csv';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const buf = await f.arrayBuffer(); let wb = null;
+    try { wb = await oiReadXlsx(buf); } catch (e) { wb = null; }
+    if (!wb && /\.csv$/i.test(f.name)) { const t = new TextDecoder().decode(buf); wb = {SheetNames:['CSV'], rows:{CSV:t.split(/\r?\n/).map(l => l.split(l.indexOf('\t') !== -1 ? '\t' : ','))}}; }
+    if (!wb) {
+      let XL; try { XL = await oiLoadXlsx(); } catch (e) { return toast('This file could not be read. Save it as .xlsx in Excel and try again.', true); }
+      try { const w = XL.read(buf, {type:'array'}); wb = {SheetNames:w.SheetNames, rows:{}}; w.SheetNames.forEach(n => wb.rows[n] = XL.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''})); }
+      catch (e) { return toast('This file could not be read as Excel.', true); }
+    }
+    PL.book = wb; PL.file = f; PL.preview = null;
+    const best = wb.SheetNames.map(n => ({n:n, h:plFindHeader(wb.rows[n] || [])})).sort((a, b) => b.h.score - a.h.score)[0];
+    PL.sheet = best.n; plSetHeader(best.h.row);
+    plForm();
+  };
+  inp.click();
+}
+const PL_RE = {model:/(model|part|item\s*code|code|article|art\.?\s*no|cat\.?\s*no|p\/n|sku)/i, cost:/(cost|purchase|buying|landed|net\s*price)/i, sale:/(sale|selling|price|list|rate|mrp|retail)/i};
+function plFindHeader(rows){
+  let best = {row:0, score:-1};
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
+    const r = (rows[i] || []).map(x => String(x == null ? '' : x).trim());
+    const sc = (r.some(x => PL_RE.model.test(x)) ? 3 : 0) + (r.some(x => PL_RE.sale.test(x) && !PL_RE.cost.test(x)) ? 2 : 0) + (r.some(x => PL_RE.cost.test(x)) ? 1 : 0);
+    if (sc > best.score) best = {row:i, score:sc};
+  }
+  return best;
+}
+function plSetHeader(i){
+  PL.hdr = Math.max(0, Number(i) || 0);
+  const h = ((PL.book.rows[PL.sheet] || [])[PL.hdr] || []).map(x => String(x == null ? '' : x).trim());
+  PL.cModel = h.findIndex(x => PL_RE.model.test(x));
+  PL.cCost = h.findIndex(x => PL_RE.cost.test(x));
+  PL.cSale = h.findIndex((x, k) => k !== PL.cModel && PL_RE.sale.test(x) && !PL_RE.cost.test(x));
+  PL.doCost = PL.cCost !== -1; PL.doSale = PL.cSale !== -1 || PL.cCost === -1;
+  PL.preview = null;
+}
+function plRows(){
+  const rows = PL.book.rows[PL.sheet] || [];
+  return rows.slice(PL.hdr + 1).map(r => ({model:String(r[PL.cModel] == null ? '' : r[PL.cModel]).trim(), sale:PL.cSale !== -1 ? oiNum(r[PL.cSale]) : NaN, cost:PL.cCost !== -1 ? oiNum(r[PL.cCost]) : NaN}))
+    .filter(r => r.model).map(r => ({model:r.model, sale:isNaN(r.sale) ? '' : r.sale, cost:isNaN(r.cost) ? '' : r.cost}));
+}
+function plForm(){
+  const host = $('plPanel'); if (!host || !PL.book) return;
+  const h = ((PL.book.rows[PL.sheet] || [])[PL.hdr] || []).map(x => String(x == null ? '' : x).trim());
+  const opts = (sel, none) => (none ? '<option value="-1">— not in this file —</option>' : '') + h.map((x, k) => '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + esc(x || ('Column ' + (k + 1))) + '</option>').join('');
+  const rows = plRows();
+  const sample = rows.slice(0, 5);
+  host.innerHTML = '<h3>💲 Price list upload</h3>'
+    + '<div class="muted small" style="margin-bottom:10px">File: <b>' + esc(PL.file.name) + '</b> · ' + rows.length + ' row(s) with a part number. Check that the right columns are chosen.</div>'
+    + '<div class="form-grid">'
+    + (PL.book.SheetNames.length > 1 ? '<label>Sheet<select onchange="PL.sheet=this.value;plSetHeader(plFindHeader(PL.book.rows[PL.sheet]||[]).row);plForm()">' + PL.book.SheetNames.map(n => '<option' + (n === PL.sheet ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select></label>' : '')
+    + '<label>Heading row<input type="number" min="1" value="' + (PL.hdr + 1) + '" onchange="plSetHeader(this.value-1);plForm()"></label>'
+    + '<label>Part number column<select onchange="PL.cModel=+this.value;PL.preview=null;plForm()">' + opts(PL.cModel, true) + '</select></label>'
+    + '<label>Sale price column<select onchange="PL.cSale=+this.value;PL.doSale=PL.cSale!==-1;PL.preview=null;plForm()">' + opts(PL.cSale, true) + '</select></label>'
+    + '<label>Cost price column<select onchange="PL.cCost=+this.value;PL.doCost=PL.cCost!==-1;PL.preview=null;plForm()">' + opts(PL.cCost, true) + '</select></label>'
+    + '</div>'
+    + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:10px 0">'
+    + '<label class="chk"><input type="checkbox" ' + (PL.doSale ? 'checked' : '') + (PL.cSale === -1 ? ' disabled' : '') + ' onchange="PL.doSale=this.checked;PL.preview=null;plForm()"> Update sale price</label>'
+    + '<label class="chk"><input type="checkbox" ' + (PL.doCost ? 'checked' : '') + (PL.cCost === -1 ? ' disabled' : '') + ' onchange="PL.doCost=this.checked;PL.preview=null;plForm()"> Update cost price</label></div>'
+    + (sample.length ? '<div class="table-wrap"><table class="pl-tbl"><thead><tr><th>Part number</th><th class="r">Sale price</th><th class="r">Cost price</th></tr></thead><tbody>' + sample.map(r => '<tr><td>' + esc(r.model) + '</td><td class="r">' + (!r.sale ? '—' : money(r.sale)) + '</td><td class="r">' + (!r.cost ? '—' : money(r.cost)) + '</td></tr>').join('') + '</tbody></table><div class="muted small">First rows of the file, as they will be read.</div></div>' : '<div class="imp-warn">No rows found — choose the heading row and the part number column.</div>')
+    + '<div id="plPrev"></div>'
+    + '<div class="actions" style="justify-content:flex-start"><button class="btn" onclick="PL.book=null;PL.preview=null;plRender()">Cancel</button>'
+    + '<button class="btn primary" id="plChk" onclick="plCheck()"' + (PL.cModel === -1 || (!PL.doSale && !PL.doCost) || !rows.length ? ' disabled' : '') + '>Check changes</button></div>';
+  if (PL.preview) plShowPreview();
+}
+async function plCheck(){
+  const b = $('plChk'); if (b) { b.disabled = true; b.textContent = 'Checking…'; }
+  const r = await api('priceListUpload', {rows:plRows(), doSale:PL.doSale, doCost:PL.doCost, apply:false});
+  if (b) { b.disabled = false; b.textContent = 'Check changes'; }
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not check.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  PL.preview = r; plShowPreview();
+}
+function plShowPreview(){
+  const r = PL.preview, el = $('plPrev'); if (!r || !el) return;
+  const pct = (a, b) => a > 0 ? Math.round((b - a) / a * 1000) / 10 : null;
+  const cell = (a, b) => { if (Math.abs(a - b) < 0.005) return '<span class="muted">' + money(b) + '</span>'; const p = pct(a, b); return '<span class="muted">' + (a ? money(a) : '—') + '</span> → <b>' + money(b) + '</b>' + (p !== null ? ' <span class="pl-pct ' + (Math.abs(p) >= 30 ? 'big' : p > 0 ? 'up' : 'down') + '">' + (p > 0 ? '+' : '') + p + '%</span>' : ''); };
+  const big = r.changes.filter(c => { const a = pct(c.oldSale, c.newSale), b = pct(c.oldCost, c.newCost); return (a !== null && Math.abs(a) >= 30) || (b !== null && Math.abs(b) >= 30); }).length;
+  el.innerHTML = '<div class="pl-sum"><span class="ok"><b>' + r.changes.length + '</b> product(s) will change</span><span><b>' + r.unchanged + '</b> already the same</span>'
+    + (r.skipped ? '<span><b>' + r.skipped + '</b> without a price (skipped)</span>' : '')
+    + (r.notFound.length ? '<span class="warn"><b>' + r.notFound.length + '</b> not in the product list (not added)</span>' : '') + '</div>'
+    + (big ? '<div class="imp-warn" style="margin:8px 0">⚠ ' + big + ' product(s) change by 30% or more — please check them (marked red).</div>' : '')
+    + (r.changes.length ? '<div class="table-wrap" style="max-height:380px;overflow:auto"><table class="pl-tbl"><thead><tr><th>Part number</th>' + (PL.doSale ? '<th class="r">Sale price</th>' : '') + (PL.doCost ? '<th class="r">Cost price</th>' : '') + '</tr></thead><tbody>'
+      + r.changes.slice(0, 1000).map(c => '<tr><td>' + esc(c.model) + '</td>' + (PL.doSale ? '<td class="r">' + cell(c.oldSale, c.newSale) + '</td>' : '') + (PL.doCost ? '<td class="r">' + cell(c.oldCost, c.newCost) + '</td>' : '') + '</tr>').join('')
+      + '</tbody></table></div>' : '')
+    + (r.notFound.length ? '<details style="margin-top:8px"><summary class="muted small" style="cursor:pointer">Part numbers not found in the product list (' + r.notFound.length + ')</summary><div class="muted small" style="margin-top:6px;max-height:160px;overflow:auto">' + r.notFound.map(esc).join(', ') + '</div></details>' : '')
+    + (r.changes.length ? '<div class="actions" style="justify-content:flex-start"><button class="btn primary" id="plApply" onclick="plApply()">Save ' + r.changes.length + ' price change(s)</button></div>' : '<div class="muted" style="margin-top:8px">Nothing to change — all prices are already the same.</div>');
+}
+async function plApply(){
+  const r0 = PL.preview; if (!r0 || !r0.changes.length) return;
+  if (!confirm('Update the prices of ' + r0.changes.length + ' product(s)? You can undo this upload later from this page.')) return;
+  const b = $('plApply'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  const r = await api('priceListUpload', {rows:plRows(), doSale:PL.doSale, doCost:PL.doCost, apply:true, fileName:PL.file ? PL.file.name : ''});
+  if (!r || !r.ok) { if (b) { b.disabled = false; b.textContent = 'Save price changes'; } return toast((r && r.error) || 'Could not save.', true); }
+  toast(r.applied ? r.changes.length + ' product price(s) updated.' : 'Nothing changed.');
+  PL.book = null; PL.preview = null;
+  if (typeof refresh === 'function') await refresh();
+  plRender();
+}
+async function plUndo(){
+  const l = PL.last; if (!l) return;
+  if (!confirm('Put back the old prices of the ' + l.count + ' product(s) changed on ' + fmtDate(l.date) + '? Products whose price was changed again after that upload are left as they are.')) return;
+  const r = await api('priceListUndo', {batch:l.batch});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not undo.', true);
+  toast('Old prices put back: ' + r.restored + (r.kept ? ' · ' + r.kept + ' left as they are (changed again later)' : ''));
+  if (typeof refresh === 'function') await refresh();
+  plRender();
+}
+Object.assign(window, {PL, plRender, plPick, plFindHeader, plSetHeader, plForm, plCheck, plApply, plUndo});
