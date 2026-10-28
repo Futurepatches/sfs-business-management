@@ -1668,3 +1668,13 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .oi-tot div{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px dashed #e3e8f0}
 .oi-tot .good{color:#15803d;font-weight:700}.oi-tot .bad{color:#c8102e;font-weight:700}
 .btn.oi-up{border-color:#f0c36d;background:#fff8e6;color:#8a5a00}
+
+/* ---- Price list upload ---- */
+.pl-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.pl-tbl th,.pl-tbl td{padding:6px 8px;border-bottom:1px solid #eef2f7;text-align:left}
+.pl-tbl .r{text-align:right}
+.pl-sum{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 6px}
+.pl-sum span{background:#f1f5f9;border-radius:99px;padding:5px 12px;font-size:12.5px}
+.pl-sum .ok{background:#e8f6ee;color:#15803d}.pl-sum .warn{background:#fff4e0;color:#b45309}
+.pl-pct{font-size:11px;font-weight:700;border-radius:6px;padding:1px 5px}
+.pl-pct.up{color:#15803d;background:#e8f6ee}.pl-pct.down{color:#b45309;background:#fff4e0}.pl-pct.big{color:#c8102e;background:#fdecea}
