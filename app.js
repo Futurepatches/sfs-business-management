@@ -6715,16 +6715,21 @@ function xrBuild(){
   XR.dirty = false;
 }
 async function xrWarm(force){
-  if (!S.user || (!force && Date.now() - XR.warmAt < 5 * 60 * 1000)) return;
-  XR.warmAt = Date.now();
+  /* light on the server: once after login, then every 30 minutes; a forced refresh at most every 2 minutes.
+     Pages that are opened feed the links anyway (every list the ERP loads is used). One request at a time. */
+  if (!S.user || XR.warming) return;
+  const age = Date.now() - XR.warmAt;
+  if (force ? age < 2 * 60 * 1000 : age < 30 * 60 * 1000) return;
+  XR.warmAt = Date.now(); XR.warming = true;
+  const have = t => XR.docs[t] && XR.docs[t].size > 0 && !force;
   const jobs = [];
-  if (hasMod('dc')) jobs.push(api('getReports', {mode:'docs', type:'DC'}));
-  if (hasMod('invoice')) jobs.push(api('getReports', {mode:'docs', type:'INVOICE'}));
-  if (hasMod(['quotation','enquiries'])) jobs.push(api('quotationHistory'));
-  if (hasMod('enquiries')) jobs.push(api('getEnquiries'));
-  if (hasMod('purchase')) jobs.push(api('getPurchaseOrders'));
-  if (hasMod('marketrates')) jobs.push(api('getMarketRates'));
-  await Promise.all(jobs.map(j => j.catch(() => null)));
+  if (hasMod('dc') && !have('DC')) jobs.push(() => api('getReports', {mode:'docs', type:'DC'}));
+  if (hasMod('invoice') && !have('Invoice')) jobs.push(() => api('getReports', {mode:'docs', type:'INVOICE'}));
+  if (hasMod(['quotation','enquiries']) && !have('Quotation')) jobs.push(() => api('quotationHistory'));
+  if (hasMod('enquiries') && !have('Enquiry')) jobs.push(() => api('getEnquiries'));
+  if (hasMod('purchase') && !have('PO')) jobs.push(() => api('getPurchaseOrders'));
+  if (hasMod('marketrates') && !have('MR')) jobs.push(() => api('getMarketRates'));
+  try { for (const j of jobs) { try { await j(); } catch (e) {} } } finally { XR.warming = false; }
 }
 
 /* ---- turn text on screen into links ---- */
