@@ -931,7 +931,7 @@ function renderProducts(){
   $('prows').innerHTML = a.slice(0,1000).map(p => {
     const low = Number(p.currentStock) <= reorderOf(p);
     return `<tr ${low?'style="background:#fbeae8"':''}>
-       <td>${p['Product Image']?`<img class="thumb" src="${esc(p['Product Image'])}">`:'—'}</td>
+       <td>${p['Product Image']?`<img class="thumb" loading="lazy" src="${esc(qtDriveThumb(p['Product Image']))}" alt="">`:'—'}</td>
        <td><a class="model-link" onclick="productDetail('${encA(p['Model / Part No.'])}')">${esc(p['Model / Part No.'])}</a></td>
        <td>${esc(p.Description)}</td>
        <td>${esc(p.Category)}</td>
@@ -950,7 +950,7 @@ function productDetail(em){
 
   modal('Product Details — ' + m,
     `<div class="detail">
-       <div>${p['Product Image']?`<img src="${esc(p['Product Image'])}">`:'No image'}</div>
+       <div>${p['Product Image']?`<a href="${esc(p['Product Image'])}" target="_blank" rel="noopener" title="Open the full picture"><img src="${esc(qtDriveThumb(p['Product Image']))}" alt=""></a>`:'No image'}</div>
        <div class="detail-grid">
          <div class="kv"><b>Model</b>${esc(p['Model / Part No.'])}</div>
          <div class="kv"><b>Description</b>${esc(p.Description)}</div>
