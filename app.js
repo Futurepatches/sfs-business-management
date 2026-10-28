@@ -4478,42 +4478,72 @@ function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.load
 
 function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Act(); db2YSales(); db2YOut(); }
 
-/* ---------- year-wise bars (sales, outstanding) ---------- */
-function db2YearBars(list, cls, unitLabel){
-  /* list = [{y, v, sub}] oldest -> newest */
-  const max = Math.max(1, ...list.map(x => x.v)) * 1.1, cy = new Date().getFullYear();
-  return '<div class="db2-ybars ' + cls + '">' + list.map((x, i) => {
-    const prev = x.prev != null ? x.prev : (i ? list[i - 1].v : 0), g = prev > 0 ? Math.round((x.v - prev) / prev * 100) : null;
-    return '<div class="db2-ycol" title="' + x.y + ': Rs ' + money(x.v) + (x.sub ? ' · ' + x.sub : '') + (x.prevNote && g !== null ? ' · ' + x.prevNote : '') + '"><div class="db2-yval">' + (x.v > 0 ? db2Short(x.v) : '—') + (g !== null && cls === 'sales' ? '<small class="' + (g >= 0 ? 'up' : 'dn') + '">' + (g >= 0 ? '▲' : '▼') + Math.abs(g) + '%</small>' : '') + '</div>'
-      + '<div class="db2-ybar' + (x.y === cy ? ' cur' : '') + '" style="height:' + Math.max(1.5, x.v / max * 100) + '%"></div><div class="db2-yl">' + x.y + (x.y === cy ? '<small>so far</small>' : '') + '</div></div>';
-  }).join('') + '</div>';
+/* ---------- year-wise charts (sales, outstanding) ---------- */
+function db2Tip(e, html){
+  let t = $('db2Tipbox'); if (!t) { t = document.createElement('div'); t.id = 'db2Tipbox'; document.body.appendChild(t); }
+  if (!html) { t.style.display = 'none'; return; }
+  t.innerHTML = html; t.style.display = 'block';
+  const r = t.getBoundingClientRect(), x = Math.min(window.innerWidth - r.width - 8, e.clientX + 14), y = e.clientY - r.height - 12;
+  t.style.left = Math.max(8, x) + 'px'; t.style.top = (y < 8 ? e.clientY + 18 : y) + 'px';
 }
+function db2Nice(max){ const p = Math.pow(10, Math.floor(Math.log10(max || 1))); const f = max / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
 function db2YSales(){
   const host = $('db2YSales'); if (!host) return;
   const r = DB2.data.invs;
   if (!r) { if (DB2.done) host.innerHTML = '<h3>Sales by year</h3><div class="muted">Could not load.</div>'; return; }
-  const by = {}, now = new Date(), cut = (now.getMonth() + 1) * 100 + now.getDate();
-  let ytdPrev = 0;   /* last year up to the same day: the fair comparison for this year "so far" */
-  (r.documents || []).forEach(d => { const dt = new Date(d.date); if (isNaN(dt)) return; const y = dt.getFullYear(); const b = by[y] || (by[y] = {v:0, n:0}); b.v += Number(d.subtotal) || 0; b.n++;
-    if (y === now.getFullYear() - 1 && (dt.getMonth() + 1) * 100 + dt.getDate() <= cut) ytdPrev += Number(d.subtotal) || 0; });
-  const ys = Object.keys(by).map(Number).sort((a, b) => a - b);
+  const by = {}, now = new Date(), cy = now.getFullYear(), cut = (now.getMonth() + 1) * 100 + now.getDate();
+  let ytdPrev = 0;
+  (r.documents || []).forEach(d => { const dt = new Date(d.date); if (isNaN(dt)) return; const y = dt.getFullYear(), v = Number(d.subtotal) || 0;
+    const b = by[y] || (by[y] = {v:0, n:0}); b.v += v; b.n++;
+    if (y === cy - 1 && (dt.getMonth() + 1) * 100 + dt.getDate() <= cut) ytdPrev += v; });
+  const ys = Object.keys(by).map(Number).filter(y => y <= cy).sort((a, b) => a - b);
   if (!ys.length) { host.innerHTML = '<h3>Sales by year</h3><div class="muted">No invoices yet.</div>'; return; }
-  const cy = new Date().getFullYear(), from = Math.max(ys[0], cy - 7), list = [];
-  for (let y = from; y <= Math.max(cy, ys[ys.length - 1]); y++) list.push(Object.assign({y:y, v:Math.round((by[y] || {v:0}).v), sub:((by[y] || {n:0}).n) + ' invoice(s)'}, y === cy ? {prev:Math.round(ytdPrev), prevNote:'compared with ' + (cy - 1) + ' up to the same date (Rs ' + money(ytdPrev) + ')'} : {}));
-  host.innerHTML = '<h3>Sales by year' + (db2Can('invoice') ? ' <a onclick="db2Go(\'ivhistory\')">Invoices →</a>' : '') + '</h3><div class="muted small db2-ysub">Invoices before GST · ' + cy + ' % is compared with ' + (cy - 1) + ' up to the same date</div>' + db2YearBars(list, 'sales');
+  const list = []; for (let y = Math.max(ys[0], cy - 7); y <= cy; y++) list.push({y:y, v:(by[y] || {v:0}).v, n:(by[y] || {n:0}).n});
+  const cur = list[list.length - 1], best = list.slice().sort((a, b) => b.v - a.v)[0];
+  const g = ytdPrev > 0 ? Math.round((cur.v - ytdPrev) / ytdPrev * 100) : null;
+  /* chart geometry (SVG, scales to the card) */
+  const W = 640, H = 230, L = 46, R = 10, T = 24, B = 28, ph = H - T - B, top = db2Nice(Math.max(...list.map(x => x.v), ytdPrev) * 1.05);
+  const band = (W - L - R) / list.length, bw = Math.min(30, band * 0.5), yv = v => T + ph - v / top * ph;
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="db2-svg" role="img" aria-label="Sales by year">';
+  for (let k = 0; k <= 4; k++) { const v = top * k / 4, y = yv(v); svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" class="g"/><text x="' + (L - 8) + '" y="' + (y + 4) + '" class="ax" text-anchor="end">' + (v ? db2Short(v) : '0') + '</text>'; }
+  list.forEach((x, i) => {
+    const cx = L + band * i + band / 2, h = Math.max(x.v ? 2 : 0, x.v / top * ph), y0 = T + ph, isCur = x.y === cy, rr = Math.min(4, h);
+    const prev = i ? list[i - 1].v : 0, gi = isCur ? g : (prev > 0 ? Math.round((x.v - prev) / prev * 100) : null);
+    const tip = '<b>' + x.y + (isCur ? ' (so far)' : '') + '</b><br>Rs ' + money(x.v) + '<br>' + x.n + ' invoice' + (x.n === 1 ? '' : 's') + (gi !== null ? '<br><span class="' + (gi >= 0 ? 'up' : 'dn') + '">' + (gi >= 0 ? '▲ ' : '▼ ') + Math.abs(gi) + '%</span> vs ' + (isCur ? (cy - 1) + ' by this date' : (x.y - 1)) : '');
+    svg += '<g class="col' + (isCur ? ' cur' : '') + '" onmousemove="db2Tip(event,this.dataset.tip)" onmouseleave="db2Tip(event)" data-tip="' + esc(tip) + '">'
+      + '<rect x="' + (cx - band / 2) + '" y="' + T + '" width="' + band + '" height="' + ph + '" class="hit"/>'
+      + (h > 0 ? '<path class="bar" d="M' + (cx - bw / 2) + ',' + y0 + 'V' + (y0 - h + rr) + 'Q' + (cx - bw / 2) + ',' + (y0 - h) + ' ' + (cx - bw / 2 + rr) + ',' + (y0 - h) + 'H' + (cx + bw / 2 - rr) + 'Q' + (cx + bw / 2) + ',' + (y0 - h) + ' ' + (cx + bw / 2) + ',' + (y0 - h + rr) + 'V' + y0 + 'Z"/>' : '')
+      + '<text x="' + cx + '" y="' + (y0 - h - 7) + '" class="val" text-anchor="middle">' + (x.v ? db2Short(x.v) : '') + '</text>'
+      + '<text x="' + cx + '" y="' + (H - 8) + '" class="yr" text-anchor="middle">' + x.y + '</text></g>';
+    if (isCur && ytdPrev > 0) { const ty = yv(ytdPrev); svg += '<line x1="' + (cx - bw / 2 - 7) + '" x2="' + (cx + bw / 2 + 7) + '" y1="' + ty + '" y2="' + ty + '" class="ghost"/><text x="' + (cx - bw / 2 - 10) + '" y="' + (ty + 4) + '" class="ghostt" text-anchor="end">' + (cy - 1) + ' by today</text>'; }
+  });
+  svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + (T + ph) + '" y2="' + (T + ph) + '" class="base"/></svg>';
+  host.innerHTML = '<h3>Sales by year' + (db2Can('invoice') ? ' <a onclick="db2Go(\'ivhistory\')">Invoices →</a>' : '') + '</h3>'
+    + '<div class="db2-ystats"><div><span>' + cy + ' so far</span><b>Rs ' + db2Short(cur.v) + '</b>' + (g !== null ? '<em class="' + (g >= 0 ? 'up' : 'dn') + '">' + (g >= 0 ? '▲ ' : '▼ ') + Math.abs(g) + '% <small>vs ' + (cy - 1) + ' by this date</small></em>' : '') + '</div>'
+    + (best && best.v ? '<div><span>Best year</span><b>' + best.y + '</b><em>Rs ' + db2Short(best.v) + '</em></div>' : '')
+    + '<div><span>Invoices ' + cy + '</span><b>' + cur.n + '</b><em>before GST</em></div></div>'
+    + svg;
 }
 function db2YOut(){
   const host = $('db2YOut'); if (!host) return;
   const r = DB2.data.out;
   if (!r) { if (DB2.done) host.innerHTML = '<h3>Outstanding by year</h3><div class="muted">Could not load.</div>'; return; }
-  const by = {};
-  (r.rows || []).forEach(x => { const o = Number(x.outstanding) || 0; if (o <= 0.5) return; const dt = new Date(x.date); const y = isNaN(dt) ? 0 : dt.getFullYear(); const b = by[y] || (by[y] = {v:0, n:0}); b.v += o; b.n++; });
-  const ys = Object.keys(by).map(Number).filter(Boolean).sort((a, b) => a - b), total = Object.values(by).reduce((a, b) => a + b.v, 0);
+  const by = {}, cy = new Date().getFullYear();
+  (r.rows || []).forEach(x => { const o = Number(x.outstanding) || 0; if (o <= 0.5) return; const dt = new Date(x.date); const y = isNaN(dt) ? cy : dt.getFullYear();
+    const b = by[y] || (by[y] = {v:0, n:0, c:new Set()}); b.v += o; b.n++; b.c.add(x.customer); });
+  const ys = Object.keys(by).map(Number).sort((a, b) => b - a), total = ys.reduce((a, y) => a + by[y].v, 0);
   if (!ys.length) { host.innerHTML = '<h3>Outstanding by year</h3><div class="db2-ok">✓ Nothing outstanding.</div>'; return; }
-  const list = ys.map(y => ({y:y, v:Math.round(by[y].v), sub:by[y].n + ' unpaid invoice(s)'}));
-  host.innerHTML = '<h3>Outstanding by year <a onclick="db2Go(\'accounts\')">Accounts →</a></h3><div class="muted small db2-ysub">Unpaid invoices by the year they were made · total <b>Rs ' + money(total) + '</b> (incl. GST)</div>' + db2YearBars(list, 'out');
+  const max = Math.max(...ys.map(y => by[y].v)), old = ys.filter(y => y < cy).reduce((a, y) => a + by[y].v, 0);
+  host.innerHTML = '<h3>Outstanding by year <a onclick="db2Go(\'accounts\')">Accounts →</a></h3>'
+    + '<div class="db2-ystats"><div><span>Total outstanding</span><b>Rs ' + db2Short(total) + '</b><em>incl. GST</em></div>'
+    + (old > 0 ? '<div><span>From before ' + cy + '</span><b class="dn">Rs ' + db2Short(old) + '</b><em>' + Math.round(old / total * 100) + '% of the total</em></div>' : '<div><span>From before ' + cy + '</span><b class="up">Nothing</b><em>all from this year</em></div>') + '</div>'
+    + '<div class="db2-hbars">' + ys.map(y => { const b = by[y], age = cy - y, pct = Math.round(b.v / total * 100);
+        const tip = '<b>Invoices of ' + y + '</b><br>Rs ' + money(b.v) + ' still unpaid<br>' + b.n + ' invoice' + (b.n === 1 ? '' : 's') + ' · ' + b.c.size + ' client' + (b.c.size === 1 ? '' : 's');
+        return '<div class="db2-hrow a' + Math.min(age, 3) + '" onclick="db2Go(\'accounts\')" onmousemove="db2Tip(event,this.dataset.tip)" onmouseleave="db2Tip(event)" data-tip="' + esc(tip) + '">'
+          + '<div class="hl"><b>' + y + '</b><small>' + (age === 0 ? 'this year' : age === 1 ? 'last year' : age + ' years old') + '</small></div>'
+          + '<div class="ht"><i style="width:' + Math.max(2, b.v / max * 100) + '%"></i></div>'
+          + '<div class="hv"><b>' + db2Short(b.v) + '</b><small>' + pct + '%</small></div></div>'; }).join('') + '</div>';
 }
-
 /* ---------- derived data ---------- */
 function db2Overdue(){
   const r = DB2.data.out; if (!r) return null;
@@ -4776,7 +4806,7 @@ document.addEventListener('keydown', function(e){
   const k = String(e.key).toUpperCase(), qa = (window.DB2_QA || []).find(x => x.k === k);
   if (qa) { e.preventDefault(); qa.go(); }
 });
-Object.assign(window, {db2YSales, db2YOut, renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2TopMode, db2TopToggle, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
+Object.assign(window, {db2Tip, db2YSales, db2YOut, renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2TopMode, db2TopToggle, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
 
 /* ============================================================
    ENQUIRY BOX (free — no paid AI)
