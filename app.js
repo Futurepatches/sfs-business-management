@@ -4445,11 +4445,13 @@ function renderDashboard(){
     + '<div class="db2-kpis" id="db2Kpis"></div>'
     + '<div class="db2-grid"><div class="db2-col">'
     + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
+    + ((db2Can('reports') || db2Can('invoice')) ? '<div class="db2-card" id="db2YSales"><div class="muted">Loading sales by year…</div></div>' : '')
     + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading top customers…</div></div>' : '')
     + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
     + '</div><div class="db2-col">'
     + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
     + (db2Can('accounts') ? '<div class="db2-card" id="db2Over"><div class="muted">Loading…</div></div>' : '')
+    + (db2Can('accounts') ? '<div class="db2-card" id="db2YOut"><div class="muted">Loading outstanding by year…</div></div>' : '')
     + (isAdmin() ? '<div class="db2-card" id="db2Act"><div class="muted">Loading team activity…</div></div>' : '')
     + '</div></div>'
     + '<details class="db2-more" id="db2More" ontoggle="db2MoreToggle(this)"><summary>Detailed views — payments table, sales target, low stock, stock by category, pipeline</summary><div id="dashClassic"></div></details>'
@@ -4464,8 +4466,8 @@ function renderDashboard(){
   if (db2Can('sales')) {
     take('qt', api('quotationHistory'));
     take('dcs', api('getReports', {mode:'docs', type:'DC'}));
-    take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
   }
+  if (db2Can('invoice') || db2Can('reports') || db2Can('dc')) take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
   if (db2Can('enquiries') || db2Can('sales')) take('enq', api('getEnquiries'));
   if (db2Can('enquiries')) take('ibx', api('getInbox', {countOnly:true}));
   if (isAdmin()) take('act', api('getUserActivity', {year:yr}));
@@ -4474,7 +4476,43 @@ function renderDashboard(){
 
 function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.loaded = '1'; renderDashboardClassic(); } }
 
-function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Act(); }
+function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Act(); db2YSales(); db2YOut(); }
+
+/* ---------- year-wise bars (sales, outstanding) ---------- */
+function db2YearBars(list, cls, unitLabel){
+  /* list = [{y, v, sub}] oldest -> newest */
+  const max = Math.max(1, ...list.map(x => x.v)) * 1.1, cy = new Date().getFullYear();
+  return '<div class="db2-ybars ' + cls + '">' + list.map((x, i) => {
+    const prev = x.prev != null ? x.prev : (i ? list[i - 1].v : 0), g = prev > 0 ? Math.round((x.v - prev) / prev * 100) : null;
+    return '<div class="db2-ycol" title="' + x.y + ': Rs ' + money(x.v) + (x.sub ? ' · ' + x.sub : '') + (x.prevNote && g !== null ? ' · ' + x.prevNote : '') + '"><div class="db2-yval">' + (x.v > 0 ? db2Short(x.v) : '—') + (g !== null && cls === 'sales' ? '<small class="' + (g >= 0 ? 'up' : 'dn') + '">' + (g >= 0 ? '▲' : '▼') + Math.abs(g) + '%</small>' : '') + '</div>'
+      + '<div class="db2-ybar' + (x.y === cy ? ' cur' : '') + '" style="height:' + Math.max(1.5, x.v / max * 100) + '%"></div><div class="db2-yl">' + x.y + (x.y === cy ? '<small>so far</small>' : '') + '</div></div>';
+  }).join('') + '</div>';
+}
+function db2YSales(){
+  const host = $('db2YSales'); if (!host) return;
+  const r = DB2.data.invs;
+  if (!r) { if (DB2.done) host.innerHTML = '<h3>Sales by year</h3><div class="muted">Could not load.</div>'; return; }
+  const by = {}, now = new Date(), cut = (now.getMonth() + 1) * 100 + now.getDate();
+  let ytdPrev = 0;   /* last year up to the same day: the fair comparison for this year "so far" */
+  (r.documents || []).forEach(d => { const dt = new Date(d.date); if (isNaN(dt)) return; const y = dt.getFullYear(); const b = by[y] || (by[y] = {v:0, n:0}); b.v += Number(d.subtotal) || 0; b.n++;
+    if (y === now.getFullYear() - 1 && (dt.getMonth() + 1) * 100 + dt.getDate() <= cut) ytdPrev += Number(d.subtotal) || 0; });
+  const ys = Object.keys(by).map(Number).sort((a, b) => a - b);
+  if (!ys.length) { host.innerHTML = '<h3>Sales by year</h3><div class="muted">No invoices yet.</div>'; return; }
+  const cy = new Date().getFullYear(), from = Math.max(ys[0], cy - 7), list = [];
+  for (let y = from; y <= Math.max(cy, ys[ys.length - 1]); y++) list.push(Object.assign({y:y, v:Math.round((by[y] || {v:0}).v), sub:((by[y] || {n:0}).n) + ' invoice(s)'}, y === cy ? {prev:Math.round(ytdPrev), prevNote:'compared with ' + (cy - 1) + ' up to the same date (Rs ' + money(ytdPrev) + ')'} : {}));
+  host.innerHTML = '<h3>Sales by year' + (db2Can('invoice') ? ' <a onclick="db2Go(\'ivhistory\')">Invoices →</a>' : '') + '</h3><div class="muted small db2-ysub">Invoices before GST · ' + cy + ' % is compared with ' + (cy - 1) + ' up to the same date</div>' + db2YearBars(list, 'sales');
+}
+function db2YOut(){
+  const host = $('db2YOut'); if (!host) return;
+  const r = DB2.data.out;
+  if (!r) { if (DB2.done) host.innerHTML = '<h3>Outstanding by year</h3><div class="muted">Could not load.</div>'; return; }
+  const by = {};
+  (r.rows || []).forEach(x => { const o = Number(x.outstanding) || 0; if (o <= 0.5) return; const dt = new Date(x.date); const y = isNaN(dt) ? 0 : dt.getFullYear(); const b = by[y] || (by[y] = {v:0, n:0}); b.v += o; b.n++; });
+  const ys = Object.keys(by).map(Number).filter(Boolean).sort((a, b) => a - b), total = Object.values(by).reduce((a, b) => a + b.v, 0);
+  if (!ys.length) { host.innerHTML = '<h3>Outstanding by year</h3><div class="db2-ok">✓ Nothing outstanding.</div>'; return; }
+  const list = ys.map(y => ({y:y, v:Math.round(by[y].v), sub:by[y].n + ' unpaid invoice(s)'}));
+  host.innerHTML = '<h3>Outstanding by year <a onclick="db2Go(\'accounts\')">Accounts →</a></h3><div class="muted small db2-ysub">Unpaid invoices by the year they were made · total <b>Rs ' + money(total) + '</b> (incl. GST)</div>' + db2YearBars(list, 'out');
+}
 
 /* ---------- derived data ---------- */
 function db2Overdue(){
@@ -4738,7 +4776,7 @@ document.addEventListener('keydown', function(e){
   const k = String(e.key).toUpperCase(), qa = (window.DB2_QA || []).find(x => x.k === k);
   if (qa) { e.preventDefault(); qa.go(); }
 });
-Object.assign(window, {renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2TopMode, db2TopToggle, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
+Object.assign(window, {db2YSales, db2YOut, renderDashboard, renderDashboardClassic, db2Go, db2OpenDoc, db2Details, db2TopYear, db2TopMode, db2TopToggle, db2SetFilter, db2MoreToggle, db2PipeSet, db2OpenSearch, db2Search});
 
 /* ============================================================
    ENQUIRY BOX (free — no paid AI)
