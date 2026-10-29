@@ -1739,3 +1739,11 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .sr-map tr.sr-warn input{border-color:#f0c36d;background:#fffaf0}
 .sr-tbl tr.sr-skip td{color:#94a3b8}
 .sr-tbl tr.sr-flag td{background:#fffbeb}
+.db2-topr{display:flex;gap:10px;align-items:center;flex:0 1 560px;justify-content:flex-end;flex-wrap:wrap}
+.db2-topr .db2-search{flex:1 1 300px}
+.db2-year{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e8f0;border-radius:12px;padding:5px 6px 5px 12px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+.db2-year select{border:0;background:#eef2f9;border-radius:8px;padding:6px 8px;font-size:14px;font-weight:700;color:#1f3b63;cursor:pointer}
+.db2-pastbar{margin:12px 0 0;background:#eef4ff;border:1px solid #c7d7fe;color:#1e3a8a;border-radius:12px;padding:10px 14px;font-size:13px}
+.db2-pastbar a{font-weight:700;cursor:pointer;margin-left:6px;text-decoration:underline}
+.db2-hrow.sel{background:#fff7e6;outline:1px solid #f5d08a}
+@media (max-width:700px){.db2-topr{flex:1 1 100%}}
