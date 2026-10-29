@@ -1747,3 +1747,74 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-pastbar a{font-weight:700;cursor:pointer;margin-left:6px;text-decoration:underline}
 .db2-hrow.sel{background:#fff7e6;outline:1px solid #f5d08a}
 @media (max-width:700px){.db2-topr{flex:1 1 100%}}
+
+/* ---- Quotation: Excel view ---- */
+.qx-wrap{max-width:1180px}
+.qx-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 12px}
+.qx-switch{display:inline-flex;background:#e8edf5;border-radius:10px;padding:3px}
+.qx-switch button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:700;font-size:13px;color:#475569}
+.qx-switch button.on{background:#fff;color:#1f3b63;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.qx-paper{background:#fff;border:1px solid #dfe4ec;border-radius:6px;box-shadow:0 10px 30px rgba(15,23,42,.07);padding:26px 30px 22px}
+.qx-head{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1f3b63;padding-bottom:8px;margin-bottom:14px}
+.qx-logo{height:46px}
+.qx-word{font-size:24px;font-weight:800;letter-spacing:6px;color:#1f3b63}
+.qx-info{display:grid;grid-template-columns:1.15fr 1fr;gap:26px;margin-bottom:10px}
+.qx-l,.qx-m{display:flex;align-items:center;gap:8px;min-height:30px}
+.qx-l>span{width:44px;flex:0 0 44px;font-weight:700;color:#334155;font-size:13px}
+.qx-m>span{width:118px;flex:0 0 118px;font-weight:700;color:#334155;font-size:13px;text-align:right}
+.qx-in{border:1px solid transparent;background:transparent;border-radius:5px;padding:5px 7px;font-size:13.5px;color:#0f172a;width:100%;min-width:0;font-family:inherit;transition:background .12s,border-color .12s}
+.qx-in:hover{background:#f6f8fc;border-color:#e3e8f0}
+.qx-in:focus{outline:none;background:#f0f6ff;border-color:#93b4f2;box-shadow:0 0 0 2px rgba(37,99,235,.12)}
+.qx-in::placeholder{color:#b6c0ce}
+.qx-in[readonly]{color:#64748b}
+.qx-big{font-size:15.5px;font-weight:800;color:#1f3b63}
+.qx-more summary{cursor:pointer;font-size:12px;color:#64748b;font-weight:600;text-align:right;padding:4px 7px}
+.qx-note{display:block;width:100%;resize:none;overflow:hidden;border:1px dashed transparent;background:transparent;border-radius:6px;padding:7px 8px;font-size:13px;color:#334155;font-family:inherit;margin:4px 0}
+.qx-note:hover{border-color:#d5dce8;background:#fbfcfe}.qx-note:focus{outline:none;border-color:#93b4f2;background:#f0f6ff}
+.qx-note::placeholder{color:#b6c0ce;font-style:italic}
+.qx-items{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:6px;border:1px solid #cfd6e1}
+.qx-items th{background:#1f3b63;color:#fff;font-size:11.5px;font-weight:700;padding:8px 6px;text-align:left;border-right:1px solid #2c4a75}
+.qx-items td{border:1px solid #dde3ec;padding:3px 4px;vertical-align:top}
+.qx-items .qx-sn{width:46px;text-align:center;font-weight:700;color:#334155;padding-top:9px}
+.qx-items th.qx-q,.qx-items td.qx-q{width:86px}
+.qx-items th.qx-r,.qx-items td.qx-r{width:118px}
+.qx-items th.qx-a,.qx-items td.qx-a{width:112px;text-align:right}
+.qx-items td.qx-a{padding:9px 8px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
+.qx-items th.qx-dl,.qx-items td.qx-dl{width:150px}
+.qx-items th.qx-int,.qx-items td.qx-int{width:138px;background:#f7f8fa;color:#64748b}
+.qx-items th.qx-int{background:#64748b;border-right-color:#64748b}
+.qx-items td.qx-int .qx-in{font-size:12px;color:#475569}
+.qx-items th.qx-mn,.qx-items td.qx-mn{width:34px;text-align:center}
+.qx-part{display:flex;gap:4px}
+.qx-model{font-weight:700;color:#1f3b63;flex:1.2}.qx-make{flex:1;color:#475569;font-size:12.5px}
+.qx-desc{resize:none;overflow:hidden;line-height:1.4;min-height:30px}
+.qx-irem{font-size:12px;color:#475569;font-style:italic}
+.qx-qty,.qx-rate{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.qx-unit{text-align:right;font-size:11.5px;color:#64748b;padding-top:0;padding-bottom:2px}
+.qx-each{display:block;text-align:right;font-size:11.5px;color:#94a3b8;padding:0 8px 3px}
+.qx-info2{font-size:11px;color:#64748b;padding:2px 7px 4px}
+.qx-pic img{max-height:54px;max-width:90px;margin:2px 7px;border:1px solid #e3e8f0;border-radius:4px}
+.qx-dots{border:0;background:transparent;font-size:18px;line-height:1;color:#94a3b8;padding:6px 4px;border-radius:6px;cursor:pointer}
+.qx-dots:hover{background:#eef2f9;color:#1f3b63}
+.qx-text td{background:#fbfcfe}
+.qx-textin{font-weight:700;color:#1f3b63;font-style:italic}
+.qx-optrow td{background:#fcfaf3}
+.qx-optrow td.qx-d{border-left:3px solid #f0c36d}
+.qx-opt{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.03em;background:#e0ecff;color:#1d4ed8;border-radius:99px;padding:1px 8px;margin:4px 0 0 6px}
+.qx-opt.o2{background:#fff1d6;color:#a16207}
+.qx-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.qx-foot{display:grid;grid-template-columns:1fr 330px;gap:18px;align-items:start;margin-top:6px}
+.qx-total{border:1px solid #cfd6e1;border-radius:4px}
+.qx-total>div{display:flex;justify-content:space-between;padding:8px 12px;font-size:13px;border-bottom:1px solid #eef1f5}
+.qx-total>div:last-child{border-bottom:0}
+.qx-total b{font-size:15px;color:#1f3b63;font-variant-numeric:tabular-nums}
+.qx-total .qx-sub{font-size:11.5px;color:#64748b;padding-top:0}
+.qx-sign{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-top:22px;font-size:12px;color:#64748b;flex-wrap:wrap}
+.qx-sign div{text-align:center}.qx-sign div span{display:block;font-size:11px}.qx-sign div b{display:block;color:#0f172a;font-size:13.5px;border-top:1px solid #94a3b8;padding-top:3px;margin-top:22px;min-width:150px}
+.qx-actions{display:flex;gap:10px;justify-content:flex-end;margin:14px 0}
+.qx-menu{position:fixed;z-index:1200;background:#fff;border:1px solid #e3e8f0;border-radius:10px;box-shadow:0 12px 30px rgba(15,23,42,.18);padding:5px;min-width:250px}
+.qx-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:7px;font-size:13px;color:#1e293b}
+.qx-menu button:hover{background:#f1f5fb}
+@media (max-width:900px){.qx-info{grid-template-columns:1fr}.qx-foot{grid-template-columns:1fr}.qx-paper{padding:16px}.qx-items{display:block;overflow-x:auto}}
+.qx-items thead th.qx-sn{color:#fff;padding-top:8px;font-size:11px}
+.qx-items thead th.qx-int{color:#fff}
