@@ -1537,6 +1537,7 @@ async function loadIVHistory(){
   const ivT = v => { const t = new Date(v).getTime(); return isNaN(t) ? 0 : t; };
   IVH_CACHE = IVH_CACHE.map((d, i) => [d, i]).sort((a, b) => ivT(b[0].date) - ivT(a[0].date) || a[1] - b[1]).map(x => x[0]);
   filterIVHistory();
+  if (hasMod('invoice') && typeof gstLoadList === 'function') gstLoadList().then(() => { if ($('ivhRows')) filterIVHistory(); });
 }
 
 function filterIVHistory(){
@@ -1564,6 +1565,7 @@ function filterIVHistory(){
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}',true)">Print</button>
         ${oiIsOld(d) && hasMod('invoice') ? `<button class="btn small oi-up" title="Old invoice without items — upload its Excel file" onclick="oiUpload('${encA(d.no)}')">⬆ Upload invoice</button>` : ''}
         ${d.sourceFile ? `<a class="btn small" href="${esc(d.sourceFile)}" target="_blank" rel="noopener" title="The original Excel file">📎 Original</a>` : ''}
+        ${!oiIsOld(d) && Number(d.gstPercent == null || d.gstPercent === '' ? 18 : d.gstPercent) > 0 && hasMod('invoice') ? (gstOfInvoice(d.no) ? `<button class="btn small gst-has" title="Sale Tax Invoice ${esc(gstOfInvoice(d.no))} — open / print / undertaking" onclick="gstOpen('${encA(d.no)}')">GST ${esc(gstOfInvoice(d.no))}</button>` : `<button class="btn small" title="Make the Sale Tax (GST) invoice" onclick="gstOpen('${encA(d.no)}')">Make GST Invoice</button>`) : ''}
       </td>
     </tr>`).join('');
 }
@@ -1612,6 +1614,7 @@ function viewInvoice(noEnc, print){
        <button class="btn primary" onclick="viewInvoice('${encA(no)}',true)">Print</button>
        ${d.sourceFile ? '<a class="btn" href="' + esc(d.sourceFile) + '" target="_blank" rel="noopener">📎 Original file</a>' : ''}
        ${oiIsOld(d) && hasMod('invoice') ? '<button class="btn primary" onclick="closeModal();oiUpload(\'' + encA(no) + '\')">⬆ Upload invoice</button>' : ''}
+       ${!oiIsOld(d) && Number(d.gstPercent == null || d.gstPercent === '' ? 18 : d.gstPercent) > 0 && hasMod('invoice') ? '<button class="btn" onclick="closeModal();gstOpen(\'' + encA(no) + '\')">' + (gstOfInvoice(no) ? 'GST invoice ' + esc(gstOfInvoice(no)) : 'Make GST Invoice') + '</button>' : ''}
        ${isAdmin() && !oiIsOld(d) ? '<button class="btn" onclick="editInvoice(\'' + encA(no) + '\')">Edit Invoice</button>' : ''}
      </div>`);
 }
@@ -8200,3 +8203,148 @@ function qtxApplyLayout(d){
   document.querySelectorAll('.qx-note').forEach(qtxGrow);
 }
 Object.assign(window, {qtxLayout, qtxApplyLayout});
+
+
+/* ============================================================
+   SALE TAX (GST) INVOICE · UNDERTAKING · GD COPIES
+   From an invoice: "GST Invoice" -> same quantities and amounts, own descriptions, number = invoice # − 200.
+   Undertaking for non-deduction of 5.5% WHT (suggested above the limit, default Rs 55,000) with a GD copy.
+   ============================================================ */
+let GSTI = null, GST_LIST = null;
+const SFS_NTN = '2221343-7', SFS_STRN = '3277876141543', SFS_ADDR = '1410, 14th Floor, K.S Trade Tower, New Challi, Karachi', SFS_PH = '021-32464447';
+const GST_WORDS = ['SEAL KIT','REPAIR KIT','SOLENOID VALVE','CONTROL VALVE','BALL VALVE','VALVE','CYLINDER','CONNECTOR','SOCKET','ELBOW','TEE','REDUCER','UNION','NIPPLE','PLUG','SILENCER','FITTING','REGULATOR','FILTER','LUBRICATOR','FRL','GAUGE','SWITCH','SENSOR','COIL','PIPE','TUBE','HOSE','PUMP','MOTOR','GRIPPER','ACTUATOR','POSITIONER','BRACKET','CLAMP','SEAL','KIT','GUN','COUPLING','MANIFOLD'];
+function gstGuessName(desc){ const d = String(desc || '').toUpperCase(); const w = GST_WORDS.find(k => new RegExp('\\b' + k + 'S?\\b').test(d)); return w || d.replace(/\s+/g, ' ').trim().split(' ').slice(0, 3).join(' '); }
+function gstNoFor(invNo){ const m = String(invNo || '').match(/^(\D*?)(\d+)$/); return m ? String(Number(m[2]) - 200) : ''; }
+let GST_HC = [];
+async function gstLoadList(){ const r = await api('gstInvoiceList'); if (r && r.ok) { GST_LIST = {}; GST_HC = r.list || []; GST_HC.forEach(x => GST_LIST[x.invoiceNo] = x.no); } return GST_LIST; }
+/* H.CODE: every code used before is offered; a customer's last code is the default */
+const GST_HC_BASE = [{c:'84-F', d:'General Industrial Machinery & Equipment'}];
+function gstHCodes(){ const m = new Map(); GST_HC_BASE.concat(GST_HC.slice().reverse().filter(x => x.hCode).map(x => ({c:x.hCode, d:x.hDesc}))).forEach(x => { const k = String(x.c).trim().toUpperCase(); if (k && (!m.has(k) || x.d)) m.set(k, {c:String(x.c).trim(), d:x.d || (m.get(k) || {}).d || ''}); }); return [...m.values()]; }
+function gstHCodeFor(cust){ const k = String(cust || '').trim().toLowerCase(); const L = GST_HC.filter(x => x.hCode && String(x.customer).trim().toLowerCase() === k); return L.length ? {c:L[L.length - 1].hCode, d:L[L.length - 1].hDesc} : null; }
+function gstPickHCode(v){ GSTI.f.hCode = v; const h = gstHCodes().find(x => x.c.toUpperCase() === String(v).trim().toUpperCase()); if (h && h.d && $('gstHDesc')) { GSTI.f.hDesc = h.d; $('gstHDesc').value = h.d; } }
+window.gstPickHCode = gstPickHCode;
+function gstOfInvoice(no){ return GST_LIST ? GST_LIST[String(no)] || '' : ''; }
+async function gstOpen(invEnc){
+  const invNo = decodeURIComponent(invEnc);
+  let inv = (IVH_CACHE || []).find(x => String(x.no) === invNo);
+  if (!inv) { const r = await api('getReports', {mode:'docs', type:'INVOICE'}); if (r && r.ok) { inv = (r.documents || []).find(x => String(x.no) === invNo); } }
+  if (!inv) return toast('Invoice ' + invNo + ' not found.', true);
+  if (oiIsOld(inv)) return toast('This invoice has no item lines yet — upload its Excel file first.', true);
+  if (!GST_LIST) await gstLoadList();
+  const r = await api('gstInvoiceGet', {invoiceNo:invNo});
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not open.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  const c = findCust(inv.customer) || {}, g = r.gst, names = r.names || {}, rate = (inv.gstPercent === '' || inv.gstPercent == null) ? 18 : Number(inv.gstPercent);
+  const lines = (inv.items || []).filter(x => x.model || x.desc).map((x, i) => ({model:x.model, qty:+x.qty || 0, rate:+x.rate || 0,
+    desc:(g && g.lines[i] && g.lines[i].desc) || names[String(x.model || '').trim().toUpperCase()] || gstGuessName(x.desc), long:x.desc}));
+  GSTI = {inv:inv, rate:rate, limit:r.limit || 55000, saved:!!g, gdId:(g && g.gdId) || '', und:!!(g && g.undertakingDate),
+    f:{no:(g && g.no) || gstNoFor(invNo), date:toInputDate((g && g.date) || inv.date) || todayStr(), address:(g && g.address) || inv.address || c.Address || '',
+       strn:(g && g.strn) || inv.stn || stnOf(c) || '', ntn:(g && g.ntn) || inv.ntn || c['NTN/Tax ID'] || '', hCode:(g && g.hCode) || (gstHCodeFor(inv.customer) || {}).c || '84-F', hDesc:(g && g.hDesc) || (gstHCodeFor(inv.customer) || {}).d || 'General Industrial Machinery & Equipment'},
+    lines:lines, gds:null};
+  gstRender();
+  api('gdList').then(x => { if (GSTI && x && x.ok) { GSTI.gds = x.list || []; if (!GSTI.gdId && GSTI.gds.length) GSTI.gdId = GSTI.gds[0].id; gstRenderGd(); } });
+}
+function gstTotals(){ const r2 = n => Math.round(n * 100) / 100; const v = r2(GSTI.lines.reduce((a, l) => a + l.qty * l.rate, 0)), t = r2(v * GSTI.rate / 100); return {v:v, t:t, i:r2(v + t)}; }
+function gstRender(){
+  const G = GSTI, f = G.f, T = gstTotals(), big = T.i >= G.limit;
+  const inp = (k, w, ph) => '<input class="qx-in" style="' + (w ? 'width:' + w : '') + '" value="' + esc(f[k] || '') + '" placeholder="' + esc(ph || '') + '" oninput="GSTI.f.' + k + '=this.value">';
+  modal('Sale Tax Invoice — for invoice ' + G.inv.no, '<div class="oi-box"></div>'
+    + '<div class="gst-paper"><div class="gst-h"><div><b>STANDARD FLUID SYSTEMS</b><div class="muted small">' + esc(SFS_ADDR) + ' · Tel ' + SFS_PH + '</div></div><div class="gst-ids">NTN No. <b>' + SFS_NTN + '</b><br>GST No. <b>' + SFS_STRN + '</b></div></div>'
+    + '<div class="gst-title">SALE TAX INVOICE</div>'
+    + '<div class="gst-grid"><label>Invoice No.' + inp('no', '120px') + '</label><label>Dated<input class="qx-in" type="date" value="' + esc(f.date) + '" oninput="GSTI.f.date=this.value"></label>'
+    + '<label class="w">M/S<input class="qx-in" value="' + esc(G.inv.customer) + '" readonly tabindex="-1"></label><label class="w">Address' + inp('address', '', 'Customer address') + '</label>'
+    + '<label>Customer GST No.' + inp('strn', '', 'STRN') + '</label><label>Customer NTN No.' + inp('ntn', '', 'NTN') + '</label></div>'
+    + '<table class="gst-t"><thead><tr><th>Quantity</th><th>Description of Goods <small>(only this can be changed)</small></th><th class="r">Unit Price</th><th class="r">Value Exc. S.Tax</th><th class="r">Rate of S.Tax</th><th class="r">Total S.Tax</th><th class="r">Value Inc. S.Tax</th></tr></thead><tbody>'
+    + G.lines.map((l, i) => { const v = l.qty * l.rate, t = v * G.rate / 100; return '<tr><td class="c"><b>' + esc(l.qty) + '</b></td><td><input class="qx-in gst-desc" value="' + esc(l.desc) + '" oninput="GSTI.lines[' + i + '].desc=this.value"><div class="muted small">' + esc(l.model && l.model !== '-' ? l.model + ' · ' : '') + esc(String(l.long || '').slice(0, 70)) + '</div></td><td class="r">' + money(l.rate) + '</td><td class="r">' + money(v) + '</td><td class="r">' + G.rate + '%</td><td class="r">' + money(t) + '</td><td class="r">' + money(v + t) + '</td></tr>'; }).join('')
+    + '</tbody><tfoot><tr><td></td><td class="r"><b>TOTAL</b></td><td></td><td class="r"><b>' + money(T.v) + '</b></td><td></td><td class="r"><b>' + money(T.t) + '</b></td><td class="r"><b>' + money(T.i) + '</b></td></tr></tfoot></table>'
+    + '<div class="gst-grid"><label>H.CODE <span class="muted small">(pick or type a new one)</span><input class="qx-in" id="gstHCode" list="gstHCodes" style="width:160px" value="' + esc(f.hCode || '') + '" oninput="gstPickHCode(this.value)"><datalist id="gstHCodes">' + gstHCodes().map(h => '<option value="' + esc(h.c) + '">' + esc(h.d) + '</option>').join('') + '</datalist></label><label class="w">Description<input class="qx-in" id="gstHDesc" value="' + esc(f.hDesc || '') + '" oninput="GSTI.f.hDesc=this.value"></label></div></div>'
+    + '<div class="actions" style="justify-content:space-between"><span class="muted small">Quantities and amounts come from invoice ' + esc(G.inv.no) + ' and cannot be changed here.</span><span><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="gstSave(false)">Save</button><button class="btn primary" onclick="gstSave(true)">Save &amp; Print GST invoice</button></span></div>'
+    + '<div class="und-box' + (big ? ' big' : '') + '"><div class="und-head"><b>📄 Undertaking — non-deduction of 5.5% withholding tax</b><span class="muted small">' + (big ? 'Suggested: the invoice is Rs ' + money(T.i) + ' (above Rs ' + money(G.limit) + ')' : 'Usually given above Rs ' + money(G.limit)) + (isAdmin() ? ' · <a class="model-link" onclick="gstLimit()">change</a>' : '') + '</span></div>'
+    + '<div id="gstGd" class="muted small">Loading GD copies…</div>'
+    + '<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn' + (big ? ' primary' : '') + '" onclick="gstSave(false,true)">Save &amp; Print undertaking</button><button class="btn" onclick="gdUploadForm()">⬆ Add a GD copy</button>' + (G.und ? '<span class="muted small" style="align-self:center">Undertaking already printed once for this invoice.</span>' : '') + '</div></div>');
+  gstRenderGd();
+}
+function gstRenderGd(){
+  const el = $('gstGd'); if (!el || !GSTI) return;
+  const L = GSTI.gds; if (!L) return;
+  if (!L.length) { el.innerHTML = 'No GD copy saved yet — press “⬆ Add a GD copy” to upload the scan (PDF or picture) once; it can be used for every undertaking.'; return; }
+  el.innerHTML = '<label class="gst-gdsel">GD copy to give with it: <select onchange="GSTI.gdId=this.value;gstRenderGd()">' + L.map(g => '<option value="' + esc(g.id) + '"' + (g.id === GSTI.gdId ? ' selected' : '') + '>' + esc((g.no || g.id) + (g.date ? ' · ' + fmtDate(g.date) : '') + (g.note ? ' · ' + g.note : '')) + '</option>').join('') + '</select></label>'
+    + (() => { const g = L.find(x => x.id === GSTI.gdId); return g && g.url ? ' <a class="btn small" href="' + esc(g.url) + '" target="_blank" rel="noopener">Open GD copy</a>' : ''; })();
+}
+async function gstSave(printGst, printUnd){
+  const G = GSTI; if (!G) return;
+  if (!String(G.f.no).trim()) return toast('Enter the GST invoice number.', true);
+  const r = await api('gstInvoiceSave', {invoiceNo:G.inv.no, no:String(G.f.no).trim(), date:G.f.date, address:G.f.address, strn:G.f.strn, ntn:G.f.ntn, hCode:G.f.hCode, hDesc:G.f.hDesc,
+    lines:G.lines.map(l => ({desc:l.desc})), gdId:G.gdId, undertaking:!!printUnd, undertakingDate:todayStr()});
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not save.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  G.saved = true; if (printUnd) G.und = true;
+  GST_LIST = GST_LIST || {}; GST_LIST[G.inv.no] = r.id;
+  GST_HC = GST_HC.filter(x => x.invoiceNo !== G.inv.no).concat([{no:r.id, invoiceNo:G.inv.no, customer:G.inv.customer, hCode:String(G.f.hCode || '').trim(), hDesc:G.f.hDesc}]);
+  toast('GST invoice ' + r.id + ' saved.');
+  if (printGst) { closeModal(); gstPrint(r.gst || G); }
+  else if (printUnd) { const gd = (G.gds || []).find(x => x.id === G.gdId); closeModal(); undPrint(r.gst, gd); if (gd && gd.url) setTimeout(() => toast('Print the GD copy too: open it from the GST invoice → Undertaking.'), 400); }
+  if ($('ivhRows')) filterIVHistory();
+}
+async function gstLimit(){
+  const v = prompt('Suggest an undertaking above (Rs):', GSTI ? GSTI.limit : 55000); if (v == null) return;
+  const r = await api('gstSettingsSave', {limit:Number(String(v).replace(/,/g, '')) || 55000});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not save.', true);
+  GSTI.limit = Number(String(v).replace(/,/g, '')) || 55000; gstRender();
+}
+function gdUploadForm(){
+  const back = GSTI;
+  const box = document.createElement('div'); box.className = 'gd-pop no-dirty-track';
+  box.innerHTML = '<b>Add a GD copy</b><div class="form-grid"><label>GD number<input id="gdNo" placeholder="e.g. KAPW-HC-1856"></label><label>GD date<input id="gdDate" type="date"></label><label class="wide">Note (optional)<input id="gdNote" placeholder="e.g. Univer fittings shipment"></label><label class="wide">File (PDF or picture)<input id="gdFile" type="file" accept=".pdf,image/*"></label></div><div class="actions"><button class="btn" onclick="this.closest(\'.gd-pop\').remove()">Cancel</button><button class="btn primary" id="gdGo" onclick="gdUploadGo()">Upload</button></div>';
+  const host = document.querySelector('.und-box'); if (host) host.appendChild(box); GSTI = back;
+}
+async function gdUploadGo(){
+  const f = ($('gdFile') || {}).files && $('gdFile').files[0]; if (!f) return toast('Choose the GD file.', true);
+  if (f.size > 14 * 1024 * 1024) return toast('The file is too large (max 14 MB).', true);
+  const b = $('gdGo'); if (b) { b.disabled = true; b.textContent = 'Uploading…'; }
+  const data = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(f); });
+  const r = await api('gdUpload', {fileBase64:data, fileName:f.name, no:$('gdNo').value.trim(), date:$('gdDate').value, note:$('gdNote').value.trim()});
+  if (!r || !r.ok) { if (b) { b.disabled = false; b.textContent = 'Upload'; } return toast((r && r.error) || 'Could not upload.', true); }
+  toast('GD copy saved.');
+  const x = await api('gdList'); if (GSTI && x && x.ok) { GSTI.gds = x.list || []; GSTI.gdId = r.id; }
+  const pop = document.querySelector('.gd-pop'); if (pop) pop.remove();
+  gstRenderGd();
+}
+function gstDate(v, long){ const d = new Date(v); if (isNaN(d)) return ''; const M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return long ? d.getDate() + '-' + M[d.getMonth()] + '-' + d.getFullYear() : String(d.getDate()).padStart(2, '0') + '-' + M[d.getMonth()].slice(0, 3) + '-' + String(d.getFullYear()).slice(2); }
+function gstPrint(g){
+  const lines = g.lines || [], rate = lines[0] ? (lines[0].gstRate != null ? lines[0].gstRate : GSTI && GSTI.rate) : 18;
+  const L = lines.map(l => { const v = l.value != null ? l.value : l.qty * l.rate, t = l.st != null ? l.st : v * rate / 100; return {qty:l.qty, desc:l.desc, rate:l.rate, v:v, t:t, i:v + t}; });
+  const tv = L.reduce((a, l) => a + l.v, 0), tt = L.reduce((a, l) => a + l.t, 0);
+  const f = g.f || g, cust = g.customer || (g.inv && g.inv.customer) || '';
+  const body = '<style>.sti{font-family:Arial,Helvetica,sans-serif;color:#111}.sti-h{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px}.sti-h h1{margin:0;font-size:22px;letter-spacing:.5px}.sti-h .a{font-size:11px;margin-top:3px}.sti-h .ids{font-size:11.5px;text-align:right;line-height:1.6}.sti-t{text-align:center;margin:16px 0 12px}.sti-t span{display:inline-block;border:2px solid #111;padding:5px 26px;font-weight:bold;font-size:15px;letter-spacing:1px}.sti-r{display:flex;justify-content:space-between;font-size:12.5px;margin:4px 0}.sti-r b{font-size:13px}.sti-m{font-size:12.5px;margin:4px 0}.sti-tb{width:100%;border-collapse:collapse;margin-top:12px;font-size:11.5px}.sti-tb th,.sti-tb td{border:1px solid #111;padding:6px 6px}.sti-tb th{background:#f0f0f0;font-size:10.5px}.sti-tb .n td{text-align:center;font-size:9.5px;padding:2px;background:#fafafa}.sti-tb .r{text-align:right}.sti-tb .c{text-align:center}.sti-tb tfoot td{font-weight:bold}.sti-f{margin-top:14px;font-size:12px}.sti-sig{margin-top:56px;text-align:right;font-weight:bold;font-size:12.5px}.sti-sig span{display:inline-block;border-top:1px solid #111;padding-top:4px;min-width:220px;text-align:center}</style>'
+    + '<div class="sti"><div class="sti-h"><div><h1>STANDARD FLUID SYSTEMS</h1><div class="a">' + esc(SFS_ADDR) + '<br>Tel: ' + SFS_PH + '</div></div><div class="ids">NTN No. <b>' + SFS_NTN + '</b><br>GST No. <b>' + SFS_STRN + '</b></div></div>'
+    + '<div class="sti-t"><span>SALE TAX INVOICE</span></div>'
+    + '<div class="sti-r"><span>Invoice No. <b>' + esc(g.no || f.no) + '</b></span><span>Dated: <b>' + esc(gstDate(g.date || f.date, true)) + '</b></span></div>'
+    + '<div class="sti-m">M/S: <b>' + esc(cust) + '</b></div><div class="sti-m">Address: ' + esc(g.address || f.address || '') + '</div>'
+    + '<div class="sti-r"><span>GST No. <b>' + esc(g.strn || f.strn || '') + '</b></span><span>NTN No. <b>' + esc(g.ntn || f.ntn || '') + '</b></span></div>'
+    + '<table class="sti-tb"><thead><tr><th>Quantity</th><th>Description of Goods</th><th>Unit<br>Price</th><th>Value<br>Exc. S.Tax</th><th>Rate of<br>S.Tax @%</th><th>Total S.Tax<br>Payable</th><th>Value Inc.<br>S.Tax</th></tr><tr class="n"><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td></tr></thead><tbody>'
+    + L.map(l => '<tr><td class="c">' + esc(l.qty) + '</td><td>' + esc(l.desc) + '</td><td class="r">' + money(l.rate) + '</td><td class="r">' + money(l.v) + '</td><td class="c">' + rate + '%</td><td class="r">' + money(l.t) + '</td><td class="r">' + money(l.i) + '</td></tr>').join('')
+    + '</tbody><tfoot><tr><td></td><td class="r">TOTAL</td><td></td><td class="r">' + money(tv) + '</td><td></td><td class="r">' + money(tt) + '</td><td class="r">' + money(tv + tt) + '</td></tr></tfoot></table>'
+    + '<div class="sti-f"><b>H.CODE</b> &nbsp; ' + esc(g.hCode || f.hCode || '84-F') + '<br><b>Description:</b> ' + esc(g.hDesc || f.hDesc || '') + '</div>'
+    + '<div class="sti-sig"><span>For STANDARD FLUID SYSTEMS</span></div></div>';
+  printDoc(body, '', docFileName(g.no || f.no, cust, 'Sale Tax Invoice'));
+}
+function undPrint(g, gd){
+  const cust = g.customer || '', no = g.no, dt = g.date;
+  const body = '<style>.und{font-family:Calibri,Arial,Helvetica,sans-serif;color:#111;font-size:12.5px;line-height:1.45}.und-top{display:flex;justify-content:space-between;align-items:center}.und-top img.l{height:58px}.und-top .ag{text-align:center;font-size:10px}.und-top .ag img{height:20px;display:block;margin:2px auto}.und-top .ps{font-weight:900;color:#4a5b70;font-size:15px;line-height:1.05;text-align:right}.und-top .ps b{color:#1d72b8;display:block}.und p{margin:8px 0}.und .dt{text-align:right;font-weight:bold;margin:22px 0 14px}.und .ms{margin:6px 0}.und .ms b{font-size:13.5px}.und .sub{margin:22px 0 12px;display:flex;gap:70px}.und .sub u{font-weight:bold}.und ol{margin:8px 0 8px 18px;padding-left:16px}.und .reg{font-weight:bold;font-size:13.5px;margin:4px 0 0 4px}.und .sign{margin-top:70px}.und .sign u{font-weight:bold}</style>'
+    + '<div class="und"><div class="und-top"><img class="l" src="' + printLogoSrc() + '" alt=""><div class="ag">Sole Agent<img src="' + QT_BRAND_LOGOS.univer + '" alt="UNIVER">ITALY</div><div class="ps">PNEUMATIC<b>SOLUTION</b><b>PROVIDER</b></div></div>'
+    + '<div class="dt">Dated: ' + esc(gstDate(new Date(), false)) + '</div>'
+    + '<div class="ms"><b>M/S:</b> &nbsp; <b>' + esc(cust) + '</b></div><div class="ms" style="margin-left:52px">' + esc(g.address || '') + '</div>'
+    + '<div class="ms" style="margin-top:16px"><u>National Tax No:</u> &nbsp;<b>' + esc(g.ntn || '') + '</b></div>'
+    + '<div class="sub"><b>Subject:</b><u>Undertaking for Non-Deduction of 5.5% Withholding Tax</u></div>'
+    + '<p>Dear Sir,<br>This is to inform you that through Notification No. SRO 97 (1)/2002 dated 12/02/2002 the Central board of Revenue has substitute clause (9B) of Part-IV of Second Schedule, to the Income Tax Ordinance. 1979 providing that no withholding tax shall be deducted u/s. 50(4) on supplies made out of imports on which tax collected at source u/s. 50(5) has been contemplated as final discharge of tax liability u/s.80C. In pursuance of this Notification No SRO # 97(I)/2002 dated 12/02/2002 issued by the Central Board of Revenue; you are prohibited to withhold tax u/s. 50(4) of the Income Tax Ordinance. 1979 in respect of goods supplied out of imported by us.</p>'
+    + '<p>We hereby certify that following information is true and correct:</p>'
+    + '<ol><li>We are commercial importer with Registration Numbers:<div class="reg">NTN: &nbsp;' + SFS_NTN + ' &nbsp; &nbsp; &nbsp; STRN: ' + SFS_STRN + '</div></li></ol>'
+    + '<p>For all the items we have supplied you according to <u><b>our Sale Tax invoice No. ' + esc(no) + ', dated: ' + esc(gstDate(dt, true)) + '</b></u>. We have already added income tax at time of import and are in nomenclature with the imported goods. There has been no value addition to the supply of these goods mentioned in our bill and we have directly imported them since the above SRO has been incorporated in the statute, therefore, we have been legally protected from deduction of withholding tax u/s.50(4) of the income tax ordinance, 1979).</p>'
+    + '<ol start="2"><li>It is indemnified that we shall bear all legal consequences, if the income tax authorities initiate any coercive step for not deduction withholding tax u/s.153(4) of income tax ordinance 2001 (u/s.50(4) of the repealed income tax ordinance,1979).</li></ol>'
+    + '<p>We, therefore, request you not to deduct the withholding tax while making payment to us. Please do not hesitate to contact us if you need any further information regarding this matter.</p>'
+    + '<p>Thanking you,</p>' + (gd ? '<p class="muted" style="font-size:10.5px;color:#555">Enclosed: copy of GD ' + esc(gd.no || '') + (gd.date ? ' dated ' + esc(gstDate(gd.date, true)) : '') + '</p>' : '')
+    + '<div class="sign"><u>For STANDARD FLUID SYSTEMS</u></div></div>';
+  const footer = '<div class="qt-foot" style="text-align:center;font-size:9.5px">e-mail: sales@standardfluid.com, standardfluidsystems@live.com, www.standardfluid.com<br>' + esc(SFS_ADDR) + ', Ph: ' + SFS_PH + '</div><div style="display:flex;justify-content:space-around;align-items:center;margin-top:6px">' + ['ckd','festo','smc','hydac','aventics'].map(k => '<img src="' + QT_BRAND_LOGOS[k] + '" style="height:14px" alt="">').join('') + '</div>';
+  printDoc(body, footer, docFileName(no, cust, 'Undertaking'));
+}
+Object.assign(window, {gstOpen, gstRender, gstRenderGd, gstSave, gstLimit, gdUploadForm, gdUploadGo, gstPrint, undPrint, gstLoadList});
