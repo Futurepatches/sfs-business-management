@@ -1729,3 +1729,13 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-hrow .hv{text-align:right}.db2-hrow .hv b{display:block;font-size:13px;color:#0f172a}.db2-hrow .hv small{font-size:11px;color:#64748b}
 #db2Tipbox{position:fixed;z-index:2000;display:none;pointer-events:none;background:#0f172a;color:#fff;font-size:12px;line-height:1.45;padding:8px 10px;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.25);max-width:240px}
 #db2Tipbox .up{color:#86efac}#db2Tipbox .dn{color:#fca5a5}
+
+/* ---- Sales register import ---- */
+.sr-h{margin:16px 0 6px;font-size:14px;color:#1f3b63}
+.sr-cols summary{cursor:pointer;font-size:12.5px;color:#475569;font-weight:600}
+.sr-map{max-height:320px;overflow:auto}
+.sr-map input{width:100%;border:1px solid #d5dce8;border-radius:8px;padding:6px 8px}
+.sr-map tr.sr-none input{border-color:#f0b4b4;background:#fff7f7}
+.sr-map tr.sr-warn input{border-color:#f0c36d;background:#fffaf0}
+.sr-tbl tr.sr-skip td{color:#94a3b8}
+.sr-tbl tr.sr-flag td{background:#fffbeb}
