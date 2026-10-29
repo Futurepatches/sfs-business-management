@@ -8213,7 +8213,8 @@ Object.assign(window, {qtxLayout, qtxApplyLayout});
 let GSTI = null, GST_LIST = null;
 const SFS_NTN = '2221343-7', SFS_STRN = '3277876141543', SFS_ADDR = '1410, 14th Floor, K.S Trade Tower, New Challi, Karachi', SFS_PH = '021-32464447';
 const GST_WORDS = ['SEAL KIT','REPAIR KIT','SOLENOID VALVE','CONTROL VALVE','BALL VALVE','VALVE','CYLINDER','CONNECTOR','SOCKET','ELBOW','TEE','REDUCER','UNION','NIPPLE','PLUG','SILENCER','FITTING','REGULATOR','FILTER','LUBRICATOR','FRL','GAUGE','SWITCH','SENSOR','COIL','PIPE','TUBE','HOSE','PUMP','MOTOR','GRIPPER','ACTUATOR','POSITIONER','BRACKET','CLAMP','SEAL','KIT','GUN','COUPLING','MANIFOLD'];
-function gstGuessName(desc){ const d = String(desc || '').toUpperCase(); const w = GST_WORDS.find(k => new RegExp('\\b' + k + 'S?\\b').test(d)); return w || d.replace(/\s+/g, ' ').trim().split(' ').slice(0, 3).join(' '); }
+const GST_ABBR = [[/\bELB\b/, 'ELBOW'], [/\bCONN?\b/, 'CONNECTOR'], [/\bCYL\b/, 'CYLINDER'], [/\bVLV\b|\bV\/V\b/, 'VALVE'], [/\bSOL\.? ?V/, 'SOLENOID VALVE'], [/\bREG\b/, 'REGULATOR'], [/\bSIL\b/, 'SILENCER'], [/\bRED\b/, 'REDUCER'], [/\bNIPP?\b/, 'NIPPLE'], [/\bBR?KT\b/, 'BRACKET']];
+function gstGuessName(desc){ const d = String(desc || '').toUpperCase(); const ab = GST_ABBR.find(x => x[0].test(d)); const w = GST_WORDS.find(k => new RegExp('\\b' + k + 'S?\\b').test(d)); return w || (ab && ab[1]) || d.replace(/\s+/g, ' ').trim().split(' ').slice(0, 3).join(' '); }
 function gstNoFor(invNo){ const m = String(invNo || '').match(/^(\D*?)(\d+)$/); return m ? String(Number(m[2]) - 200) : ''; }
 let GST_HC = [];
 async function gstLoadList(){ const r = await api('gstInvoiceList'); if (r && r.ok) { GST_LIST = {}; GST_HC = r.list || []; GST_HC.forEach(x => GST_LIST[x.invoiceNo] = x.no); } return GST_LIST; }
@@ -8315,18 +8316,39 @@ function gstPrint(g){
   const L = lines.map(l => { const v = l.value != null ? l.value : l.qty * l.rate, t = l.st != null ? l.st : v * rate / 100; return {qty:l.qty, desc:l.desc, rate:l.rate, v:v, t:t, i:v + t}; });
   const tv = L.reduce((a, l) => a + l.v, 0), tt = L.reduce((a, l) => a + l.t, 0);
   const f = g.f || g, cust = g.customer || (g.inv && g.inv.customer) || '';
-  const body = '<style>.sti{font-family:Arial,Helvetica,sans-serif;color:#111}.sti-h{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px}.sti-h h1{margin:0;font-size:22px;letter-spacing:.5px}.sti-h .a{font-size:11px;margin-top:3px}.sti-h .ids{font-size:11.5px;text-align:right;line-height:1.6}.sti-t{text-align:center;margin:16px 0 12px}.sti-t span{display:inline-block;border:2px solid #111;padding:5px 26px;font-weight:bold;font-size:15px;letter-spacing:1px}.sti-r{display:flex;justify-content:space-between;font-size:12.5px;margin:4px 0}.sti-r b{font-size:13px}.sti-m{font-size:12.5px;margin:4px 0}.sti-tb{width:100%;border-collapse:collapse;margin-top:12px;font-size:11.5px}.sti-tb th,.sti-tb td{border:1px solid #111;padding:6px 6px}.sti-tb th{background:#f0f0f0;font-size:10.5px}.sti-tb .n td{text-align:center;font-size:9.5px;padding:2px;background:#fafafa}.sti-tb .r{text-align:right}.sti-tb .c{text-align:center}.sti-tb tfoot td{font-weight:bold}.sti-f{margin-top:14px;font-size:12px}.sti-sig{margin-top:56px;text-align:right;font-weight:bold;font-size:12.5px}.sti-sig span{display:inline-block;border-top:1px solid #111;padding-top:4px;min-width:220px;text-align:center}</style>'
-    + '<div class="sti"><div class="sti-h"><div><h1>STANDARD FLUID SYSTEMS</h1><div class="a">' + esc(SFS_ADDR) + '<br>Tel: ' + SFS_PH + '</div></div><div class="ids">NTN No. <b>' + SFS_NTN + '</b><br>GST No. <b>' + SFS_STRN + '</b></div></div>'
-    + '<div class="sti-t"><span>SALE TAX INVOICE</span></div>'
-    + '<div class="sti-r"><span>Invoice No. <b>' + esc(g.no || f.no) + '</b></span><span>Dated: <b>' + esc(gstDate(g.date || f.date, true)) + '</b></span></div>'
-    + '<div class="sti-m">M/S: <b>' + esc(cust) + '</b></div><div class="sti-m">Address: ' + esc(g.address || f.address || '') + '</div>'
-    + '<div class="sti-r"><span>GST No. <b>' + esc(g.strn || f.strn || '') + '</b></span><span>NTN No. <b>' + esc(g.ntn || f.ntn || '') + '</b></span></div>'
-    + '<table class="sti-tb"><thead><tr><th>Quantity</th><th>Description of Goods</th><th>Unit<br>Price</th><th>Value<br>Exc. S.Tax</th><th>Rate of<br>S.Tax @%</th><th>Total S.Tax<br>Payable</th><th>Value Inc.<br>S.Tax</th></tr><tr class="n"><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td></tr></thead><tbody>'
-    + L.map(l => '<tr><td class="c">' + esc(l.qty) + '</td><td>' + esc(l.desc) + '</td><td class="r">' + money(l.rate) + '</td><td class="r">' + money(l.v) + '</td><td class="c">' + rate + '%</td><td class="r">' + money(l.t) + '</td><td class="r">' + money(l.i) + '</td></tr>').join('')
-    + '</tbody><tfoot><tr><td></td><td class="r">TOTAL</td><td></td><td class="r">' + money(tv) + '</td><td></td><td class="r">' + money(tt) + '</td><td class="r">' + money(tv + tt) + '</td></tr></tfoot></table>'
-    + '<div class="sti-f"><b>H.CODE</b> &nbsp; ' + esc(g.hCode || f.hCode || '84-F') + '<br><b>Description:</b> ' + esc(g.hDesc || f.hDesc || '') + '</div>'
-    + '<div class="sti-sig"><span>For STANDARD FLUID SYSTEMS</span></div></div>';
-  printDoc(body, '', docFileName(g.no || f.no, cust, 'Sale Tax Invoice'));
+  /* like the Excel sheet: whole rupees without decimals, the grand total with .00 */
+  const n0 = v => { v = Math.round(Number(v || 0) * 100) / 100; return v.toLocaleString('en-US', {minimumFractionDigits:v % 1 ? 2 : 0, maximumFractionDigits:2}); };
+  const n2 = v => Number(v || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const d = new Date(g.date || f.date), M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dated = isNaN(d) ? '' : M[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  const filler = Math.max(0, 15 - L.length);
+  const body = '<style>.sti{font-family:Arial,Helvetica,sans-serif;color:#000}.sti *{color:#000}'
+    + '.sti table{width:auto;margin:0;box-shadow:none;border-radius:0}.sti table.sti-tb{width:100%}.sti th,.sti td{text-transform:none!important;letter-spacing:normal!important;background:transparent!important;border-bottom:0;box-shadow:none}.sti tr{background:transparent!important}.sti-tb thead th,.sti-tb .n td,.sti-tb tfoot td{border:1px solid #000!important}.sti-tb tbody td{border-top:0!important;border-bottom:0!important}.sti-tb tbody tr:last-child td{border-bottom:0!important}.sti-ids td{border:0!important;font-size:12.5px}.sti h1{white-space:nowrap;line-height:1.1}.sti-h .a{white-space:nowrap}'
+    + '.sti-h{display:flex;justify-content:space-between;align-items:flex-start}.sti-lg{display:flex;align-items:center;gap:10px}.sti-em{width:56px;height:74px;overflow:hidden;flex:none}.sti-em img{height:74px;display:block}'
+    + '.sti-h h1{margin:0;font-size:24px;font-weight:bold}.sti-h .a{font-size:12.5px;margin:2px 0 0 18px;line-height:1.35}.sti-ids{font-size:12.5px;line-height:1.4}.sti-ids td{padding:0 0 0 18px}.sti-ids td+td{text-align:right}'
+    + '.sti-band{margin-top:34px;background:#c0c0c0;border:1px solid #000;text-align:center;font-weight:bold;font-size:18px;padding:3px}'
+    + '.sti-no{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #000;font-size:15.5px;padding:2px 0}.sti-no b{font-size:18px;margin-left:46px}.sti-no .dt span{margin-left:110px}'
+    + '.sti-ms{margin-top:18px;font-size:16px;font-weight:bold}.sti-ms u{font-size:18px;margin-left:20px}.sti-ad{display:flex;font-size:12.5px;margin-top:2px}.sti-ad span{flex:none;width:68px}.sti-ad div{max-width:60%}'
+    + '.sti-gn{display:flex;justify-content:space-between;font-weight:bold;font-size:14px;margin-top:22px}.sti-gn .nt span{margin-left:60px}'
+    + '.sti-tb{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}.sti-tb th{font-weight:normal;font-size:12px;border:1px solid #000;padding:2px 3px;text-align:center;line-height:1.3}'
+    + '.sti-tb .n td{border:1px solid #000;text-align:center;font-weight:bold;font-size:12px;padding:0}.sti-tb tbody td{border-left:1px solid #000;border-right:1px solid #000;padding:5px 5px;vertical-align:top}.sti-tb .f td{height:22px}'
+    + '.sti-tb .c{text-align:center}.sti-tb .r{text-align:right}.sti-tb .b{font-weight:bold}.sti-tb tfoot td{border:1px solid #000;padding:8px 5px 3px;font-size:14px}'
+    + '.sti-hc{margin-top:4px;font-size:11px;font-weight:bold}.sti-hc b{font-size:13.5px;margin-left:16px}.sti-hd{margin-top:10px;font-size:11px;font-weight:bold}'
+    + '.print-company:has(>span:only-child:empty){display:none}.sti-sig{margin-top:90px;font-size:17px;display:flex;align-items:flex-end}.sti-sig i{font-style:normal}.sti-sig span{display:inline-block;width:260px;border-bottom:1px solid #000;margin-left:-60px}</style>'
+    + '<div class="sti"><div class="sti-h"><div class="sti-lg"><div class="sti-em"><img src="' + printLogoSrc() + '" alt=""></div><div><h1>STANDARD FLUID SYSTEMS</h1><div class="a">' + esc(SFS_ADDR) + '<br>Tel: ' + SFS_PH + '</div></div></div>'
+    + '<table class="sti-ids"><tr><td>NTN No.</td><td>' + SFS_NTN + '</td></tr><tr><td>GST No.</td><td>' + SFS_STRN + '</td></tr></table></div>'
+    + '<div class="sti-band">SALE TAX INVOICE</div>'
+    + '<div class="sti-no"><span>Invoice No.<b>' + esc(g.no || f.no) + '</b></span><span class="dt">Dated:<span>' + esc(dated) + '</span></span></div>'
+    + '<div class="sti-ms">M/S:<u>' + esc(cust) + '</u></div><div class="sti-ad"><span>Address:</span><div>' + esc(g.address || f.address || '') + '</div></div>'
+    + '<div class="sti-gn"><span>GST No. ' + esc(g.strn || f.strn || '') + '</span><span class="nt">NTN No.<span>' + esc(g.ntn || f.ntn || '') + '</span></span></div>'
+    + '<table class="sti-tb"><colgroup><col style="width:8.6%"><col style="width:33.2%"><col style="width:9.8%"><col style="width:10.9%"><col style="width:9.1%"><col style="width:13.2%"><col style="width:15.2%"></colgroup>'
+    + '<thead><tr><th>Quantity</th><th>Description of Goods</th><th>Unit<br>Price</th><th>Value<br>Exc.S.Tax</th><th>Rate of<br>S.Tax @%</th><th>Total S.Tax<br>Payable</th><th>Value Inc.<br>S.Tax</th></tr><tr class="n"><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td></tr></thead><tbody>'
+    + L.map(l => '<tr><td class="c">' + esc(l.qty) + '</td><td>' + esc(l.desc) + '</td><td class="c b">' + n0(l.rate) + '</td><td class="r">' + n0(l.v) + '</td><td class="c">' + rate + '%</td><td class="r">' + n0(l.t) + '</td><td class="c">' + n0(l.i) + '</td></tr>').join('')
+    + '<tr class="f"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(filler)
+    + '</tbody><tfoot><tr><td style="border-right:0"></td><td style="border-left:0"></td><td class="c b">TOTAL</td><td class="r">' + n0(tv) + '</td><td class="c b">TOTAL</td><td class="c">' + n0(tt) + '</td><td class="c">' + n2(tv + tt) + '</td></tr></tfoot></table>'
+    + '<div class="sti-hc">H.CODE<b>' + esc(g.hCode || f.hCode || '84-F') + '</b></div><div class="sti-hd">Description: ' + esc(g.hDesc || f.hDesc || '') + '</div>'
+    + '<div class="sti-sig"><i>For&nbsp; STANDARD FLUID SYSTEMS</i><span></span></div></div>';
+  printDoc(body, '<span></span>', docFileName(g.no || f.no, cust, 'Sale Tax Invoice'));
 }
 function undPrint(g, gd){
   const cust = g.customer || '', no = g.no, dt = g.date;
