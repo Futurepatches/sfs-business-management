@@ -1818,3 +1818,25 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 @media (max-width:900px){.qx-info{grid-template-columns:1fr}.qx-foot{grid-template-columns:1fr}.qx-paper{padding:16px}.qx-items{display:block;overflow-x:auto}}
 .qx-items thead th.qx-sn{color:#fff;padding-top:8px;font-size:11px}
 .qx-items thead th.qx-int{color:#fff}
+
+/* ---- Sale tax invoice / undertaking ---- */
+.modal-card:has(.gst-paper){max-width:1020px;width:96vw}
+.gst-paper{border:1px solid #dfe4ec;border-radius:6px;padding:14px 16px;background:#fff}
+.gst-h{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #1f3b63;padding-bottom:6px}
+.gst-h b{font-size:16px;color:#1f3b63}.gst-ids{text-align:right;font-size:12.5px;line-height:1.6}
+.gst-title{text-align:center;margin:10px 0}.gst-title{font-weight:800;letter-spacing:2px;color:#1f3b63}
+.gst-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px;margin:6px 0}
+.gst-grid label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#334155;white-space:nowrap}
+.gst-grid label.w{grid-column:1/-1}
+.gst-t{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+.gst-t th{background:#1f3b63;color:#fff;font-size:11px;padding:6px;text-align:left}
+.gst-t td{border:1px solid #e3e8f0;padding:4px 6px;vertical-align:top}
+.gst-t .r{text-align:right;font-variant-numeric:tabular-nums}.gst-t .c{text-align:center}
+.gst-t tfoot td{background:#f6f8fc}
+.gst-desc{font-weight:700;color:#1f3b63}
+.und-box{margin-top:12px;border:1px dashed #cbd5e1;border-radius:10px;padding:10px 12px;background:#fbfcfe}
+.und-box.big{border:1px solid #f0c36d;background:#fffaf0}
+.und-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.gst-gdsel select{margin-left:6px;border:1px solid #d5dce8;border-radius:8px;padding:5px 8px}
+.gd-pop{margin-top:10px;border:1px solid #d5dce8;border-radius:10px;padding:10px;background:#fff}
+.btn.gst-has{border-color:#93c5fd;background:#eff6ff;color:#1d4ed8}
