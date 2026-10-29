@@ -459,7 +459,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
-  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${hasMod('pricing')?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
+  settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel sr-panel" id="srPanel"><h3>📥 Import sales register</h3><div class="muted">Checking…</div></div>':''}${hasMod('pricing')?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
 };
 
@@ -1530,8 +1530,11 @@ async function loadIVHistory(){
   IVH_CACHE = (r.documents||[]).map(d => {
     const gstN = (d.gstPercent === '' || d.gstPercent == null || isNaN(Number(d.gstPercent))) ? 18 : Number(d.gstPercent);
     const total = (d.subtotal||0) * (1 + gstN/100);
-    return {...d, grandTotal: total, searchText: [d.no, d.customer, d.customerId, d.dc, d.po, ...d.items.map(x=>x.model), ...d.items.map(x=>x.desc)].join(' ').toLowerCase()};
+    return {...d, grandTotal: total, searchText: [d.no, d.customer, d.customerId, d.dc, d.po, d.summary, d.stInv, ...d.items.map(x=>x.model), ...d.items.map(x=>x.desc)].join(' ').toLowerCase()};
   });
+  /* newest first by date (old years added later at the end of the sheet still sort into their place) */
+  const ivT = v => { const t = new Date(v).getTime(); return isNaN(t) ? 0 : t; };
+  IVH_CACHE = IVH_CACHE.map((d, i) => [d, i]).sort((a, b) => ivT(b[0].date) - ivT(a[0].date) || a[1] - b[1]).map(x => x[0]);
   filterIVHistory();
 }
 
@@ -1551,7 +1554,7 @@ function filterIVHistory(){
     <tr>
       <td><b>${esc(d.no)}</b></td>
       <td>${fmtDate(d.date)}</td>
-      <td>${esc(d.customer)}</td>
+      <td>${esc(d.customer)}${d.summary && oiIsOld(d) ? `<div class="muted small" title="Items (from the sales register)">${esc(String(d.summary).slice(0, 90))}</div>` : ''}</td>
       <td>${esc(d.dc||'—')}</td>
       <td>${esc(d.po||'—')}</td>
       <td class="right">${money(d.grandTotal)}</td>
@@ -2205,7 +2208,7 @@ function psCsv(){
 }
 
 /* ---------- SETTINGS ---------- */
-function renderSettings(){ if (hasMod('pricing')) plRender(); if (isAdmin()) { bkLoad(); } if (typeof offPanel === 'function') offPanel(); }
+function renderSettings(){ if (hasMod('pricing')) plRender(); if (isAdmin()) { bkLoad(); srRender(); } if (typeof offPanel === 'function') offPanel(); }
 async function refreshSource(){
   if (!confirm('Refreshing the source snapshot rebuilds the Products list from the source sheet.\n\nWarning: products that were added only in this app (and are not in the source sheet) may be removed from the list.\n\nHave you taken a backup? Continue?')) return;
   const r = await api('refreshSource');
@@ -7753,3 +7756,184 @@ async function obSave(){
   toast(done + ' old invoice(s) saved.');
 }
 Object.assign(window, {obPick, obRead, obRender, obSave});
+
+
+/* ============================================================
+   IMPORT SALES REGISTER (Settings, Admin only)
+   A yearly Excel register (one row per invoice) -> ERP invoices + payments, after a preview.
+   Steps: choose file -> check columns -> match customer names -> check -> save. Undo possible.
+   ============================================================ */
+let SR = null;
+const SR_COLS = [
+  ['no', 'Invoice #', /^(inv(oice)?\.?\s*(#|no\.?|number))$|^bill\s*no/i],
+  ['stInv', 'Sales tax invoice #', /^s\.?\s*t\.?\s*inv/i],
+  ['date', 'Invoice date', /^inv(oice)?\.?\s*date$|^date$/i],
+  ['customer', 'Customer', /customer|party|client|^m\/s/i],
+  ['po', 'PO #', /^p\.?\s*o\.?\s*(#|no)/i],
+  ['poDate', 'PO date', /^p\.?\s*o\.?\s*date/i],
+  ['amount', 'Amount before GST', /w\/o\s*gst|without\s*gst|excl|before\s*gst|^amount$|^value$/i],
+  ['gst', 'GST amount', /^gst$|^g\.?s\.?t\.?\s*(amount|amt)?$|^sales\s*tax$/i],
+  ['net', 'Net amount (with GST)', /^net|grand\s*total|incl/i],
+  ['received', 'Received amount', /receiv\w*\s*(amount|amt)|^received$|^recd/i],
+  ['recDate', 'Receiving date', /receiv\w*\s*date|^recd\.?\s*date|payment\s*date/i],
+  ['tax', 'Income tax deducted', /(\d+(\.\d+)?\s*%\s*tax)|income\s*tax|^wht|w\.h\.t/i],
+  ['summary', 'Items (text)', /^items?$|^description$|^particulars$/i],
+  ['remarks', 'Remarks', /remark/i]
+];
+async function srRender(){
+  const host = $('srPanel'); if (!host) return;
+  if (SR && SR.book) return srForm();
+  host.innerHTML = '<h3>📥 Import sales register</h3><div class="muted small" style="margin-bottom:10px">Bring a whole year of old sales into the ERP from your Excel register (one row per invoice: invoice #, date, customer, PO, amount, GST, received amount, tax, receiving date, items). Invoices and their payments are created; amount-only invoices of the same number are replaced; invoices with items and existing payments are never touched; stock is not changed. You see everything before it is saved, and the import can be undone.</div>'
+    + '<div id="srLast" class="muted small" style="margin-bottom:10px"></div><div class="actions" style="justify-content:flex-start"><button class="btn primary" onclick="srPick()">Choose sales register (Excel)</button></div>';
+  const r = await api('salesRegisterAliases');
+  const el = $('srLast'); if (!el) return;
+  if (!r || !r.ok) { el.textContent = r && /unknown action/i.test(r.error || '') ? 'This needs the new Code.gs — paste it in Apps Script and deploy a New version.' : ''; return; }
+  SR = SR || {}; SR.aliases = r.aliases || {}; SR.last = r.last;
+  el.innerHTML = r.last ? 'Last import: <b>' + fmtDate(r.last.date) + '</b> by ' + esc(r.last.by) + (r.last.file ? ' · ' + esc(r.last.file) : '') + ' · ' + r.last.count + ' invoice(s)' + (r.last.undone ? ' · <span class="dn">undone</span>' : ' · <a class="model-link" onclick="srUndo()">Undo this import</a>') : '';
+}
+function srPick(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm,.ods';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    let wb; try { wb = await oiBook(await f.arrayBuffer()); } catch (e) { return toast('This file could not be read. Save it as .xlsx and try again.', true); }
+    SR = Object.assign(SR || {}, {book:wb, file:f, preview:null, map:{}});
+    const score = n => { const h = srFindHeader(wb.rows[n] || []); return h.score; };
+    SR.sheet = wb.SheetNames.slice().sort((a, b) => score(b) - score(a))[0];
+    srSetHeader(srFindHeader(wb.rows[SR.sheet] || []).row);
+    srForm();
+  };
+  inp.click();
+}
+function srFindHeader(rows){
+  let best = {row:0, score:-1};
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const r = (rows[i] || []).map(x => String(x == null ? '' : x).trim());
+    const sc = SR_COLS.reduce((a, c) => a + (r.some(x => c[2].test(x)) ? 1 : 0), 0);
+    if (sc > best.score) best = {row:i, score:sc};
+  }
+  return best;
+}
+function srSetHeader(i){
+  SR.hdr = Math.max(0, Number(i) || 0);
+  const h = ((SR.book.rows[SR.sheet] || [])[SR.hdr] || []).map(x => String(x == null ? '' : x).trim());
+  SR.cols = {}; const used = {};
+  SR_COLS.forEach(c => { const k = h.findIndex((x, j) => !used[j] && c[2].test(x)); SR.cols[c[0]] = k; if (k !== -1) used[k] = 1; });
+  SR.preview = null;
+}
+/* the invoice rows of the register (the summary blocks further down are left out) */
+function srRows(){
+  const rows = SR.book.rows[SR.sheet] || [], C = SR.cols, out = [];
+  const val = (r, k) => C[k] === -1 || C[k] == null ? '' : r[C[k]];
+  const asDate = v => { if (v instanceof Date) return v; if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Math.round((v - 25569) * 864e5)); const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
+  const num = v => { const n = oiNum(v); return isNaN(n) ? 0 : n; };
+  let lastDate = null; SR.badRows = [];
+  for (let i = SR.hdr + 1; i < rows.length; i++) {
+    const r = rows[i] || [], no = String(val(r, 'no') == null ? '' : val(r, 'no')).trim();
+    if (/^(bill\s*no|inv|invoice)/i.test(no)) break;                       /* a second table starts */
+    if (!/^[A-Z]{0,5}[-\s]?\d{2,}([-\s]?[A-Z]{1,2})?$/i.test(no)) {          /* totals, months, notes */
+      if (no && String(val(r, 'customer') || '').trim() && num(val(r, 'amount')) > 0) SR.badRows.push({i:i + 1, no:no, c:String(val(r, 'customer')).trim(), a:num(val(r, 'amount'))});
+      continue;
+    }
+    const x = {i:i + 1, no:no, flags:[]};
+    x.date = asDate(val(r, 'date'));
+    if (!x.date && lastDate) { x.date = lastDate; x.flags.push('date taken from the row above'); }
+    if (x.date) lastDate = x.date;
+    x.fileCustomer = String(val(r, 'customer') || '').trim();
+    x.po = String(val(r, 'po') == null ? '' : val(r, 'po')).trim(); x.poDate = asDate(val(r, 'poDate'));
+    x.amount = num(val(r, 'amount')); x.gst = num(val(r, 'gst')); x.net = num(val(r, 'net'));
+    if (!x.amount && x.net && !x.gst && C.amount === -1) x.amount = x.net;
+    x.received = num(val(r, 'received')); x.recDate = asDate(val(r, 'recDate')); x.tax = num(val(r, 'tax'));
+    if (x.received > 0 && !x.recDate) { x.recDate = x.date; x.flags.push('received date = invoice date'); }
+    x.summary = String(val(r, 'summary') || '').replace(/\s+/g, ' ').trim(); x.stInv = String(val(r, 'stInv') || '').trim(); x.remarks = String(val(r, 'remarks') || '').trim();
+    if (x.amount > 0 && x.gst && Math.abs(x.gst / x.amount - 0.18) > 0.002) x.flags.push('GST is ' + Math.round(x.gst / x.amount * 1000) / 10 + '% (kept as in the file)');
+    out.push(x);
+  }
+  return out;
+}
+const SR_STOP = ['TEXTILE','TEXTILES','MILLS','MILL','FILMS','FILM','PAKISTAN','ENTERPRISES','ENTERPRISE','ENGINEERING','INTERNATIONAL','TRADING','TRADERS','CORPORATION','CORP','GROUP','PACKAGING','THE','AND','PVT','PRIVATE','LTD','LIMITED','CO','COMPANY','INDUSTRIES','INDUSTREIS','INDUSTRY'];
+function srToks(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length > 1 && SR_STOP.indexOf(t) === -1).map(t => t.length > 4 ? t.replace(/S$/, '') : t); }
+function srGuess(name){
+  const a = SR.aliases || {}, k = name.toLowerCase();
+  if (a[k]) return a[k];
+  const C = (S.customers || []).map(c => c['Customer Name']).filter(Boolean);
+  const exact = C.find(c => c.toLowerCase() === k); if (exact) return exact;
+  const t = srToks(name); if (!t.length) return '';
+  let best = '', bs = 0;
+  C.forEach(c => { const ct = srToks(c); if (!ct.length || ct[0] !== t[0]) return;      /* the main word must be the same */
+    const inter = t.filter(x => ct.indexOf(x) !== -1).length, uni = new Set(t.concat(ct)).size, sc = inter / uni;
+    if (sc > bs) { bs = sc; best = c; } });
+  return bs >= 0.6 ? best : '';
+}
+function srForm(){
+  const host = $('srPanel'); if (!host || !SR || !SR.book) return;
+  const rows = srRows(), h = ((SR.book.rows[SR.sheet] || [])[SR.hdr] || []).map(x => String(x == null ? '' : x).trim());
+  const names = Array.from(new Set(rows.map(r => r.fileCustomer).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  names.forEach(n => { if (SR.map[n] === undefined) SR.map[n] = srGuess(n); });
+  const unmatched = names.filter(n => !SR.map[n]).length;
+  const opt = (sel) => '<option value="-1">— not in this file —</option>' + h.map((x, k) => '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + esc(x || 'Column ' + (k + 1)) + '</option>').join('');
+  host.innerHTML = '<h3>📥 Import sales register</h3>'
+    + '<div class="muted small" style="margin-bottom:8px">File: <b>' + esc(SR.file.name) + '</b> · sheet “' + esc(SR.sheet) + '” · <b>' + rows.length + '</b> invoice row(s) found' + (rows.length ? ' (' + esc(rows[0].no) + ' … ' + esc(rows[rows.length - 1].no) + ')' : '') + '</div>'
+    + '<details class="sr-cols"' + (rows.length ? '' : ' open') + '><summary>Columns (found by themselves — open to check)</summary><div class="form-grid" style="margin-top:8px">'
+    + (SR.book.SheetNames.length > 1 ? '<label>Sheet<select onchange="SR.sheet=this.value;srSetHeader(srFindHeader(SR.book.rows[SR.sheet]||[]).row);srForm()">' + SR.book.SheetNames.map(n => '<option' + (n === SR.sheet ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select></label>' : '')
+    + '<label>Heading row<input type="number" min="1" value="' + (SR.hdr + 1) + '" onchange="srSetHeader(this.value-1);srForm()"></label>'
+    + SR_COLS.map(c => '<label>' + c[1] + '<select onchange="SR.cols[\'' + c[0] + '\']=+this.value;SR.preview=null;srForm()">' + opt(SR.cols[c[0]]) + '</select></label>').join('')
+    + '</div></details>'
+    + ((SR.badRows || []).length ? '<div class="imp-warn" style="margin:8px 0">⚠ ' + SR.badRows.length + ' row(s) look like invoices but their invoice # is not valid, so they are left out — correct them in the Excel file and choose it again: ' + SR.badRows.map(b => 'row ' + b.i + ' (“' + esc(b.no) + '”, ' + esc(b.c) + ', ' + money(b.a) + ')').join('; ') + '</div>' : '')
+    + '<h4 class="sr-h">1. Customer names <span class="muted small">' + names.length + ' different names in the file' + (unmatched ? ' · <b class="dn">' + unmatched + ' not matched yet</b>' : ' · all matched ✓') + '</span></h4>'
+    + '<div class="muted small" style="margin-bottom:6px">Pick the ERP customer for each name. Your choices are remembered for the next file. Leave a name empty to keep it exactly as written in the file.</div>'
+    + '<datalist id="srCust">' + (S.customers || []).map(c => '<option value="' + esc(c['Customer Name']) + '">').join('') + '</datalist>'
+    + '<div class="table-wrap sr-map"><table class="pl-tbl"><thead><tr><th>Name in the file</th><th class="r">Invoices</th><th>ERP customer</th></tr></thead><tbody>'
+    + names.map(n => { const cnt = rows.filter(r => r.fileCustomer === n).length, v = SR.map[n] || '', ok = v && (S.customers || []).some(c => c['Customer Name'] === v);
+        return '<tr class="' + (v ? (ok ? '' : 'sr-warn') : 'sr-none') + '"><td><b>' + esc(n) + '</b></td><td class="r">' + cnt + '</td><td><input list="srCust" value="' + esc(v) + '" placeholder="(keep the file name)" data-n="' + esc(n) + '" onchange="SR.map[this.dataset.n]=this.value.trim();SR.preview=null;srForm()"></td></tr>'; }).join('')
+    + '</tbody></table></div>'
+    + '<h4 class="sr-h">2. Check</h4><div id="srPrev" class="muted small">Press “Check” to see exactly what will be added, replaced or left alone.</div>'
+    + '<div class="actions" style="justify-content:flex-start"><button class="btn" onclick="SR.book=null;SR.preview=null;srRender()">Cancel</button><button class="btn primary" id="srChk" onclick="srCheck()"' + (rows.length ? '' : ' disabled') + '>Check</button></div>';
+  if (SR.preview) srShowPreview();
+}
+function srPayload(){
+  return srRows().map(x => ({no:x.no, stInv:x.stInv, date:x.date ? toInputDate(x.date) : '', customer:(SR.map[x.fileCustomer] || x.fileCustomer), po:x.po, poDate:x.poDate ? toInputDate(x.poDate) : '',
+    amount:x.amount, gst:x.gst, received:x.received, recDate:x.recDate ? toInputDate(x.recDate) : '', tax:x.tax, summary:x.summary, remarks:x.remarks}));
+}
+async function srCheck(){
+  const b = $('srChk'); if (b) { b.disabled = true; b.textContent = 'Checking…'; }
+  const r = await api('salesRegisterImport', {rows:srPayload(), apply:false});
+  if (b) { b.disabled = false; b.textContent = 'Check'; }
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not check.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  SR.preview = r; srShowPreview();
+}
+function srShowPreview(){
+  const r = SR.preview, el = $('srPrev'); if (!r || !el) return;
+  const src = srRows(), byNo = {}; src.forEach(x => byNo[x.no] = x);
+  const unpaid = r.rows.filter(x => x.action !== 'skip' && x.left > 0.5);
+  el.className = '';
+  el.innerHTML = '<div class="pl-sum"><span class="ok"><b>' + r.add + '</b> new</span><span class="ok"><b>' + r.replace + '</b> replace amount-only rows</span><span><b>' + r.payments + '</b> payments</span>'
+    + (r.skip ? '<span class="warn"><b>' + r.skip + '</b> left out</span>' : '') + (unpaid.length ? '<span class="warn"><b>' + unpaid.length + '</b> still unpaid · Rs ' + money(unpaid.reduce((a, x) => a + x.left, 0)) + '</span>' : '') + '</div>'
+    + ((r.unknownCustomers || []).length ? '<div class="imp-warn" style="margin:6px 0">' + r.unknownCustomers.length + ' customer name(s) are not in the ERP customer list and will be saved as written: ' + r.unknownCustomers.slice(0, 12).map(esc).join(', ') + (r.unknownCustomers.length > 12 ? '…' : '') + '</div>' : '')
+    + '<div class="table-wrap" style="max-height:420px;overflow:auto"><table class="pl-tbl sr-tbl"><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="r">Amount</th><th class="r">GST</th><th>Payment</th><th class="r">Unpaid</th><th>Result</th></tr></thead><tbody>'
+    + r.rows.map(x => { const s = byNo[x.no] || {}, fl = (s.flags || []);
+        return '<tr class="' + (x.action === 'skip' ? 'sr-skip' : fl.length ? 'sr-flag' : '') + '"><td><b>' + esc(x.no) + '</b></td><td>' + (s.date ? fmtDate(s.date) : '—') + '</td><td>' + esc(SR.map[s.fileCustomer] || s.fileCustomer || '') + '</td>'
+          + '<td class="r">' + money(s.amount) + '</td><td class="r">' + (s.gst ? money(s.gst) : '0') + '</td><td>' + esc(x.pay || (x.action === 'skip' ? '' : '—')) + '</td><td class="r">' + (x.left > 0.5 ? '<b class="dn">' + money(x.left) + '</b>' : '') + '</td>'
+          + '<td>' + (x.action === 'skip' ? '<span class="ob-st bad">' + esc(x.why) + '</span>' : '<span class="ob-st ok">' + (x.action === 'add' ? 'New' : 'Replace') + '</span>') + (fl.length ? '<div class="muted small">⚠ ' + fl.map(esc).join(' · ') + '</div>' : '') + '</td></tr>'; }).join('')
+    + '</tbody></table></div>'
+    + (r.add + r.replace ? '<div class="actions" style="justify-content:flex-start"><button class="btn primary" id="srGo" onclick="srApply()">Save ' + (r.add + r.replace) + ' invoice(s) and ' + r.payments + ' payment(s)</button></div>' : '<div class="muted" style="margin-top:8px">Nothing to save.</div>');
+}
+async function srApply(){
+  const r0 = SR.preview; if (!r0) return;
+  if (!confirm('Save ' + (r0.add + r0.replace) + ' invoice(s) and ' + r0.payments + ' payment(s)? You can undo this import later on this page.')) return;
+  const b = $('srGo'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  const aliases = {}; Object.keys(SR.map).forEach(k => { if (SR.map[k] && SR.map[k] !== k) aliases[k] = SR.map[k]; });
+  const r = await api('salesRegisterImport', {rows:srPayload(), apply:true, fileName:SR.file ? SR.file.name : '', aliases:aliases});
+  if (!r || !r.ok) { if (b) { b.disabled = false; b.textContent = 'Save'; } return toast((r && r.error) || 'Could not save.', true); }
+  toast((r.add + r.replace) + ' invoice(s) and ' + r.payments + ' payment(s) saved.');
+  SR.book = null; SR.preview = null; IVH_CACHE = [];
+  srRender();
+}
+async function srUndo(){
+  const l = SR && SR.last; if (!l) return;
+  if (!confirm('Undo the import of ' + fmtDate(l.date) + ' (' + l.count + ' invoices)? Its invoices and payments are removed and the replaced rows come back.')) return;
+  const r = await api('salesRegisterUndo', {batch:l.batch});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not undo.', true);
+  toast('Import undone: ' + r.removed + ' invoice row(s) removed, ' + r.restored + ' old row(s) put back.');
+  IVH_CACHE = []; srRender();
+}
+Object.assign(window, {srRender, srPick, srFindHeader, srSetHeader, srForm, srCheck, srApply, srUndo});
