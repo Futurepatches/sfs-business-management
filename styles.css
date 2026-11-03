@@ -1851,3 +1851,5 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-tiscroll{max-height:560px;overflow-y:auto;padding-right:4px}
 .db2-tin{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:#64748b}
 .db2-tin .db2-seg button:disabled{opacity:.4;cursor:default}
+.db2-pdf{border:1px solid #d6dde8;background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#1f3b63;cursor:pointer}
+.db2-pdf:hover{background:#f3f6fb}
