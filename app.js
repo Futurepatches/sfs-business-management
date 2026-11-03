@@ -3376,12 +3376,20 @@ function impEntry(c){
 }
 async function impSave(){
   if (!hasMod('imports')) return toast('You do not have access to Imports.', true);
-  const v = impValidate(); if (!v.ok) return toast(v.error, true);
+  let v = impValidate(); if (!v.ok) return toast(v.error, true);
+  if (IMP.editId && !IMP.editUndone) {
+    if (!confirm('Save the corrected import?\n\nFirst the old import ' + IMP.editId + ' is undone (its stock, supplier payable and cost price go back), then this one is saved as a new import.')) return;
+    const u = await impUndo(IMP.editId, null);
+    if (!u) return;
+    IMP.editUndone = true;
+    await refresh();                       /* stock and cost price as they are without the old import */
+    v = impValidate(); if (!v.ok) return toast(v.error, true);
+  }
   const c = v.calc, h = IMP.h, entry = impEntry(c);
-  if (h.ref && impHistory().some(x => norm(x.ref) === norm(h.ref) && norm(x.supplier) === norm(h.supplier)) && !confirm('An import with this supplier and reference was already saved on this device. Save again?')) return;
+  if (!IMP.editId && h.ref && impHistory().some(x => norm(x.ref) === norm(h.ref) && norm(x.supplier) === norm(h.supplier)) && !confirm('An import with this supplier and reference was already saved on this device. Save again?')) return;
   if (h.payable && !h.supplier && !confirm('Supplier is empty — the supplier invoice value will not appear in Supplier Payable. Continue?')) return;
   const nNew = c.rows.filter(r => !r.exists).length;
-  if (!confirm('Save this import?\n\n• ' + nNew + ' new product(s) will be created\n• ' + c.rows.length + ' inward stock entr' + (c.rows.length === 1 ? 'y' : 'ies') + ' will be added\n• Total landed cost: Rs. ' + money(c.totLanded))) return;
+  if (!IMP.editUndone && !confirm('Save this import?\n\n• ' + nNew + ' new product(s) will be created\n• ' + c.rows.length + ' inward stock entr' + (c.rows.length === 1 ? 'y' : 'ies') + ' will be added\n• Total landed cost: Rs. ' + money(c.totLanded))) return;
 
   const key = [h.date, norm(h.supplier), norm(h.ref), c.rows.map(r => norm(r.model) + ':' + r.qty).join('|')].join('#');
   IMP_DONE[key] = IMP_DONE[key] || {};
@@ -3408,17 +3416,19 @@ async function impSave(){
         const res = await api('saveInward', {date:h.date, sourceType:'Import', model:r.model, quantity:r.qty, supplier:h.supplier, supplierReference:h.ref,
           purchaseCost:h.payable ? impR2(r.valPkr) : '', remarks:'Import' + (h.ref ? ' ' + h.ref : '')});
         if (!res || !res.ok) { if (prog) prog.textContent = ''; return toast('Stopped at ' + r.model + ' (stock entry): ' + ((res && res.error) || 'could not save') + '. Press Save again — items already saved will not be repeated.', true); }
-        st.inw = true;
+        st.inw = true; st.inwId = res.id || '';
       }
     }
+    const done = IMP_DONE[key] || {};
     delete IMP_DONE[key];
     const cs = await api('saveImportCosting', {date:h.date, supplier:h.supplier, ref:h.ref, cur:c.cur, rate:c.rate, method:c.method,
-      charges:c.charges, rows:c.rows.map(r => ({model:r.model, desc:r.desc, qty:r.qty, price:r.price, valCur:r.valCur, valPkr:r.valPkr, share:r.share, landed:r.landed, unitCost:r.unitCost, sale:r.sale, newCost:r.newCost}))});
+      charges:c.charges, rows:c.rows.map(r => ({model:r.model, desc:r.desc, qty:r.qty, price:r.price, valCur:r.valCur, valPkr:r.valPkr, share:r.share, landed:r.landed, unitCost:r.unitCost, sale:r.sale, newCost:r.newCost,
+        inwardId:(done[r.model] || {}).inwId || '', costBefore:r.exists && r.p ? (r.p['Cost Price'] === undefined ? '' : r.p['Cost Price']) : '', exists:!!r.exists}))});
     window.IMP_PREVIEW_ENTRY = entry;
     const costingSaved = !!(cs && cs.ok);
     if (costingSaved) { entry.id = cs.id; IMP_HIST.unshift(entry); }
     if (IMP.draftId) { const did = IMP.draftId; api('impDraftDelete', {id:did}).then(() => impDraftLoad()); }
-    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''}); IMP.draftId = null; IMP.draftName = null;
+    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''}); IMP.draftId = null; IMP.draftName = null; IMP.editId = null; IMP.editUndone = false;
     if (prog) prog.textContent = '';
     await refresh();
     modal('Import Saved ✓', `<p><b>${c.rows.length}</b> item(s) saved — ${nNew} new product(s) created and stock increased.<br>Landed cost per unit has been saved as the product Cost Price.</p>`
@@ -3444,7 +3454,7 @@ function impBlur(){ const a = document.activeElement; if (a && a !== document.bo
 function impDraftRender(){
   const host = $('impDrafts'); if (!host) return;
   const L = IMP_DRAFTS || [], cur = IMP.draftId;
-  const head = cur ? '<div class="imp-dcur">✏️ Working on draft <b>' + esc(IMP.draftName || cur) + '</b> — “Save draft” updates it; saving the import removes it. <a class="model-link" onclick="impDraftNew()">Start a new costing</a></div>' : '';
+  const head = IMP.editId ? '<div class="imp-dcur imp-dedit">✏️ Editing import <b>' + esc(IMP.editId) + '</b>' + (IMP.editUndone ? ' — the old import has already been undone; press <b>Save Import</b> to save the corrected one.' : ' — when you press <b>Save Import</b>, the old import is undone first (stock, supplier payable, cost price) and this one is saved.') + ' <a class="model-link" onclick="impEditCancel()">Cancel edit</a></div>' : cur ? '<div class="imp-dcur">✏️ Working on draft <b>' + esc(IMP.draftName || cur) + '</b> — “Save draft” updates it; saving the import removes it. <a class="model-link" onclick="impDraftNew()">Start a new costing</a></div>' : '';
   host.innerHTML = head + (L.length ? '<div class="imp-dlist"><b>📝 Saved drafts</b>' + L.map(d => '<span class="imp-dchip' + (d.id === cur ? ' on' : '') + '"><a onclick="impDraftOpen(\'' + encA(d.id) + '\')" title="Open this draft">' + esc(d.name || d.id) + ' <small>' + d.items + ' item' + (d.items === 1 ? '' : 's') + ' · ' + esc(fmtDate(d.on)) + (d.by ? ' · ' + esc(d.by) : '') + '</small></a><button type="button" title="Delete this draft" onclick="impDraftDelete(\'' + encA(d.id) + '\')">×</button></span>').join('') + '</div>' : '');
 }
 async function impDraftSave(){
@@ -3484,6 +3494,72 @@ async function impDraftDelete(idEnc){
   toast('Draft deleted.'); impDraftLoad();
 }
 Object.assign(window, {impDraftSave, impDraftOpen, impDraftDelete, impDraftNew});
+
+/* ---------- delete / edit a saved import ---------- */
+async function impUndo(id, costs){
+  /* costs: {model: cost} to set back; null = take them from the preview (recorded cost before, else the estimate, else unchanged) */
+  if (!costs) {
+    const pv = await api('importDeletePreview', {id:id});
+    if (!pv || !pv.ok) { toast(((pv && pv.error) || 'Could not read the import.') + (pv && /unknown action/i.test(pv.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true); return null; }
+    costs = {}; pv.imp.items.forEach(it => { const v = it.costBefore !== null ? it.costBefore : it.costEstimate; if (v !== null && v !== undefined) costs[it.model] = v; });
+  }
+  const r = await api('importDelete', {id:id, costs:costs});
+  if (!r || !r.ok) { toast((r && r.error) || 'Could not undo the import.', true); return null; }
+  IMP_HIST = IMP_HIST.filter(x => x.id !== id);
+  return r;
+}
+let IMP_DEL = null;
+async function impDeleteOpen(id){
+  const pv = await api('importDeletePreview', {id:id});
+  if (!pv || !pv.ok) return toast(((pv && pv.error) || 'Could not read the import.') + (pv && /unknown action/i.test(pv.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  const I = pv.imp; IMP_DEL = I;
+  const q = v => Number(v || 0).toLocaleString('en-US', {maximumFractionDigits:2});
+  const rows = I.items.map((it, i) => {
+    const def = it.costBefore !== null ? it.costBefore : (it.costEstimate !== null ? it.costEstimate : '');
+    const tag = it.costBefore !== null ? '<span class="imp-tag ok">recorded</span>' : it.costEstimate !== null ? '<span class="imp-tag est">estimate — check</span>' : '<span class="imp-tag">not recorded — leave empty to keep</span>';
+    return '<tr><td><b>' + esc(it.model) + '</b>' + (it.wasNew ? ' <span class="muted small">(new product — stays)</span>' : '') + '</td><td class="right">' + q(it.qty) + '</td>'
+      + '<td class="right">' + (it.inwardRow ? q(it.stockNow) + ' → <b class="' + (it.stockAfter < 0 ? 'neg' : '') + '">' + q(it.stockAfter) + '</b>' : '<span class="neg">stock entry not found</span>') + '</td>'
+      + '<td class="right">' + money(it.costNow) + '</td><td><input class="imp-in num" id="impDelCost' + i + '" type="number" min="0" step="any" value="' + esc(def) + '" placeholder="' + esc(money(it.costNow)) + '"> ' + tag + '</td></tr>';
+  }).join('');
+  const neg = I.items.filter(it => it.inwardRow && it.stockAfter < 0), miss = I.items.filter(it => !it.inwardRow);
+  modal('Delete import ' + esc(I.id) + (I.ref ? ' — ' + esc(I.ref) : ''),
+    '<div class="muted" style="margin-bottom:10px">' + esc(I.supplier) + ' · ' + esc(fmtDate(I.date)) + '. Deleting undoes this import:</div>'
+    + '<ul class="imp-undo"><li><b>Stock</b> goes back out (recorded as “Import Deleted” in the stock movements).</li><li><b>Supplier payable</b> for ' + esc(I.supplier || 'the supplier') + ' drops by <b>Rs ' + money(pv.payable) + '</b>.</li><li><b>Cost price</b> is set to the value in the last column (empty = not changed).</li><li>Products created by this import stay. Sale prices are not changed.</li></ul>'
+    + (neg.length ? '<div class="imp-warn">⚠ ' + neg.length + ' item(s) were already sold — their stock will go below zero: ' + neg.map(it => esc(it.model)).join(', ') + '. Delete only if this import was really wrong.</div>' : '')
+    + (miss.length ? '<div class="imp-warn">⚠ No stock entry found for ' + miss.map(it => esc(it.model)).join(', ') + ' — their stock is not changed.</div>' : '')
+    + '<div class="table-wrap"><table class="imp-table"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Stock now → after</th><th class="right">Cost now</th><th>Set cost price to</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" id="impDelGo" onclick="impDeleteGo()">Delete import</button></div>');
+}
+async function impDeleteGo(){
+  const I = IMP_DEL; if (!I) return;
+  if (!confirm('Delete import ' + I.id + '? This cannot be undone.')) return;
+  const costs = {}; I.items.forEach((it, i) => { const el = $('impDelCost' + i); if (el && el.value !== '') costs[it.model] = Number(el.value); });
+  const b = $('impDelGo'); if (b) { b.disabled = true; b.textContent = 'Deleting…'; }
+  const r = await impUndo(I.id, costs);
+  if (!r) { if (b) { b.disabled = false; b.textContent = 'Delete import'; } return; }
+  closeModal();
+  toast('Import ' + I.id + ' deleted — ' + r.inward + ' stock entr' + (r.inward === 1 ? 'y' : 'ies') + ' undone.' + (r.missing && r.missing.length ? ' No stock entry for: ' + r.missing.join(', ') : ''));
+  await refresh(); impLoadHistory();
+}
+function impEditOpen(id){
+  const e = impFindEntry(id); if (!e) return toast('Import not found.', true);
+  if (impHasWork() && !confirm('Open import ' + id + ' for editing? What is on the screen now will be replaced.')) return;
+  const cur = e.cur || 'PKR';
+  IMP = {h:{date:toInputDate(e.date) || todayStr(), supplier:e.supplier || '', ref:e.ref || '', cur:cur, rate:cur === 'PKR' ? 1 : (e.rate || ''), alloc:e.method === 'qty' ? 'qty' : 'value', mode:'avg', payable:true},
+    rows:(e.rows || []).map(r => { const p = findProd(r.model) || {}; return Object.assign(impBlankRow(), {model:r.model, desc:r.desc || p.Description || '', cat:p.Category || 'Others', brand:p.Brand || '', unit:p.Unit || 'Pcs', qty:r.qty, price:r.price, sale:r.sale || ''}); }),
+    charges:(e.charges && e.charges.length ? e.charges.map(c => ({name:c.name, amt:c.amt, cur:String(c.cur || '').toUpperCase() === 'PKR' && cur !== 'PKR' ? 'PKR' : 'inv', inc:!!c.inc})) : impDefaultCharges()),
+    editId:id, editUndone:false};
+  if (!IMP.rows.length) IMP.rows = [impBlankRow()];
+  impBlur(); renderImports();
+  if (typeof impTab === 'function') { try { impTab('zCost'); } catch (er) {} }
+  const z = $('zCost'); if (z) z.scrollIntoView({behavior:'smooth', block:'start'});
+  toast('Import ' + id + ' opened for editing — change it, then press Save Import.');
+}
+function impEditCancel(){
+  if (IMP.editUndone) return toast('The old import is already undone — save the corrected one now (or save it as a draft).', true);
+  IMP = {h:Object.assign({}, IMP.h, {ref:'', supplier:''}), rows:[impBlankRow()], charges:impDefaultCharges()}; impBlur(); renderImports();
+}
+Object.assign(window, {impDeleteOpen, impDeleteGo, impEditOpen, impEditCancel});
 
 /* ---------- costing sheet (screen / PDF / CSV) ---------- */
 function impSheetTable(e, cls){
@@ -3669,7 +3745,7 @@ function impRenderHistory(){
   host.innerHTML = '<div class="panel-head"><h3>Past Imports</h3><span class="muted small">Stored on the server — visible only to Admin and users with Imports access.</span></div>'
     + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Ref</th><th class="right">Items</th><th class="right">Landed Cost (Rs.)</th><th></th></tr></thead><tbody>'
       + list.slice(0, 20).map(e => `<tr><td>${fmtDate(e.date)}</td><td>${esc(e.supplier)}</td><td>${esc(e.ref)}</td><td class="right">${e.rows.length}</td><td class="right"><b>${money(e.totLanded)}</b></td>
-          <td style="white-space:nowrap"><button class="btn small" onclick="impViewEntry('${e.id}')">View</button></td></tr>`).join('')
+          <td style="white-space:nowrap"><button class="btn small" onclick="impViewEntry('${e.id}')">View</button>${/^IMP-/.test(e.id) ? ` <button class="btn small" onclick="impEditOpen('${e.id}')" title="Change this import — the old one is undone and the corrected one saved">Edit</button> <button class="btn small danger" onclick="impDeleteOpen('${e.id}')" title="Undo this import: stock, supplier payable and cost price go back">Delete</button>` : ''}</td></tr>`).join('')
       + '</tbody></table></div>' : '<div class="muted">No imports saved yet.</div>');
 }
 function impViewEntry(id){ const e = impFindEntry(id); if (e) modal('Import Costing — ' + (e.ref || fmtDate(e.date)), impSheetModalHtml(e, false)); }
