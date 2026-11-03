@@ -1848,3 +1848,6 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-ti .db2-tbar-name small{color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db2-ti .db2-tbar-val small{display:block;color:#64748b;font-size:10.5px}
 @media (max-width:640px){.db2-ti{grid-template-columns:22px 1fr 96px}.db2-ti .db2-tbar-track{display:none}}
+.db2-tiscroll{max-height:560px;overflow-y:auto;padding-right:4px}
+.db2-tin{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:#64748b}
+.db2-tin .db2-seg button:disabled{opacity:.4;cursor:default}
