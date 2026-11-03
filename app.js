@@ -4811,7 +4811,7 @@ function db2Items(){
   }));
   const all = Object.values(by), total = all.reduce((a, r) => a + r.value, 0);
   all.sort((a, b) => mode === 'qty' ? (b.qty - a.qty || b.value - a.value) : (b.value - a.value || b.qty - a.qty));
-  const n = DB2.tiMore ? 25 : 10, list = all.slice(0, n), key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
+  const n = [10, 50, 100].includes(Number(DB2.tiN)) ? Number(DB2.tiN) : 10, list = all.slice(0, n), key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
   const qtyTxt = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2});
   const row = (r, i) => {
     const p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
@@ -4827,9 +4827,10 @@ function db2Items(){
   };
   const topSum = list.reduce((a, r) => a + r.value, 0);
   host.innerHTML = title
-    + (list.length ? '<div class="db2-tbars">' + list.map(row).join('') + '</div>'
+    + (list.length ? '<div class="db2-tbars' + (n > 10 ? ' db2-tiscroll' : '') + '">' + list.map(row).join('') + '</div>'
+      + '<div class="db2-tin">Show <span class="db2-seg">' + [10, 50, 100].map(v => '<button type="button" class="' + (v === n ? 'on' : '') + '"' + (v > 10 && all.length <= (v === 50 ? 10 : 50) ? ' disabled title="Only ' + all.length + ' items sold"' : '') + ' onclick="db2ItemsSet(\'N\',' + v + ')">Top ' + v + '</button>').join('') + '</span></div>'
       + '<div class="muted small" style="margin-top:8px">' + all.length + ' different items sold in ' + y + ' · top ' + list.length + ' = <b>' + db2Short(topSum) + '</b>' + (total ? ' (' + Math.round(topSum / total * 100) + '% of item sales)' : '')
-      + (all.length > 10 ? ' · <a class="model-link" onclick="db2ItemsSet(\'More\',' + (DB2.tiMore ? 'false' : 'true') + ')">' + (DB2.tiMore ? 'Show top 10' : 'Show top 25') + '</a>' : '')
+
       + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
       : '<div class="muted">No invoice item lines in ' + y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
 }
