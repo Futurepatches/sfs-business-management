@@ -39,7 +39,8 @@ const ALL_MODULES = [
   {id:'enquiries', group:'Sales', label:'Enquiries & Inbox'},
   {id:'accounts',  group:'Accounts & Parties', label:'Payments / Outstanding'},
   {id:'parties',   group:'Accounts & Parties', label:'Customers & Suppliers'},
-  {id:'reports',   group:'Accounts & Parties', label:'Reports'}
+  {id:'reports',   group:'Accounts & Parties', label:'Reports'},
+  {id:'topitems',  group:'Accounts & Parties', label:'Top selling items — dashboard list (value, quantity, brand, category) & PDF'}
 ];
 /* permissions saved before the detailed list still work: an old name means its whole group */
 const MODULE_GROUPS = {products:['prodview','prodedit','inward'], sales:['dc','invoice','quotation']};
@@ -4662,7 +4663,7 @@ function renderDashboard(){
 }
 
 /* the dashboard is split into tabs so it stays short and calm; the KPI cards stay on top of every tab */
-function db2SeeItems(){ return isAdmin() || canSeeCost(); }   /* top selling items: Admin and the costing / pricing people only */
+function db2SeeItems(){ return isAdmin() || hasMod('topitems'); }   /* top selling items: Admin and users given the "Top selling items" permission only */
 function db2TabList(){
   return [['overview', 'Overview', true], ['sales', 'Sales & outstanding', db2Can('reports') || db2Can('invoice') || db2Can('accounts') || db2Can('sales') || db2Can('enquiries')],
     ['top', 'Top customers & items', db2Can('reports') || db2SeeItems()], ['team', 'Team activity', isAdmin()], ['more', 'Detailed views', true]].filter(t => t[2]);
