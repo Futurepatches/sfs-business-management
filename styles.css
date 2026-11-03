@@ -1853,3 +1853,57 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-tin .db2-seg button:disabled{opacity:.4;cursor:default}
 .db2-pdf{border:1px solid #d6dde8;background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#1f3b63;cursor:pointer}
 .db2-pdf:hover{background:#f3f6fb}
+
+/* Imports: drafts */
+.imp-drafts:empty{display:none}
+.imp-drafts{margin:0 0 12px}
+.imp-dcur{background:#fff7e6;border:1px solid #f5d38a;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px}
+.imp-dlist{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+.imp-dchip{display:inline-flex;align-items:center;border:1px solid #d6dde8;background:#fff;border-radius:999px;overflow:hidden}
+.imp-dchip.on{border-color:#1f3b63;box-shadow:0 0 0 2px rgba(31,59,99,.12)}
+.imp-dchip a{padding:5px 4px 5px 12px;cursor:pointer;color:#1f3b63;font-weight:600}
+.imp-dchip a small{color:#64748b;font-weight:400;margin-left:4px}
+.imp-dchip button{border:0;background:transparent;color:#94a3b8;font-size:16px;padding:2px 10px 2px 6px;cursor:pointer}
+.imp-dchip button:hover{color:#c0392b}
+
+/* Excel view: Delivery Challan + Invoice */
+.dx-title:empty{display:none}
+.dx-title{font-size:18px;font-weight:800;color:#1f3b63;margin:0 0 6px}
+.dx-items th.dx-mk,.dx-items td.dx-mk{width:130px}
+.dx-items td.qx-d .qx-model{width:100%}
+.dx-desc{font-size:13px;color:#0f172a;padding:2px 7px 0;line-height:1.35}
+.dx-bad{color:#c0392b!important}
+.dx-top{align-items:flex-start}
+.dx-note .qx-in{border:1.5px dashed #cfd6e1;font-weight:700;letter-spacing:.2px}
+.dx-note .qx-in:placeholder-shown{font-weight:400;letter-spacing:0}
+.dx-ro{font-size:13px;color:#334155;padding:5px 7px;line-height:1.35;min-height:20px}
+.dx-pair{display:grid;grid-template-columns:1.25fr .9fr;gap:6px}
+.dx-pair .qx-l>span{width:44px;flex:0 0 44px}
+.dx-dcno .btn{flex:none;white-space:nowrap}
+.dx-words{font-size:13px;color:#334155;padding:10px 4px;align-self:center}
+.qx-total .dx-grand{background:#f3f6fb}
+@media (max-width:760px){.dx-pair{grid-template-columns:1fr}.dx-items th.dx-mk,.dx-items td.dx-mk{width:84px}}
+.dx-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (max-width:760px){.dx-paper{padding:16px 12px}.dx-items{min-width:640px}.qx-info{grid-template-columns:1fr;gap:6px}}
+
+/* Dashboard: tabs (calmer layout) */
+.db2-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #dfe5ee;margin:2px 0 16px}
+.db2-tabs button{border:0;background:transparent;padding:10px 14px 11px;font-size:13.5px;font-weight:700;color:#64748b;border-bottom:2.5px solid transparent;margin-bottom:-1px;cursor:pointer;border-radius:8px 8px 0 0}
+.db2-tabs button:hover{color:#1f3b63;background:#f3f6fb}
+.db2-tabs button.on{color:#1f3b63;border-bottom-color:#c8102e}
+.db2-pane{display:none}
+.db2[data-tab="overview"] .db2-pane[data-pane="overview"],.db2[data-tab="sales"] .db2-pane[data-pane="sales"],.db2[data-tab="top"] .db2-pane[data-pane="top"],.db2[data-tab="team"] .db2-pane[data-pane="team"],.db2[data-tab="more"] .db2-pane[data-pane="more"]{display:block}
+.db2-grid.db2-even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.db2-pane[data-pane="team"] .db2-card{max-width:900px}
+/* quick actions: one slim row */
+.db2-qa{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.db2-qa button{padding:9px 12px;border-radius:12px;font-size:13px;gap:10px}
+.db2-qa i{width:30px;height:30px;border-radius:9px;font-size:14px}
+.db2-qa small{display:none}
+@media(max-width:1200px){.db2-grid.db2-even{grid-template-columns:1fr}}
+@media(max-width:640px){.db2-tabs{flex-wrap:nowrap;overflow-x:auto}.db2-tabs button{white-space:nowrap;padding:9px 11px}}
+.db2-tibar{margin:-4px 0 10px}
+.db2-ti .db2-stk{display:block;font-style:normal;font-size:10.5px;color:#15803d;font-weight:600;line-height:1.2}
+.db2-ti .db2-stk.out{color:#c0392b}
+.db2-ti.grp .db2-tbar-name b{font-size:13px}
+.db2-tsub .db2-ti.sub{padding-left:4px;background:#fafbfd}
