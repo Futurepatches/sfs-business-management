@@ -4438,7 +4438,7 @@ function db2YearSel(){
   list.sort((a, b) => b - a);
   return '<label class="db2-year" title="Show the dashboard of another year"><span>Year</span><select onchange="db2SetYear(this.value)">' + list.map(y => '<option value="' + y + '"' + (y === db2Y() ? ' selected' : '') + '>' + y + (y === cy ? ' (this year)' : '') + '</option>').join('') + '</select></label>';
 }
-function db2SetYear(y){ DB2.year = Number(y); DB2.topYear = DB2.year; DB2.topCache = DB2.topCache || {}; renderDashboard(); }
+function db2SetYear(y){ DB2.year = Number(y); DB2.topYear = DB2.year; DB2.tiYear = DB2.year; DB2.topCache = DB2.topCache || {}; renderDashboard(); }
 
 function db2Short(n){
   n = Number(n) || 0; const a = Math.abs(n), s = n < 0 ? '-' : '';
@@ -4484,6 +4484,7 @@ function renderDashboard(){
     + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
     + ((db2Can('reports') || db2Can('invoice')) ? '<div class="db2-card" id="db2YSales"><div class="muted">Loading sales by year…</div></div>' : '')
     + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading top customers…</div></div>' : '')
+    + (db2Can('reports') ? '<div class="db2-card" id="db2Items"><div class="muted">Loading top selling items…</div></div>' : '')
     + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
     + '</div><div class="db2-col">'
     + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
@@ -4514,7 +4515,7 @@ function renderDashboard(){
 
 function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.loaded = '1'; renderDashboardClassic(); } }
 
-function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Act(); db2YSales(); db2YOut(); }
+function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Items(); db2Act(); db2YSales(); db2YOut(); }
 
 /* ---------- year-wise charts (sales, outstanding) ---------- */
 function db2Tip(e, html){
@@ -4782,6 +4783,57 @@ function db2Top(){
       + (mode === 'group' ? ' · ' + (groups ? groups + ' group' + (groups === 1 ? '' : 's') + ' set' : 'no groups set yet') + ((db2Can('parties') || isAdmin()) ? ' · <a class="model-link" onclick="customerGroupsManager()">Manage groups</a>' : '') : '') + '</div>'
       : '<div class="muted">No invoice sales in ' + y + '.</div>');
 }
+
+/* ---------- Top selling items (from invoice lines; old invoices without item lines are not counted) ---------- */
+function db2ItemsSet(k, v){ DB2['ti' + k] = v; if (k === 'Mode') { try { localStorage.setItem('sfsTopItemMode', v); } catch (e) {} } db2Items(); }
+function db2Items(){
+  const host = $('db2Items'); if (!host) return;
+  if (!DB2.tiMode) { try { DB2.tiMode = localStorage.getItem('sfsTopItemMode') || 'value'; } catch (e) { DB2.tiMode = 'value'; } }
+  const mode = DB2.tiMode === 'qty' ? 'qty' : 'value', docs = (DB2.data.invs && DB2.data.invs.documents) || null;
+  const yearOf = d => { const x = new Date(d); return isNaN(x) ? null : x.getFullYear(); };
+  const cy = new Date().getFullYear(), y = Number(DB2.tiYear) || db2Y();
+  const years = Array.from(new Set([cy, cy - 1, cy - 2, db2Y(), y].concat((docs || []).map(d => yearOf(d.date)).filter(Boolean)))).sort((a, b) => b - a);
+  const sel = '<span class="db2-topctl"><span class="db2-seg"><button type="button" class="' + (mode === 'value' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'value\')">By value</button><button type="button" class="' + (mode === 'qty' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'qty\')">By quantity</button></span>'
+    + '<select class="db2-sel" onchange="db2ItemsSet(\'Year\',Number(this.value))">' + years.map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select></span>';
+  const title = '<h3><span>Top selling items <span class="muted small">' + (mode === 'value' ? 'by sales value (excl. GST)' : 'by quantity sold') + '</span></span>' + sel + '</h3>';
+  if (!docs) { host.innerHTML = title + '<div class="muted">' + (DB2.done ? 'Could not load invoices.' : 'Loading…') + '</div>'; return; }
+  const inYear = docs.filter(d => yearOf(d.date) === y);
+  const noLines = inYear.filter(d => typeof oiIsOld === 'function' && oiIsOld(d)).length;
+  const by = {};
+  inYear.forEach(d => (d.items || []).forEach(x => {
+    const model = String(x.model || '').trim(), desc = String(x.desc || '').trim(), qty = Number(x.qty) || 0, val = qty * (Number(x.rate) || 0);
+    if ((!model || model === '-') && !desc) return;
+    if (val <= 0 || qty <= 0 || /\bdiscount\b/i.test(desc)) return;   /* discount / adjustment lines */
+    const hasModel = model && model !== '-', key = hasModel ? 'M:' + model.toUpperCase() : 'D:' + desc.toUpperCase().replace(/\s+/g, ' ').slice(0, 60);
+    const r = by[key] || (by[key] = {model:hasModel ? model : '', desc:desc, qty:0, value:0, inv:new Set(), cust:new Set()});
+    r.qty += qty; r.value += val; r.inv.add(d.no); r.cust.add(norm(d.customer || ''));
+    if (!r.desc && desc) r.desc = desc;
+  }));
+  const all = Object.values(by), total = all.reduce((a, r) => a + r.value, 0);
+  all.sort((a, b) => mode === 'qty' ? (b.qty - a.qty || b.value - a.value) : (b.value - a.value || b.qty - a.qty));
+  const n = DB2.tiMore ? 25 : 10, list = all.slice(0, n), key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
+  const qtyTxt = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2});
+  const row = (r, i) => {
+    const p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
+    const share = total ? Math.round(r.value / total * 1000) / 10 : 0;
+    const click = r.model ? ' onclick="xrOpen(\'Model\',decodeURIComponent(\'' + encA(r.model) + '\'))" title="Open ' + esc(r.model) + '"' : ' title="' + esc(desc) + '"';
+    return '<div class="db2-tbar db2-ti' + (r.model ? ' click' : '') + '"' + click + '>'
+      + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+      + '<span class="db2-tbar-name">' + (r.model ? '<b>' + esc(r.model) + '</b>' : '') + '<small>' + esc(desc) + '</small></span>'
+      + '<span class="db2-tbar-track"><i style="width:' + Math.max(1.5, key(r) / max * 100) + '%"></i></span>'
+      + '<span class="db2-tbar-val">' + (mode === 'qty'
+          ? '<b>' + qtyTxt(r.qty) + ' pcs</b><small>' + db2Short(r.value) + ' · ' + r.cust.size + ' cust.</small>'
+          : '<b>' + db2Short(r.value) + '</b><small>' + share + '% · ' + qtyTxt(r.qty) + ' pcs</small>') + '</span></div>';
+  };
+  const topSum = list.reduce((a, r) => a + r.value, 0);
+  host.innerHTML = title
+    + (list.length ? '<div class="db2-tbars">' + list.map(row).join('') + '</div>'
+      + '<div class="muted small" style="margin-top:8px">' + all.length + ' different items sold in ' + y + ' · top ' + list.length + ' = <b>' + db2Short(topSum) + '</b>' + (total ? ' (' + Math.round(topSum / total * 100) + '% of item sales)' : '')
+      + (all.length > 10 ? ' · <a class="model-link" onclick="db2ItemsSet(\'More\',' + (DB2.tiMore ? 'false' : 'true') + ')">' + (DB2.tiMore ? 'Show top 10' : 'Show top 25') + '</a>' : '')
+      + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
+      : '<div class="muted">No invoice item lines in ' + y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
+}
+Object.assign(window, {db2Items, db2ItemsSet});
 
 /* ---------- Team activity (Admin) ---------- */
 function db2Details(raw){
