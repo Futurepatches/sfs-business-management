@@ -4794,7 +4794,8 @@ function db2Items(){
   const cy = new Date().getFullYear(), y = Number(DB2.tiYear) || db2Y();
   const years = Array.from(new Set([cy, cy - 1, cy - 2, db2Y(), y].concat((docs || []).map(d => yearOf(d.date)).filter(Boolean)))).sort((a, b) => b - a);
   const sel = '<span class="db2-topctl"><span class="db2-seg"><button type="button" class="' + (mode === 'value' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'value\')">By value</button><button type="button" class="' + (mode === 'qty' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'qty\')">By quantity</button></span>'
-    + '<select class="db2-sel" onchange="db2ItemsSet(\'Year\',Number(this.value))">' + years.map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select></span>';
+    + '<select class="db2-sel" onchange="db2ItemsSet(\'Year\',Number(this.value))">' + years.map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>'
+    + '<button type="button" class="db2-pdf" onclick="db2ItemsPdf()" title="Save this list as PDF">⬇ PDF</button></span>';
   const title = '<h3><span>Top selling items <span class="muted small">' + (mode === 'value' ? 'by sales value (excl. GST)' : 'by quantity sold') + '</span></span>' + sel + '</h3>';
   if (!docs) { host.innerHTML = title + '<div class="muted">' + (DB2.done ? 'Could not load invoices.' : 'Loading…') + '</div>'; return; }
   const inYear = docs.filter(d => yearOf(d.date) === y);
@@ -4826,6 +4827,7 @@ function db2Items(){
           : '<b>' + db2Short(r.value) + '</b><small>' + share + '% · ' + qtyTxt(r.qty) + ' pcs</small>') + '</span></div>';
   };
   const topSum = list.reduce((a, r) => a + r.value, 0);
+  DB2.tiLast = {list:list, all:all.length, total:total, topSum:topSum, y:y, mode:mode, n:n, noLines:noLines};
   host.innerHTML = title
     + (list.length ? '<div class="db2-tbars' + (n > 10 ? ' db2-tiscroll' : '') + '">' + list.map(row).join('') + '</div>'
       + '<div class="db2-tin">Show <span class="db2-seg">' + [10, 50, 100].map(v => '<button type="button" class="' + (v === n ? 'on' : '') + '"' + (v > 10 && all.length <= (v === 50 ? 10 : 50) ? ' disabled title="Only ' + all.length + ' items sold"' : '') + ' onclick="db2ItemsSet(\'N\',' + v + ')">Top ' + v + '</button>').join('') + '</span></div>'
@@ -4834,7 +4836,25 @@ function db2Items(){
       + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
       : '<div class="muted">No invoice item lines in ' + y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
 }
-Object.assign(window, {db2Items, db2ItemsSet});
+function db2ItemsPdf(){
+  const T = DB2.tiLast; if (!T || !T.list.length) return toast('Nothing to print yet.', true);
+  const q = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2}), rs = v => Math.round(Number(v) || 0).toLocaleString('en-US');
+  const rows = T.list.map((r, i) => { const p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
+    return '<tr><td class="c">' + (i + 1) + '</td><td class="b">' + esc(r.model || '—') + '</td><td>' + esc(desc) + '</td><td class="r">' + q(r.qty) + '</td><td class="c">' + r.cust.size + '</td><td class="c">' + r.inv.size + '</td><td class="r">' + rs(r.value) + '</td><td class="r">' + (T.total ? (Math.round(r.value / T.total * 1000) / 10) + '%' : '') + '</td></tr>'; }).join('');
+  const tq = T.list.reduce((a, r) => a + r.qty, 0);
+  const body = '<style>.tsi{width:100%;border-collapse:collapse;table-layout:fixed;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;margin:0}.tsi th,.tsi td{border:1px solid #999!important;padding:3px 5px!important;color:#111!important;background:#fff!important;text-transform:none!important;letter-spacing:normal!important;vertical-align:top;line-height:1.3;overflow-wrap:anywhere}'
+    + '.tsi thead th{background:#eef1f5!important;font-weight:bold;text-align:left}.tsi .c{text-align:center}.tsi .r{text-align:right;white-space:nowrap}.tsi .b{font-weight:bold}.tsi tr{break-inside:avoid;page-break-inside:avoid}.tsi thead{display:table-header-group}.tsi tfoot{display:table-row-group}.tsi tfoot td{font-weight:bold;background:#f6f7f9!important}'
+    + '.tsi-sub{margin:-8px 0 12px;font-size:11.5px;color:#444}.tsi-note{font-size:10px;color:#666;margin-top:6px}</style>'
+    + '<div class="doc-head"><div class="doc-head-left"><img src="' + printLogoSrc() + '" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">TOP ' + T.n + ' SELLING ITEMS — ' + T.y + '</div></div></div>'
+    + '<div class="tsi-sub">Ranked by <b>' + (T.mode === 'qty' ? 'quantity sold' : 'sales value (excl. GST)') + '</b> · ' + T.all + ' different items sold in ' + T.y + ' · total item sales Rs ' + rs(T.total) + ' · printed ' + esc(fmtDate(new Date())) + '</div>'
+    + '<table class="tsi"><colgroup><col style="width:5%"><col style="width:15%"><col style="width:37%"><col style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:13%"><col style="width:8%"></colgroup>'
+    + '<thead><tr><th class="c">#</th><th>Part No.</th><th>Description</th><th class="r">Qty</th><th class="c">Cust.</th><th class="c">Inv.</th><th class="r">Sales (Rs)</th><th class="r">Share</th></tr></thead><tbody>' + rows + '</tbody>'
+    + '<tfoot><tr><td></td><td colspan="2" class="r">Top ' + T.list.length + ' total</td><td class="r">' + q(tq) + '</td><td></td><td></td><td class="r">' + rs(T.topSum) + '</td><td class="r">' + (T.total ? Math.round(T.topSum / T.total * 100) + '%' : '') + '</td></tr></tfoot></table>'
+    + '<div class="tsi-note">Cust. = number of customers who bought it · Inv. = number of invoices it appears on.'
+    + (T.noLines ? ' ' + T.noLines + ' invoice' + (T.noLines === 1 ? '' : 's') + ' of ' + T.y + ' without item lines (old invoices without their Excel file) ' + (T.noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>';
+  printDoc(body, null, 'Top ' + T.n + ' selling items ' + T.y + (T.mode === 'qty' ? ' (by quantity)' : ''));
+}
+Object.assign(window, {db2Items, db2ItemsSet, db2ItemsPdf});
 
 /* ---------- Team activity (Admin) ---------- */
 function db2Details(raw){
