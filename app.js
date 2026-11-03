@@ -3147,6 +3147,7 @@ function impPageHtml(){
     </section>
 
     <section class="imp-zone z-cost" id="zCost"><div class="imp-zhead"><i>📦</i><div><b>New Import Costing</b><span>A real shipment → landed cost, new products and stock</span></div></div>
+    <div class="imp-drafts no-dirty-track" id="impDrafts"></div>
     <div class="panel"><h3>1. Shipment Details</h3>
       <div class="form-grid">
         <label>Date<input id="impDate" type="date" oninput="impHdr()"></label>
@@ -3174,6 +3175,7 @@ function impPageHtml(){
     <div class="imp-actions">
       <span id="impProgress" class="muted"></span>
       <button class="btn" onclick="impClear()">Clear</button>
+      <button class="btn" onclick="impDraftSave()" title="Keep this costing on the server and finish it later — nothing else changes">💾 Save draft</button>
       <button class="btn" onclick="impPreview()">Preview Costing</button>
       <button class="btn primary" onclick="impSave()">Save Import → Products + Inward Stock</button>
     </div>
@@ -3202,7 +3204,7 @@ function renderImports(){
   $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
   $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
   IMP.h = h; impSyncRateBox();
-  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab(); pcLoad();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab(); pcLoad(); impDraftLoad();
 }
 function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
 function impHdr(){
@@ -3231,7 +3233,15 @@ function impAddCharge(){ IMP.charges.push({name:'Other charge', amt:'', cur:'PKR
 function impDelCharge(i){ IMP.charges.splice(i, 1); impRenderCharges(); impRecalc(); }
 
 /* ---------- items grid ---------- */
+let IMP_GRID_BUSY = false;
 function impRenderGrid(){
+  if (IMP_GRID_BUSY) return;
+  const grid = $('impGrid'), a = document.activeElement, inGrid = grid && a && grid.contains(a), fid = inGrid ? a.id : '';
+  IMP_GRID_BUSY = true;
+  try { if (inGrid) a.blur(); impRenderGrid_(); } finally { IMP_GRID_BUSY = false; }
+  if (fid && $(fid)) try { $(fid).focus(); } catch (e) {}
+}
+function impRenderGrid_(){
   const cur = IMP.h ? IMP.h.cur : 'USD';
   $('impGrid').innerHTML = '<table class="imp-table"><thead><tr><th>#</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Brand</th><th>Unit</th><th class="right">Qty</th><th class="right">Unit Price (' + esc(cur) + ')</th><th class="right">Sale Price (Rs.)</th><th class="right">Value (Rs.)</th><th class="right">Charges (Rs.)</th><th class="right">Landed / Unit</th><th class="right">Margin</th><th>Status</th><th></th></tr></thead><tbody>'
     + IMP.rows.map((r, i) => `<tr>
@@ -3407,7 +3417,8 @@ async function impSave(){
     window.IMP_PREVIEW_ENTRY = entry;
     const costingSaved = !!(cs && cs.ok);
     if (costingSaved) { entry.id = cs.id; IMP_HIST.unshift(entry); }
-    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''});
+    if (IMP.draftId) { const did = IMP.draftId; api('impDraftDelete', {id:did}).then(() => impDraftLoad()); }
+    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''}); IMP.draftId = null; IMP.draftName = null;
     if (prog) prog.textContent = '';
     await refresh();
     modal('Import Saved ✓', `<p><b>${c.rows.length}</b> item(s) saved — ${nNew} new product(s) created and stock increased.<br>Landed cost per unit has been saved as the product Cost Price.</p>`
@@ -3420,6 +3431,59 @@ function impClear(){
   if (!confirm('Clear everything on this page?')) return;
   IMP = {h:Object.assign({}, IMP.h, {ref:'', rate:IMP.h ? IMP.h.rate : ''}), rows:[impBlankRow()], charges:impDefaultCharges()}; renderImports();
 }
+
+/* ---------- drafts: unfinished costing kept on the server ---------- */
+let IMP_DRAFTS = null;
+async function impDraftLoad(){
+  const r = await api('impDraftList');
+  if (r && r.ok) IMP_DRAFTS = r.list || [];
+  else if (r && /unknown action/i.test(r.error || '')) IMP_DRAFTS = null;
+  impDraftRender();
+}
+function impBlur(){ const a = document.activeElement; if (a && a !== document.body && a.blur) try { a.blur(); } catch (e) {} }
+function impDraftRender(){
+  const host = $('impDrafts'); if (!host) return;
+  const L = IMP_DRAFTS || [], cur = IMP.draftId;
+  const head = cur ? '<div class="imp-dcur">✏️ Working on draft <b>' + esc(IMP.draftName || cur) + '</b> — “Save draft” updates it; saving the import removes it. <a class="model-link" onclick="impDraftNew()">Start a new costing</a></div>' : '';
+  host.innerHTML = head + (L.length ? '<div class="imp-dlist"><b>📝 Saved drafts</b>' + L.map(d => '<span class="imp-dchip' + (d.id === cur ? ' on' : '') + '"><a onclick="impDraftOpen(\'' + encA(d.id) + '\')" title="Open this draft">' + esc(d.name || d.id) + ' <small>' + d.items + ' item' + (d.items === 1 ? '' : 's') + ' · ' + esc(fmtDate(d.on)) + (d.by ? ' · ' + esc(d.by) : '') + '</small></a><button type="button" title="Delete this draft" onclick="impDraftDelete(\'' + encA(d.id) + '\')">×</button></span>').join('') + '</div>' : '');
+}
+async function impDraftSave(){
+  impBlur(); impHdr();
+  const rows = IMP.rows.filter(r => String(r.model || '').trim() || String(r.desc || '').trim());
+  if (!rows.length && !(IMP.h && (IMP.h.supplier || IMP.h.ref))) return toast('Nothing to keep yet — fill the shipment details or some items first.', true);
+  let name = IMP.draftName;
+  if (!IMP.draftId) { name = prompt('Name for this draft:', [IMP.h.supplier, IMP.h.ref].filter(Boolean).join(' — ') || 'Import ' + todayStr()); if (name == null) return; name = name.trim() || 'Draft'; }
+  const r = await api('impDraftSave', {id:IMP.draftId || '', name:name, data:{h:IMP.h, rows:IMP.rows, charges:IMP.charges}});
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not save the draft.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  IMP.draftId = r.id; IMP.draftName = name;
+  toast('Draft saved — open it any time from “Saved drafts”.');
+  impDraftLoad();
+}
+function impHasWork(){ return IMP.rows.some(r => String(r.model || '').trim()) || !!(IMP.h && (IMP.h.ref || IMP.h.supplier)); }
+function impDraftOpen(idEnc){
+  const id = decodeURIComponent(idEnc), d = (IMP_DRAFTS || []).find(x => x.id === id);
+  if (!d || !d.data) return toast('This draft could not be read.', true);
+  if (IMP.draftId !== id && impHasWork() && !confirm('Open draft “' + (d.name || id) + '”? What is on the screen now will be replaced' + (IMP.draftId ? ' (your draft keeps its last saved version).' : ' — save it as a draft first if you need it.'))) return;
+  IMP = {h:Object.assign({date:todayStr(), supplier:'', ref:'', cur:'USD', rate:'', alloc:'value', mode:'avg', payable:true}, d.data.h || {}),
+    rows:(d.data.rows && d.data.rows.length ? d.data.rows : [impBlankRow()]).map(r => Object.assign(impBlankRow(), r)),
+    charges:d.data.charges && d.data.charges.length ? d.data.charges : impDefaultCharges(), draftId:id, draftName:d.name || id};
+  impBlur(); renderImports();
+  const z = $('zCost'); if (z) z.scrollIntoView({behavior:'smooth', block:'start'});
+  toast('Draft “' + (d.name || id) + '” opened.');
+}
+function impDraftNew(){
+  if (impHasWork() && !confirm('Start a new costing? The draft stays saved as it was last saved.')) return;
+  IMP = {h:Object.assign({}, IMP.h, {ref:'', supplier:''}), rows:[impBlankRow()], charges:impDefaultCharges()}; impBlur(); renderImports();
+}
+async function impDraftDelete(idEnc){
+  const id = decodeURIComponent(idEnc), d = (IMP_DRAFTS || []).find(x => x.id === id);
+  if (!confirm('Delete draft “' + ((d && d.name) || id) + '”? This cannot be undone.')) return;
+  const r = await api('impDraftDelete', {id:id});
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not delete.', true);
+  if (IMP.draftId === id) { IMP.draftId = null; IMP.draftName = null; }
+  toast('Draft deleted.'); impDraftLoad();
+}
+Object.assign(window, {impDraftSave, impDraftOpen, impDraftDelete, impDraftNew});
 
 /* ---------- costing sheet (screen / PDF / CSV) ---------- */
 function impSheetTable(e, cls){
@@ -4480,21 +4544,29 @@ function renderDashboard(){
     + (db2Past() ? '<div class="db2-pastbar">📅 Showing <b>' + db2Y() + '</b> — sales, target, quotations, pipeline, top customers and team activity are for ' + db2Y() + '. “Today’s to-do” and outstanding are always as of today. <a onclick="db2SetYear(' + new Date().getFullYear() + ')">Back to ' + new Date().getFullYear() + '</a></div>' : '')
     + (qa.length ? '<div class="db2-qa">' + qa.map((x, i) => '<button type="button" onclick="DB2_QA[' + i + '].go()" title="Shortcut: ' + x.k + '"><i style="background:' + x.color + '">' + x.icon + '</i><span>' + esc(x.label) + '<small>' + x.k + '</small></span></button>').join('') + '</div>' : '')
     + '<div class="db2-kpis" id="db2Kpis"></div>'
-    + '<div class="db2-grid"><div class="db2-col">'
+    + db2TabsHtml()
+    + '<div class="db2-pane" data-pane="overview"><div class="db2-grid"><div class="db2-col">'
     + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
-    + ((db2Can('reports') || db2Can('invoice')) ? '<div class="db2-card" id="db2YSales"><div class="muted">Loading sales by year…</div></div>' : '')
-    + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading top customers…</div></div>' : '')
-    + (db2Can('reports') ? '<div class="db2-card" id="db2Items"><div class="muted">Loading top selling items…</div></div>' : '')
-    + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
     + '</div><div class="db2-col">'
     + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
     + (db2Can('accounts') ? '<div class="db2-card" id="db2Over"><div class="muted">Loading…</div></div>' : '')
+    + '</div></div></div>'
+    + '<div class="db2-pane" data-pane="sales"><div class="db2-grid db2-even"><div class="db2-col">'
+    + ((db2Can('reports') || db2Can('invoice')) ? '<div class="db2-card" id="db2YSales"><div class="muted">Loading sales by year…</div></div>' : '')
+    + '</div><div class="db2-col">'
     + (db2Can('accounts') ? '<div class="db2-card" id="db2YOut"><div class="muted">Loading outstanding by year…</div></div>' : '')
-    + (isAdmin() ? '<div class="db2-card" id="db2Act"><div class="muted">Loading team activity…</div></div>' : '')
-    + '</div></div>'
-    + '<details class="db2-more" id="db2More" ontoggle="db2MoreToggle(this)"><summary>Detailed views — payments table, sales target, low stock, stock by category, pipeline</summary><div id="dashClassic"></div></details>'
+    + ((db2Can('sales') || db2Can('enquiries')) ? '<div class="db2-card" id="db2Pipe"><div class="muted">Loading pipeline…</div></div>' : '')
+    + '</div></div></div>'
+    + '<div class="db2-pane" data-pane="top"><div class="db2-grid db2-even"><div class="db2-col">'
+    + (db2Can('reports') ? '<div class="db2-card" id="db2Top"><div class="muted">Loading top customers…</div></div>' : '')
+    + '</div><div class="db2-col">'
+    + (db2SeeItems() ? '<div class="db2-card" id="db2Items"><div class="muted">Loading top selling items…</div></div>' : '')
+    + '</div></div></div>'
+    + (isAdmin() ? '<div class="db2-pane" data-pane="team"><div class="db2-card" id="db2Act"><div class="muted">Loading team activity…</div></div></div>' : '')
+    + '<div class="db2-pane" data-pane="more"><details class="db2-more" id="db2More" open><summary>Detailed views — payments table, sales target, low stock, stock by category, pipeline</summary><div id="dashClassic"></div></details></div>'
     + '</div>';
 
+  db2ShowTab();
   db2Kpis();   /* stock card can show at once */
   const yr = db2Y();
   DB2.topYear = yr;
@@ -4506,13 +4578,29 @@ function renderDashboard(){
     take('qt', api('quotationHistory'));
     take('dcs', api('getReports', {mode:'docs', type:'DC'}));
   }
-  if (db2Can('invoice') || db2Can('reports') || db2Can('dc')) take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
+  if (db2Can('invoice') || db2Can('reports') || db2Can('dc') || db2SeeItems()) take('invs', api('getReports', {mode:'docs', type:'INVOICE'}));
   if (db2Can('enquiries') || db2Can('sales')) take('enq', api('getEnquiries'));
   if (db2Can('enquiries')) take('ibx', api('getInbox', {countOnly:true}));
   if (isAdmin()) take('act', api('getUserActivity', {year:yr}));
   Promise.all(jobs).then(() => { if (seq === DB2.seq) { DB2.done = true; db2Paint(); } });
 }
 
+/* the dashboard is split into tabs so it stays short and calm; the KPI cards stay on top of every tab */
+function db2SeeItems(){ return isAdmin() || canSeeCost(); }   /* top selling items: Admin and the costing / pricing people only */
+function db2TabList(){
+  return [['overview', 'Overview', true], ['sales', 'Sales & outstanding', db2Can('reports') || db2Can('invoice') || db2Can('accounts') || db2Can('sales') || db2Can('enquiries')],
+    ['top', 'Top customers & items', db2Can('reports') || db2SeeItems()], ['team', 'Team activity', isAdmin()], ['more', 'Detailed views', true]].filter(t => t[2]);
+}
+function db2Tab(){ let t = DB2.tab; if (!t) { try { t = localStorage.getItem('sfsDashTab'); } catch (e) {} } return db2TabList().some(x => x[0] === t) ? t : 'overview'; }
+function db2TabsHtml(){ const cur = db2Tab(); return '<div class="db2-tabs" role="tablist">' + db2TabList().map(t => '<button type="button" role="tab" data-tab="' + t[0] + '" class="' + (t[0] === cur ? 'on' : '') + '" onclick="db2SetTab(\'' + t[0] + '\')">' + esc(t[1]) + '</button>').join('') + '</div>'; }
+function db2ShowTab(){
+  const cur = db2Tab(), host = document.querySelector('.db2'); if (!host) return;
+  host.setAttribute('data-tab', cur);
+  host.querySelectorAll('.db2-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === cur));
+  if (cur === 'more') { const d = $('db2More'); if (d && !d.dataset.loaded && $('dashClassic')) { d.dataset.loaded = '1'; try { renderDashboardClassic(); } catch (e) {} } }
+}
+function db2SetTab(t){ DB2.tab = t; try { localStorage.setItem('sfsDashTab', t); } catch (e) {} db2ShowTab(); }
+window.db2SetTab = db2SetTab;
 function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.loaded = '1'; renderDashboardClassic(); } }
 
 function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Items(); db2Act(); db2YSales(); db2YOut(); }
@@ -4786,19 +4874,12 @@ function db2Top(){
 
 /* ---------- Top selling items (from invoice lines; old invoices without item lines are not counted) ---------- */
 function db2ItemsSet(k, v){ DB2['ti' + k] = v; if (k === 'Mode') { try { localStorage.setItem('sfsTopItemMode', v); } catch (e) {} } db2Items(); }
-function db2Items(){
-  const host = $('db2Items'); if (!host) return;
-  if (!DB2.tiMode) { try { DB2.tiMode = localStorage.getItem('sfsTopItemMode') || 'value'; } catch (e) { DB2.tiMode = 'value'; } }
-  const mode = DB2.tiMode === 'qty' ? 'qty' : 'value', docs = (DB2.data.invs && DB2.data.invs.documents) || null;
+const DB2_TI_MODES = [['value', 'By value', 'by sales value (excl. GST)'], ['qty', 'By quantity', 'by quantity sold'], ['brand', 'By brand', 'brands by sales value'], ['cat', 'By category', 'categories by sales value']];
+function db2ItemsData(){
+  const docs = (DB2.data.invs && DB2.data.invs.documents) || null; if (!docs) return null;
+  const mode = DB2_TI_MODES.some(m => m[0] === DB2.tiMode) ? DB2.tiMode : 'value';
   const yearOf = d => { const x = new Date(d); return isNaN(x) ? null : x.getFullYear(); };
-  const cy = new Date().getFullYear(), y = Number(DB2.tiYear) || db2Y();
-  const years = Array.from(new Set([cy, cy - 1, cy - 2, db2Y(), y].concat((docs || []).map(d => yearOf(d.date)).filter(Boolean)))).sort((a, b) => b - a);
-  const sel = '<span class="db2-topctl"><span class="db2-seg"><button type="button" class="' + (mode === 'value' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'value\')">By value</button><button type="button" class="' + (mode === 'qty' ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'qty\')">By quantity</button></span>'
-    + '<select class="db2-sel" onchange="db2ItemsSet(\'Year\',Number(this.value))">' + years.map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>'
-    + '<button type="button" class="db2-pdf" onclick="db2ItemsPdf()" title="Save this list as PDF">⬇ PDF</button></span>';
-  const title = '<h3><span>Top selling items <span class="muted small">' + (mode === 'value' ? 'by sales value (excl. GST)' : 'by quantity sold') + '</span></span>' + sel + '</h3>';
-  if (!docs) { host.innerHTML = title + '<div class="muted">' + (DB2.done ? 'Could not load invoices.' : 'Loading…') + '</div>'; return; }
-  const inYear = docs.filter(d => yearOf(d.date) === y);
+  const y = Number(DB2.tiYear) || db2Y(), inYear = docs.filter(d => yearOf(d.date) === y);
   const noLines = inYear.filter(d => typeof oiIsOld === 'function' && oiIsOld(d)).length;
   const by = {};
   inYear.forEach(d => (d.items || []).forEach(x => {
@@ -4810,51 +4891,97 @@ function db2Items(){
     r.qty += qty; r.value += val; r.inv.add(d.no); r.cust.add(norm(d.customer || ''));
     if (!r.desc && desc) r.desc = desc;
   }));
-  const all = Object.values(by), total = all.reduce((a, r) => a + r.value, 0);
-  all.sort((a, b) => mode === 'qty' ? (b.qty - a.qty || b.value - a.value) : (b.value - a.value || b.qty - a.qty));
-  const n = [10, 50, 100].includes(Number(DB2.tiN)) ? Number(DB2.tiN) : 10, list = all.slice(0, n), key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
-  const qtyTxt = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2});
-  const row = (r, i) => {
-    const p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
-    const share = total ? Math.round(r.value / total * 1000) / 10 : 0;
-    const click = r.model ? ' onclick="xrOpen(\'Model\',decodeURIComponent(\'' + encA(r.model) + '\'))" title="Open ' + esc(r.model) + '"' : ' title="' + esc(desc) + '"';
-    return '<div class="db2-tbar db2-ti' + (r.model ? ' click' : '') + '"' + click + '>'
-      + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
-      + '<span class="db2-tbar-name">' + (r.model ? '<b>' + esc(r.model) + '</b>' : '') + '<small>' + esc(desc) + '</small></span>'
-      + '<span class="db2-tbar-track"><i style="width:' + Math.max(1.5, key(r) / max * 100) + '%"></i></span>'
+  const items = Object.values(by);
+  items.forEach(r => { const p = r.model ? findProd(r.model) : null; r.p = p; r.stock = p ? (Number(p.currentStock) || 0) : null; r.brand = (p && String(p.Brand || '').trim()) || ''; r.cat = (p && String(p.Category || '').trim()) || ''; });
+  const total = items.reduce((a, r) => a + r.value, 0);
+  let rows;
+  if (mode === 'brand' || mode === 'cat') {
+    const g = {}, field = mode === 'brand' ? 'Brand' : 'Category', none = mode === 'brand' ? '(no brand)' : '(no category)';
+    items.forEach(r => { const k = (mode === 'brand' ? r.brand : r.cat) || none, G = g[k.toUpperCase()] || (g[k.toUpperCase()] = {group:k, items:[], qty:0, value:0, inv:new Set(), cust:new Set()});
+      G.items.push(r); G.qty += r.qty; G.value += r.value; r.inv.forEach(v => G.inv.add(v)); r.cust.forEach(v => G.cust.add(v)); });
+    /* stock in hand of every product of that brand / category (sold this year or not) */
+    const st = {}; (S.products || []).forEach(p => { const k = (String(p[field] || '').trim() || none).toUpperCase(); st[k] = (st[k] || 0) + Math.max(0, Number(p.currentStock) || 0); });
+    rows = Object.keys(g).map(k => Object.assign(g[k], {stock:st[k] || 0})).sort((a, b) => b.value - a.value || b.qty - a.qty);
+    rows.forEach(G => G.items.sort((a, b) => b.value - a.value));
+  } else rows = items.sort((a, b) => mode === 'qty' ? (b.qty - a.qty || b.value - a.value) : (b.value - a.value || b.qty - a.qty));
+  const n = [10, 50, 100].includes(Number(DB2.tiN)) ? Number(DB2.tiN) : 10;
+  return {mode:mode, y:y, rows:rows, list:rows.slice(0, n), n:n, total:total, items:items.length, noLines:noLines, years:Array.from(new Set(docs.map(d => yearOf(d.date)).filter(Boolean)))};
+}
+function db2ItemsSet(k, v){ DB2['ti' + k] = v; if (k === 'Mode') { DB2.tiOpen = {}; try { localStorage.setItem('sfsTopItemMode', v); } catch (e) {} } db2Items(); }
+function db2ItemsOpen(k){ k = decodeURIComponent(k); DB2.tiOpen = DB2.tiOpen || {}; DB2.tiOpen[k] = !DB2.tiOpen[k]; db2Items(); }
+function db2Items(){
+  const host = $('db2Items'); if (!host || !db2SeeItems()) return;
+  if (!DB2.tiMode) { try { DB2.tiMode = localStorage.getItem('sfsTopItemMode') || 'value'; } catch (e) { DB2.tiMode = 'value'; } }
+  const D = db2ItemsData(), mode = D ? D.mode : (DB2_TI_MODES.some(m => m[0] === DB2.tiMode) ? DB2.tiMode : 'value'), grp = mode === 'brand' || mode === 'cat';
+  const cy = new Date().getFullYear(), y = Number(DB2.tiYear) || db2Y();
+  const years = Array.from(new Set([cy, cy - 1, cy - 2, db2Y(), y].concat(D ? D.years : []))).sort((a, b) => b - a);
+  const M = DB2_TI_MODES.find(m => m[0] === mode);
+  const title = '<h3><span>Top selling ' + (mode === 'brand' ? 'brands' : mode === 'cat' ? 'categories' : 'items') + ' <span class="muted small">' + M[2] + '</span></span><span class="db2-topctl">'
+    + '<select class="db2-sel" onchange="db2ItemsSet(\'Year\',Number(this.value))">' + years.map(v => '<option value="' + v + '"' + (v === y ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>'
+    + '<button type="button" class="db2-pdf" onclick="db2ItemsPdf()" title="Save this list as PDF">⬇ PDF</button></span></h3>'
+    + '<div class="db2-tibar"><span class="db2-seg">' + DB2_TI_MODES.map(m => '<button type="button" class="' + (m[0] === mode ? 'on' : '') + '" onclick="db2ItemsSet(\'Mode\',\'' + m[0] + '\')">' + m[1] + '</button>').join('') + '</span></div>';
+  if (!D) { host.innerHTML = title + '<div class="muted">' + (DB2.done ? 'Could not load invoices.' : 'Loading…') + '</div>'; return; }
+  const {list, n, total, noLines} = D, key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
+  const q = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2});
+  const stockTag = s => s == null ? '' : '<em class="db2-stk' + (s <= 0 ? ' out' : '') + '">' + (s <= 0 ? 'Out of stock' : 'Stock ' + q(s)) + '</em>';
+  const itemRow = (r, i, sub) => {
+    const desc = (r.p && r.p.Description) || r.desc || '', share = total ? Math.round(r.value / total * 1000) / 10 : 0;
+    const click = r.model ? ' onclick="event.stopPropagation();xrOpen(\'Model\',decodeURIComponent(\'' + encA(r.model) + '\'))" title="Open ' + esc(r.model) + '"' : ' title="' + esc(desc) + '"';
+    const w = sub ? r.value / sub.value * 100 : key(r) / max * 100;
+    return '<div class="db2-tbar db2-ti' + (sub ? ' sub' : '') + (r.model ? ' click' : '') + '"' + click + '>'
+      + (sub ? '<span></span>' : '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>')
+      + '<span class="db2-tbar-name">' + (r.model ? '<b>' + esc(r.model) + '</b>' : '') + '<small>' + esc(desc) + '</small>' + stockTag(r.stock) + '</span>'
+      + '<span class="db2-tbar-track"><i style="width:' + Math.max(1.5, w) + '%"></i></span>'
       + '<span class="db2-tbar-val">' + (mode === 'qty'
-          ? '<b>' + qtyTxt(r.qty) + ' pcs</b><small>' + db2Short(r.value) + ' · ' + r.cust.size + ' cust.</small>'
-          : '<b>' + db2Short(r.value) + '</b><small>' + share + '% · ' + qtyTxt(r.qty) + ' pcs</small>') + '</span></div>';
+          ? '<b>' + q(r.qty) + ' pcs</b><small>' + db2Short(r.value) + ' · ' + r.cust.size + ' cust.</small>'
+          : '<b>' + db2Short(r.value) + '</b><small>' + (sub ? Math.round(r.value / sub.value * 100) + '% of ' + esc(sub.group) : share + '%') + ' · ' + q(r.qty) + ' pcs</small>') + '</span></div>';
   };
-  const topSum = list.reduce((a, r) => a + r.value, 0);
-  DB2.tiLast = {list:list, all:all.length, total:total, topSum:topSum, y:y, mode:mode, n:n, noLines:noLines};
+  const groupRow = (G, i) => {
+    const open = (DB2.tiOpen || {})[G.group], share = total ? Math.round(G.value / total * 1000) / 10 : 0;
+    return '<div class="db2-tbar db2-ti grp click" onclick="db2ItemsOpen(\'' + encA(G.group) + '\')" title="Show the items of ' + esc(G.group) + '">'
+      + '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+      + '<span class="db2-tbar-name"><b>' + esc(G.group) + '</b><small>' + (open ? '▾ ' : '▸ ') + G.items.length + ' item' + (G.items.length === 1 ? '' : 's') + ' sold · ' + q(G.qty) + ' pcs</small><em class="db2-stk' + (G.stock <= 0 ? ' out' : '') + '">' + (G.stock <= 0 ? 'Nothing in stock' : 'In stock ' + q(G.stock) + ' pcs') + '</em></span>'
+      + '<span class="db2-tbar-track"><i style="width:' + Math.max(1.5, G.value / max * 100) + '%"></i></span>'
+      + '<span class="db2-tbar-val"><b>' + db2Short(G.value) + '</b><small>' + share + '% · ' + G.cust.size + ' cust.</small></span></div>'
+      + (open ? '<div class="db2-tsub">' + G.items.slice(0, 15).map(r => itemRow(r, 0, G)).join('') + (G.items.length > 15 ? '<div class="muted small" style="padding:4px 0 6px 34px">+ ' + (G.items.length - 15) + ' more — use ⬇ PDF for the full list</div>' : '') + '</div>' : '');
+  };
+  const topSum = list.reduce((a, r) => a + r.value, 0), all = D.rows.length;
+  DB2.tiLast = {list:list, all:all, items:D.items, total:total, topSum:topSum, y:D.y, mode:mode, n:n, noLines:noLines};
+  const what = grp ? (mode === 'brand' ? 'brands' : 'categories') : 'items';
   host.innerHTML = title
-    + (list.length ? '<div class="db2-tbars' + (n > 10 ? ' db2-tiscroll' : '') + '">' + list.map(row).join('') + '</div>'
-      + '<div class="db2-tin">Show <span class="db2-seg">' + [10, 50, 100].map(v => '<button type="button" class="' + (v === n ? 'on' : '') + '"' + (v > 10 && all.length <= (v === 50 ? 10 : 50) ? ' disabled title="Only ' + all.length + ' items sold"' : '') + ' onclick="db2ItemsSet(\'N\',' + v + ')">Top ' + v + '</button>').join('') + '</span></div>'
-      + '<div class="muted small" style="margin-top:8px">' + all.length + ' different items sold in ' + y + ' · top ' + list.length + ' = <b>' + db2Short(topSum) + '</b>' + (total ? ' (' + Math.round(topSum / total * 100) + '% of item sales)' : '')
-
-      + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
-      : '<div class="muted">No invoice item lines in ' + y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
+    + (list.length ? '<div class="db2-tbars' + (n > 10 || grp ? ' db2-tiscroll' : '') + '">' + list.map((r, i) => grp ? groupRow(r, i) : itemRow(r, i)).join('') + '</div>'
+      + (all > 10 ? '<div class="db2-tin">Show <span class="db2-seg">' + [10, 50, 100].map(v => '<button type="button" class="' + (v === n ? 'on' : '') + '"' + (v > 10 && all <= (v === 50 ? 10 : 50) ? ' disabled title="Only ' + all + ' ' + what + '"' : '') + ' onclick="db2ItemsSet(\'N\',' + v + ')">Top ' + v + '</button>').join('') + '</span></div>' : '')
+      + '<div class="muted small" style="margin-top:8px">' + (grp ? all + ' ' + what + ' · ' : '') + D.items + ' different items sold in ' + D.y + ' · top ' + list.length + ' = <b>' + db2Short(topSum) + '</b>' + (total ? ' (' + Math.round(topSum / total * 100) + '% of item sales)' : '')
+      + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + D.y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
+      : '<div class="muted">No invoice item lines in ' + D.y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
 }
 function db2ItemsPdf(){
   const T = DB2.tiLast; if (!T || !T.list.length) return toast('Nothing to print yet.', true);
+  const grp = T.mode === 'brand' || T.mode === 'cat', head = T.mode === 'brand' ? 'BRANDS' : T.mode === 'cat' ? 'CATEGORIES' : 'ITEMS';
   const q = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2}), rs = v => Math.round(Number(v) || 0).toLocaleString('en-US');
-  const rows = T.list.map((r, i) => { const p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
-    return '<tr><td class="c">' + (i + 1) + '</td><td class="b">' + esc(r.model || '—') + '</td><td>' + esc(desc) + '</td><td class="r">' + q(r.qty) + '</td><td class="c">' + r.cust.size + '</td><td class="c">' + r.inv.size + '</td><td class="r">' + rs(r.value) + '</td><td class="r">' + (T.total ? (Math.round(r.value / T.total * 1000) / 10) + '%' : '') + '</td></tr>'; }).join('');
+  const pct = v => T.total ? (Math.round(v / T.total * 1000) / 10) + '%' : '';
+  const rows = T.list.map((r, i) => {
+    if (grp) return '<tr><td class="c">' + (i + 1) + '</td><td class="b">' + esc(r.group) + '</td><td class="c">' + r.items.length + '</td><td class="r">' + q(r.qty) + '</td><td class="c">' + r.cust.size + '</td><td class="c">' + r.inv.size + '</td><td class="r">' + rs(r.value) + '</td><td class="r">' + pct(r.value) + '</td><td class="r">' + q(r.stock) + '</td></tr>';
+    const desc = (r.p && r.p.Description) || r.desc || '';
+    return '<tr><td class="c">' + (i + 1) + '</td><td class="b">' + esc(r.model || '—') + '</td><td>' + esc(desc) + '</td><td class="r">' + q(r.qty) + '</td><td class="c">' + r.cust.size + '</td><td class="c">' + r.inv.size + '</td><td class="r">' + rs(r.value) + '</td><td class="r">' + pct(r.value) + '</td><td class="r">' + (r.stock == null ? '—' : q(r.stock)) + '</td></tr>';
+  }).join('');
   const tq = T.list.reduce((a, r) => a + r.qty, 0);
+  const cols = grp ? '<col style="width:5%"><col style="width:28%"><col style="width:8%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:14%"><col style="width:8%"><col style="width:11%">'
+                   : '<col style="width:5%"><col style="width:14%"><col style="width:32%"><col style="width:8%"><col style="width:6%"><col style="width:6%"><col style="width:12%"><col style="width:7%"><col style="width:10%">';
+  const th = grp ? '<th class="c">#</th><th>' + (T.mode === 'brand' ? 'Brand' : 'Category') + '</th><th class="c">Items</th><th class="r">Qty sold</th><th class="c">Cust.</th><th class="c">Inv.</th><th class="r">Sales (Rs)</th><th class="r">Share</th><th class="r">In stock</th>'
+                 : '<th class="c">#</th><th>Part No.</th><th>Description</th><th class="r">Qty</th><th class="c">Cust.</th><th class="c">Inv.</th><th class="r">Sales (Rs)</th><th class="r">Share</th><th class="r">Stock now</th>';
   const body = '<style>.tsi{width:100%;border-collapse:collapse;table-layout:fixed;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;margin:0}.tsi th,.tsi td{border:1px solid #999!important;padding:3px 5px!important;color:#111!important;background:#fff!important;text-transform:none!important;letter-spacing:normal!important;vertical-align:top;line-height:1.3;overflow-wrap:anywhere}'
     + '.tsi thead th{background:#eef1f5!important;font-weight:bold;text-align:left}.tsi .c{text-align:center}.tsi .r{text-align:right;white-space:nowrap}.tsi .b{font-weight:bold}.tsi tr{break-inside:avoid;page-break-inside:avoid}.tsi thead{display:table-header-group}.tsi tfoot{display:table-row-group}.tsi tfoot td{font-weight:bold;background:#f6f7f9!important}'
     + '.tsi-sub{margin:-8px 0 12px;font-size:11.5px;color:#444}.tsi-note{font-size:10px;color:#666;margin-top:6px}</style>'
-    + '<div class="doc-head"><div class="doc-head-left"><img src="' + printLogoSrc() + '" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">TOP ' + T.n + ' SELLING ITEMS — ' + T.y + '</div></div></div>'
-    + '<div class="tsi-sub">Ranked by <b>' + (T.mode === 'qty' ? 'quantity sold' : 'sales value (excl. GST)') + '</b> · ' + T.all + ' different items sold in ' + T.y + ' · total item sales Rs ' + rs(T.total) + ' · printed ' + esc(fmtDate(new Date())) + '</div>'
-    + '<table class="tsi"><colgroup><col style="width:5%"><col style="width:15%"><col style="width:37%"><col style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:13%"><col style="width:8%"></colgroup>'
-    + '<thead><tr><th class="c">#</th><th>Part No.</th><th>Description</th><th class="r">Qty</th><th class="c">Cust.</th><th class="c">Inv.</th><th class="r">Sales (Rs)</th><th class="r">Share</th></tr></thead><tbody>' + rows + '</tbody>'
-    + '<tfoot><tr><td></td><td colspan="2" class="r">Top ' + T.list.length + ' total</td><td class="r">' + q(tq) + '</td><td></td><td></td><td class="r">' + rs(T.topSum) + '</td><td class="r">' + (T.total ? Math.round(T.topSum / T.total * 100) + '%' : '') + '</td></tr></tfoot></table>'
-    + '<div class="tsi-note">Cust. = number of customers who bought it · Inv. = number of invoices it appears on.'
+    + '<div class="doc-head"><div class="doc-head-left"><img src="' + printLogoSrc() + '" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">TOP ' + T.n + ' SELLING ' + head + ' — ' + T.y + '</div></div></div>'
+    + '<div class="tsi-sub">Ranked by <b>' + (T.mode === 'qty' ? 'quantity sold' : 'sales value (excl. GST)') + '</b> · ' + T.items + ' different items sold in ' + T.y + ' · total item sales Rs ' + rs(T.total) + ' · printed ' + esc(fmtDate(new Date())) + '</div>'
+    + '<table class="tsi"><colgroup>' + cols + '</colgroup><thead><tr>' + th + '</tr></thead><tbody>' + rows + '</tbody>'
+    + '<tfoot><tr><td></td><td colspan="' + (grp ? 2 : 2) + '" class="r">Top ' + T.list.length + ' total</td><td class="r">' + q(tq) + '</td><td></td><td></td><td class="r">' + rs(T.topSum) + '</td><td class="r">' + (T.total ? Math.round(T.topSum / T.total * 100) + '%' : '') + '</td><td></td></tr></tfoot></table>'
+    + '<div class="tsi-note">Cust. = number of customers who bought it · Inv. = number of invoices · ' + (grp ? 'In stock = pieces in hand today of all products of that ' + (T.mode === 'brand' ? 'brand' : 'category') + '.' : 'Stock now = pieces in hand today.')
     + (T.noLines ? ' ' + T.noLines + ' invoice' + (T.noLines === 1 ? '' : 's') + ' of ' + T.y + ' without item lines (old invoices without their Excel file) ' + (T.noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>';
-  printDoc(body, null, 'Top ' + T.n + ' selling items ' + T.y + (T.mode === 'qty' ? ' (by quantity)' : ''));
+  printDoc(body, null, 'Top ' + T.n + ' selling ' + head.toLowerCase() + ' ' + T.y + (T.mode === 'qty' ? ' (by quantity)' : ''));
 }
-Object.assign(window, {db2Items, db2ItemsSet, db2ItemsPdf});
+Object.assign(window, {db2Items, db2ItemsSet, db2ItemsPdf, db2ItemsOpen});
 
 /* ---------- Team activity (Admin) ---------- */
 function db2Details(raw){
@@ -8443,3 +8570,218 @@ function undPrint(g, gd){
   printDoc(body, footer, docFileName(no, cust, 'Undertaking'));
 }
 Object.assign(window, {gstOpen, gstRender, gstRenderGd, gstSave, gstLimit, gdUploadForm, gdUploadGo, gstPrint, undPrint, gstLoadList});
+
+
+/* ============================================================
+   EXCEL VIEW for DELIVERY CHALLAN and INVOICE (same idea as the quotation's Excel view)
+   The paper keeps the same field ids as the classic form, so saving, editing, "Load DC(s)"
+   and printing work exactly as before. The view chosen is remembered per page.
+   ============================================================ */
+const DX = {
+  dc:{page:'dc', key:'sfsDcView', body:'dclines', list:() => dcl, set:v => { dcl = v; }, blank:() => ({model:'', qty:'', unit:'Pcs'}), render:() => renderDcLines(), dl:'ml',
+      ids:['dcno','dcdate','dccust','dcid','dcpo','dcpodate','dcstn','dcntn','dcaddr','dcnote']},
+  iv:{page:'invoices', key:'sfsIvView', body:'ivlines', list:() => ivl, set:v => { ivl = v; }, blank:() => ({model:'', qty:'', rate:''}), render:() => renderIvLines(), dl:'ivml',
+      ids:['ivno','ivdate','ivcust','ivcid','ivpo','ivpodate','ivdc','ivdcdate','ivstn','ivntn','ivgst']}
+};
+function dxMode(k){ try { return localStorage.getItem(DX[k].key) || 'excel'; } catch (e) { return 'excel'; } }
+function dxOn(k){ return dxMode(k) === 'excel' && !!$(k === 'dc' ? 'dcxPaper' : 'ivxPaper'); }
+function dxBar(k, excel){
+  return '<div class="qx-bar no-dirty-track"><div class="qx-switch"><button type="button"' + (excel ? ' class="on"' : ' onclick="dxSwitch(\'' + k + '\',\'excel\')"') + '>📄 Excel view</button><button type="button"' + (excel ? ' onclick="dxSwitch(\'' + k + '\',\'classic\')"' : ' class="on"') + '>☰ Classic form</button></div>'
+    + (excel ? '<span class="muted small">Click and type. Enter = next line · paste many lines (part no. / qty' + (k === 'iv' ? ' / rate' : '') + ') straight from Excel into a Part # box</span>' : '') + '</div>';
+}
+function dcxTemplate(){
+  const f = (id, ph, extra) => '<input id="' + id + '" class="qx-in" placeholder="' + esc(ph || '') + '"' + (extra || '') + '>';
+  return '<div class="wrap qx-wrap">' + dxBar('dc', true)
+    + '<div class="dx-title" id="dcTitle"></div><div id="dcEditBanner"></div>'
+    + '<div class="qx-paper dx-paper" id="dcxPaper">'
+    + '<div class="qx-head"><img src="' + esc(printLogoSrc()) + '" alt="" class="qx-logo"><div class="qx-word">CHALLAN</div></div>'
+    + '<div class="qx-info"><div class="qx-to">'
+    + '<div class="qx-l qx-cust"><span>M/S:</span><input id="dccust" class="qx-in qx-big" list="clist" autocomplete="off" placeholder="Customer name" onchange="pickCustomer(\'dc\')"></div>'
+    + '<div class="qx-l dx-top"><span></span><textarea id="dcaddr" class="qx-in qx-desc" rows="1" placeholder="Delivery address" oninput="qtxGrow(this)"></textarea></div>'
+    + '<div class="qx-l dx-note"><span></span><input id="dcnote" class="qx-in" list="dcNotes" placeholder="Note box — e.g. Partial Delivery (leave empty for no box)"><datalist id="dcNotes"><option value="Partial Delivery"><option value="Balance to follow"><option value="Complete Delivery"><option value="Replacement"><option value="Sample — not for sale"><option value="Returnable"></datalist></div>'
+    + '</div><div class="qx-meta">'
+    + '<div class="qx-m"><span>DATE:</span><input id="dcdate" type="date" class="qx-in"></div>'
+    + '<div class="qx-m"><span>Challan #:</span>' + f('dcno', 'Auto') + '</div>'
+    + '<div class="qx-m"><span>Customer ID:</span>' + f('dcid', '') + '</div>'
+    + '<div class="qx-m"><span>PO #:</span>' + f('dcpo', 'Customer PO') + '</div>'
+    + '<div class="qx-m"><span>PO Date:</span><input id="dcpodate" type="date" class="qx-in"></div>'
+    + '<div class="qx-m"><span>STN:</span>' + f('dcstn', '') + '</div>'
+    + '<div class="qx-m"><span>NTN:</span>' + f('dcntn', '') + '</div>'
+    + '</div></div>'
+    + '<div class="dx-scroll">' + '<table class="qx-items dx-items"><thead><tr><th class="qx-sn">Item</th><th>Part # / Description</th><th class="dx-mk">Make</th><th class="qx-q">Qty.</th><th class="qx-mn"></th></tr></thead><tbody id="dclines"></tbody></table>' + '</div>'
+    + '<div class="qx-add no-dirty-track"><button type="button" class="btn small" onclick="dxAdd(\'dc\')">+ Item</button><span class="muted small" id="dcxCount"></span></div>'
+    + '<div class="qx-sign"><span>Thank you for Your Business!</span><div><span>&nbsp;</span><b>Receiver\'s Name &amp; Sign</b></div></div>'
+    + '</div>'
+    + '<div class="qx-actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div>'
+    + '</div>';
+}
+function ivxTemplate(){
+  const f = (id, ph, extra) => '<input id="' + id + '" class="qx-in" placeholder="' + esc(ph || '') + '"' + (extra || '') + '>';
+  return '<div class="wrap qx-wrap">' + dxBar('iv', true)
+    + '<div id="ivEditBanner"></div>'
+    + '<div class="qx-paper dx-paper" id="ivxPaper">'
+    + '<div class="qx-head"><img src="' + esc(printLogoSrc()) + '" alt="" class="qx-logo"><div class="qx-word">INVOICE</div></div>'
+    + '<div class="qx-info"><div class="qx-to">'
+    + '<div class="qx-l qx-cust"><span>M/S:</span><input id="ivcust" class="qx-in qx-big" list="clist" autocomplete="off" placeholder="Customer name" onchange="pickCustomer(\'iv\');ivxAddr()"></div>'
+    + '<div class="qx-l"><span></span><div class="dx-ro" id="ivxAddr"></div></div>'
+    + '<div class="dx-pair"><div class="qx-l"><span>P.O#:</span>' + f('ivpo', 'Customer PO') + '</div><div class="qx-l"><span>Date:</span><input id="ivpodate" type="date" class="qx-in"></div></div>'
+    + '<div class="dx-pair"><div class="qx-l dx-dcno"><span>DC #:</span><input id="ivdc" class="qx-in" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()" title="Fill customer, PO and items from the challan(s)">Load DC(s)</button></div><div class="qx-l"><span>Date:</span><input id="ivdcdate" type="date" class="qx-in"></div></div>'
+    + '</div><div class="qx-meta">'
+    + '<div class="qx-m"><span>Date:</span><input id="ivdate" type="date" class="qx-in"></div>'
+    + '<div class="qx-m"><span>Invoice#:</span>' + f('ivno', 'Auto') + '</div>'
+    + '<div class="qx-m"><span>Customer ID:</span>' + f('ivcid', '') + '</div>'
+    + '<div class="qx-m"><span>S.T.N#:</span>' + f('ivstn', '') + '</div>'
+    + '<div class="qx-m"><span>N.T.N#:</span>' + f('ivntn', '') + '</div>'
+    + '<div class="qx-m"><span>GST %:</span><input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" class="qx-in" oninput="updateIvTotals()"></div>'
+    + '</div></div>'
+    + '<div class="dx-scroll">' + '<table class="qx-items dx-items"><thead><tr><th class="qx-sn">Item</th><th>Part # / Description</th><th class="dx-mk">Make</th><th class="qx-q">Qty.</th><th class="qx-r">Rate/Unit</th><th class="qx-a">Amount</th><th class="qx-mn"></th></tr></thead><tbody id="ivlines"></tbody></table>' + '</div>'
+    + '<div class="qx-add no-dirty-track"><button type="button" class="btn small" onclick="dxAdd(\'iv\')">+ Item</button></div>'
+    + '<div class="qx-foot"><div class="dx-words" id="ivxWords"></div><div class="qx-total">'
+    + '<div><span>SUB TOTAL</span><b id="ivtotal">0.00</b></div><div><span id="ivxGstLbl">ADD GST 18%</span><b id="ivgstamt">0.00</b></div><div class="dx-grand"><span>TOTAL</span><b id="ivgrand">0.00</b></div></div></div>'
+    + '<div class="qx-sign"><span></span><div><span>&nbsp;</span><b>FOR STANDARD FLUID SYSTEMS</b></div></div>'
+    + '</div>'
+    + '<div class="qx-actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div>'
+    + '</div>';
+}
+function ivxAddr(){ const el = $('ivxAddr'); if (!el) return; const c = findCust(($('ivcust') || {}).value || ''); el.textContent = (c && c.Address) || ''; el.title = c ? 'Address from the customer record' : ''; }
+function dxSwitch(k, mode){
+  const D = DX[k], keep = {};
+  D.ids.forEach(id => { const e = $(id); if (e) keep[id] = e.value; });
+  const ro = $(D.ids[0]) ? $(D.ids[0]).readOnly : false;
+  const banner = $(k === 'dc' ? 'dcEditBanner' : 'ivEditBanner'), bHtml = banner ? banner.innerHTML : '';
+  try { localStorage.setItem(D.key, mode); } catch (e) {}
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  $('content').innerHTML = pages[D.page]();
+  D.ids.forEach(id => { const e = $(id); if (e && keep[id] !== undefined) e.value = keep[id]; });
+  if ($(D.ids[0])) $(D.ids[0]).readOnly = ro;
+  const b2 = $(k === 'dc' ? 'dcEditBanner' : 'ivEditBanner'); if (b2 && bHtml) b2.innerHTML = bHtml;
+  if (k === 'dc' && typeof EDIT_DC !== 'undefined' && EDIT_DC && $('dcTitle')) $('dcTitle').textContent = 'Edit Delivery Challan — ' + EDIT_DC.no;
+  if (k === 'iv') ivxAddr();
+  D.render();
+  document.querySelectorAll('.dx-paper .qx-desc').forEach(qtxGrow);
+}
+/* lines */
+function dxMenuBtn(k, i){ return '<td class="qx-mn"><button type="button" class="qx-dots" title="More for this line" onclick="dxMenu(event,\'' + k + '\',' + i + ')">⋯</button></td>'; }
+function dxProdInfo(x, k){
+  const pr = findProd(x.model);
+  if (!x.model) return {pr:null, html:''};
+  if (!pr) return {pr:null, html:'<div class="dx-desc dx-bad">Product not found — check the part number</div>'};
+  const st = Number(pr.currentStock) || 0, need = Number(x.qty) || 0;
+  const low = k === 'dc' && need > 0 && need > st + ((typeof EDIT_DC !== 'undefined' && EDIT_DC && EDIT_DC.oldQty && EDIT_DC.oldQty[pr['Model / Part No.']]) || 0);
+  return {pr:pr, html:'<div class="dx-desc">' + esc(pr.Description || '') + '</div><div class="qx-info2' + (low ? ' dx-bad' : '') + '">Stock <b>' + esc(st) + '</b>' + (low ? ' — not enough for ' + need : '') + '</div>'};
+}
+function dcxRenderLines(){
+  const h = $('dclines'); if (!h) return;
+  if (!dcl.length) dcl.push(DX.dc.blank());
+  const act = document.activeElement; if (act && h.contains(act)) { dxRendering = true; act.blur(); dxRendering = false; }
+  h.innerHTML = dcl.map((x, i) => {
+    const P = dxProdInfo(x, 'dc');
+    if ((x.make == null || x.make === '') && P.pr) x.make = P.pr.Brand || '';
+    return '<tr class="qx-tr" data-i="' + i + '"><td class="qx-sn">' + (i + 1) + '</td>'
+      + '<td class="qx-d"><input class="qx-in qx-model" list="ml" value="' + esc(x.model || '') + '" placeholder="Part # / model" onchange="dxModel(\'dc\',' + i + ',this.value)" onkeydown="dxKey(event,\'dc\',' + i + ')" onpaste="dxPaste(event,\'dc\',' + i + ')">' + P.html + '</td>'
+      + '<td class="dx-mk"><input class="qx-in qx-make" value="' + esc(x.make || '') + '" placeholder="Make" oninput="dcl[' + i + '].make=this.value"></td>'
+      + '<td class="qx-q"><input class="qx-in qx-qty" type="number" min="0" step="any" value="' + esc(x.qty) + '" oninput="dcl[' + i + '].qty=this.value" onchange="dcxRenderLines()" onkeydown="dxKey(event,\'dc\',' + i + ')"><input class="qx-in qx-unit" value="' + esc(x.unit || 'Pcs') + '" oninput="dcl[' + i + '].unit=this.value"></td>'
+      + dxMenuBtn('dc', i) + '</tr>';
+  }).join('');
+  if ($('dcaddr')) qtxGrow($('dcaddr'));
+  const n = dcl.filter(x => String(x.model || '').trim()).length, q = dcl.reduce((a, x) => a + (Number(x.qty) || 0), 0);
+  if ($('dcxCount')) $('dcxCount').textContent = n ? n + ' item' + (n === 1 ? '' : 's') + ' · ' + q.toLocaleString('en-US') + ' pcs' : '';
+}
+function ivxRenderLines(){
+  const h = $('ivlines'); if (!h) return;
+  if (!ivl.length) ivl.push(DX.iv.blank());
+  const act = document.activeElement; if (act && h.contains(act)) { dxRendering = true; act.blur(); dxRendering = false; }
+  h.innerHTML = ivl.map((x, i) => {
+    const P = dxProdInfo(x, 'iv');
+    if ((x.make == null || x.make === '') && P.pr) x.make = P.pr.Brand || '';
+    const amt = (+x.qty || 0) * (+x.rate || 0);
+    return '<tr class="qx-tr" data-i="' + i + '"><td class="qx-sn">' + (i + 1) + '</td>'
+      + '<td class="qx-d"><input class="qx-in qx-model" list="ivml" value="' + esc(x.model || '') + '" placeholder="Part # / model" onchange="dxModel(\'iv\',' + i + ',this.value)" onkeydown="dxKey(event,\'iv\',' + i + ')" onpaste="dxPaste(event,\'iv\',' + i + ')">' + P.html + '</td>'
+      + '<td class="dx-mk"><input class="qx-in qx-make" value="' + esc(x.make || '') + '" placeholder="Make" oninput="ivl[' + i + '].make=this.value"></td>'
+      + '<td class="qx-q"><input class="qx-in qx-qty" type="number" min="0" step="any" value="' + esc(x.qty) + '" oninput="ivl[' + i + '].qty=this.value;updateIvTotals()" onkeydown="dxKey(event,\'iv\',' + i + ')"><span class="qx-each">nos</span></td>'
+      + '<td class="qx-r"><input class="qx-in qx-rate" type="number" min="0" step="any" value="' + esc(x.rate) + '" oninput="ivl[' + i + '].rate=this.value;updateIvTotals()" onkeydown="dxKey(event,\'iv\',' + i + ')"><span class="qx-each">each</span></td>'
+      + '<td class="qx-a" id="ivx_amt_' + i + '">' + (amt ? money(amt) : '') + '</td>'
+      + dxMenuBtn('iv', i) + '</tr>';
+  }).join('');
+  updateIvTotals();
+}
+let dxRendering = false;
+function dxModel(k, i, v){
+  if (dxRendering) { DX[k].list()[i].model = v; return; }   /* blur while the lines are being redrawn: just keep the value */
+  if (k === 'iv') return ivModelChanged(i, v);
+  const L = dcl; L[i].model = v; const pr = findProd(v); if (pr) { L[i].make = pr.Brand || L[i].make || ''; if (!L[i].unit || L[i].unit === 'Pcs') L[i].unit = pr.Unit || 'Pcs'; }
+  renderDcLines();
+  const row = document.querySelector('#dclines tr[data-i="' + i + '"] .qx-qty'); if (row && pr) row.focus();
+}
+function dxAdd(k, at){
+  const D = DX[k], L = D.list(), b = D.blank();
+  if (at == null) L.push(b); else L.splice(at, 0, b);
+  D.render();
+  const i = at == null ? L.length - 1 : at, f = document.querySelector('#' + D.body + ' tr[data-i="' + i + '"] .qx-model'); if (f) f.focus();
+}
+function dxKey(e, k, i){
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  e.preventDefault();
+  const D = DX[k], cls = Array.from(e.target.classList).find(c => /^qx-(model|qty|rate)$/.test(c)) || 'qx-model';
+  if (cls === 'qx-model') { e.target.dispatchEvent(new Event('change')); const q = document.querySelector('#' + D.body + ' tr[data-i="' + i + '"] .qx-qty'); if (q) { q.focus(); q.select && q.select(); } return; }
+  if (i === D.list().length - 1) { e.target.dispatchEvent(new Event('change')); return dxAdd(k); }
+  const f = document.querySelector('#' + D.body + ' tr[data-i="' + (i + 1) + '"] .' + cls); if (f) f.focus();
+}
+/* paste rows from Excel into a Part # box: part no. [tab] … qty [tab] rate — one line per item */
+function dxPaste(e, k, i){
+  const t = (e.clipboardData || window.clipboardData).getData('text') || '';
+  if (!/[\t\n]/.test(t.trim())) return;
+  e.preventDefault();
+  const D = DX[k], L = D.list(), num = s => { const n = Number(String(s || '').replace(/,/g, '').trim()); return String(s || '').trim() !== '' && !isNaN(n) ? n : null; };
+  const rows = t.replace(/\r/g, '').split('\n').map(l => l.split('\t').map(c => c.trim())).filter(c => c.some(Boolean));
+  const add = rows.map(c => {
+    let mi = c.findIndex(v => findProd(v)); if (mi < 0) mi = c.findIndex(v => v && num(v) === null);
+    const model = mi >= 0 ? (findProd(c[mi]) ? findProd(c[mi])['Model / Part No.'] : c[mi]) : '';
+    const nums = c.map((v, j) => j === mi ? null : num(v)).filter(v => v !== null);
+    const o = D.blank(); o.model = model; if (nums.length) o.qty = nums[0]; if (k === 'iv' && nums.length > 1) o.rate = nums[nums.length - 1];
+    const pr = findProd(model); if (pr) { o.make = pr.Brand || ''; if (k === 'iv' && (o.rate === '' || o.rate == null) && Number(pr['Sale Price']) > 0) o.rate = pr['Sale Price']; if (k === 'dc') o.unit = pr.Unit || 'Pcs'; }
+    return o;
+  }).filter(o => o.model);
+  if (!add.length) return;
+  const empty = !String(L[i].model || '').trim() && !(Number(L[i].qty) > 0);
+  L.splice(empty ? i : i + 1, empty ? 1 : 0, ...add);
+  D.render();
+  const bad = add.filter(o => !findProd(o.model)).length;
+  toast(add.length + ' line(s) added from the paste.' + (bad ? ' ' + bad + ' part number(s) not found — check the red lines.' : ''), !!bad);
+}
+function dxMenu(ev, k, i){
+  ev.stopPropagation(); qtxMenuClose();
+  const items = [['＋ Item below', "dxAdd('" + k + "'," + (i + 1) + ')'], ['⧉ Duplicate', "dxDup('" + k + "'," + i + ')'], ['↑ Move up', "dxMove('" + k + "'," + i + ',-1)'], ['↓ Move down', "dxMove('" + k + "'," + i + ',1)'], ['🗑 Delete line', "dxDel('" + k + "'," + i + ')']];
+  const m = document.createElement('div'); m.id = 'qxMenu'; m.className = 'qx-menu no-dirty-track';
+  m.innerHTML = items.map(x => '<button type="button" onclick="qtxMenuClose();' + x[1] + '">' + x[0] + '</button>').join('');
+  document.body.appendChild(m);
+  const r = ev.currentTarget.getBoundingClientRect();
+  m.style.top = Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+  setTimeout(() => document.addEventListener('click', qtxMenuClose, {once:true}), 0);
+}
+function dxDup(k, i){ const L = DX[k].list(); L.splice(i + 1, 0, JSON.parse(JSON.stringify(L[i]))); DX[k].render(); }
+function dxMove(k, i, d){ const L = DX[k].list(), j = i + d; if (j < 0 || j >= L.length) return; const t = L[i]; L[i] = L[j]; L[j] = t; DX[k].render(); }
+function dxDel(k, i){ const L = DX[k].list(); L.splice(i, 1); DX[k].render(); }
+/* hook the pages: Excel view or the classic form (with a switch on top) */
+(function(){
+  const dcClassic = pages.dc, ivClassic = pages.invoices;
+  pages.dc = () => dxMode('dc') === 'excel' ? dcxTemplate() : dcClassic().replace('<div class="wrap">', '<div class="wrap">' + dxBar('dc', false));
+  pages.invoices = () => dxMode('iv') === 'excel' ? ivxTemplate() : ivClassic().replace('<div class="wrap">', '<div class="wrap">' + dxBar('iv', false));
+  const rdl = renderDcLines, ril = renderIvLines, uit = updateIvTotals, ivmc = ivModelChanged, pc = pickCustomer;
+  renderDcLines = function(){ if (dxOn('dc')) return dcxRenderLines(); return rdl.apply(this, arguments); };
+  renderIvLines = function(){ if (dxOn('iv')) return ivxRenderLines(); return ril.apply(this, arguments); };
+  updateIvTotals = function(){
+    const r = uit.apply(this, arguments);
+    if (dxOn('iv')) {
+      ivl.forEach((x, i) => { const e = $('ivx_amt_' + i); if (e) { const v = (+x.qty || 0) * (+x.rate || 0); e.textContent = v ? money(v) : ''; } });
+      const sub = ivl.reduce((a, x) => a + (+x.qty || 0) * (+x.rate || 0), 0), g = Number(($('ivgst') || {}).value), gst = sub * ((isNaN(g) ? 0 : g) / 100);
+      if ($('ivxGstLbl')) $('ivxGstLbl').textContent = 'ADD GST ' + (isNaN(g) ? 0 : g) + '%';
+      if ($('ivxWords')) $('ivxWords').innerHTML = sub > 0 ? '<i>RUPEES: ' + esc(numberToWords(Math.round((sub + gst) * 100) / 100)) + ' Only /-</i>' : '';
+    }
+    return r;
+  };
+  window.updateIvTotals = updateIvTotals;
+  ivModelChanged = function(i, v){ const r = ivmc.apply(this, arguments); if (dxOn('iv')) { const pr = findProd(v), f = document.querySelector('#ivlines tr[data-i="' + i + '"] ' + (pr ? '.qx-qty' : '.qx-model')); if (f) f.focus(); } return r; };
+  pickCustomer = function(kind){ const r = pc.apply(this, arguments); if (kind === 'iv') ivxAddr(); else if ($('dcaddr')) qtxGrow($('dcaddr')); return r; };
+})();
+Object.assign(window, {dxSwitch, dxModel, dxAdd, dxKey, dxPaste, dxMenu, dxDup, dxMove, dxDel, ivxAddr, dcxRenderLines, ivxRenderLines, renderDcLines, renderIvLines, ivModelChanged, pickCustomer});
