@@ -4964,11 +4964,13 @@ function db2ItemsData(){
     if ((!model || model === '-') && !desc) return;
     if (val <= 0 || qty <= 0 || /\bdiscount\b/i.test(desc)) return;   /* discount / adjustment lines */
     const hasModel = model && model !== '-', key = hasModel ? 'M:' + model.toUpperCase() : 'D:' + desc.toUpperCase().replace(/\s+/g, ' ').slice(0, 60);
-    const r = by[key] || (by[key] = {model:hasModel ? model : '', desc:desc, qty:0, value:0, inv:new Set(), cust:new Set()});
+    const r = by[key] || (by[key] = {key:key, model:hasModel ? model : '', desc:desc, qty:0, value:0, inv:new Set(), cust:new Set(), lines:[]});
     r.qty += qty; r.value += val; r.inv.add(d.no); r.cust.add(norm(d.customer || ''));
+    r.lines.push({no:d.no, date:d.date, customer:d.customer || '', qty:qty, rate:Number(x.rate) || 0, value:val});
     if (!r.desc && desc) r.desc = desc;
   }));
   const items = Object.values(by);
+  DB2.tiMap = by;
   items.forEach(r => { const p = r.model ? findProd(r.model) : null; r.p = p; r.stock = p ? (Number(p.currentStock) || 0) : null; r.brand = (p && String(p.Brand || '').trim()) || ''; r.cat = (p && String(p.Category || '').trim()) || ''; });
   const total = items.reduce((a, r) => a + r.value, 0);
   let rows;
@@ -5000,14 +5002,15 @@ function db2Items(){
   if (!D) { host.innerHTML = title + '<div class="muted">' + (DB2.done ? 'Could not load invoices.' : 'Loading…') + '</div>'; return; }
   const {list, n, total, noLines} = D, key = r => mode === 'qty' ? r.qty : r.value, max = Math.max(1, ...list.map(key));
   const q = v => Number(v).toLocaleString('en-US', {maximumFractionDigits:2});
-  const stockTag = s => s == null ? '' : '<em class="db2-stk' + (s <= 0 ? ' out' : '') + '">' + (s <= 0 ? 'Out of stock' : 'Stock ' + q(s)) + '</em>';
+  const canAdd = db2CanAddProd();
+  const stockTag = (s, r) => s == null ? '<em class="db2-stk none">Not in product list' + (canAdd ? ' · <a onclick="event.stopPropagation();db2AddProduct(\'' + encA(r.key) + '\')">+ Add to products</a>' : '') + '</em>' : '<em class="db2-stk' + (s <= 0 ? ' out' : '') + '">' + (s <= 0 ? 'Out of stock' : 'Stock ' + q(s)) + '</em>';
   const itemRow = (r, i, sub) => {
     const desc = (r.p && r.p.Description) || r.desc || '', share = total ? Math.round(r.value / total * 1000) / 10 : 0;
-    const click = r.model ? ' onclick="event.stopPropagation();xrOpen(\'Model\',decodeURIComponent(\'' + encA(r.model) + '\'))" title="Open ' + esc(r.model) + '"' : ' title="' + esc(desc) + '"';
+    const click = ' onclick="event.stopPropagation();db2ItemShow(\'' + encA(r.key) + '\')" title="Who bought ' + esc(r.model || desc) + ' in ' + y + '"';
     const w = sub ? r.value / sub.value * 100 : key(r) / max * 100;
-    return '<div class="db2-tbar db2-ti' + (sub ? ' sub' : '') + (r.model ? ' click' : '') + '"' + click + '>'
+    return '<div class="db2-tbar db2-ti' + (sub ? ' sub' : '') + ' click"' + click + '>'
       + (sub ? '<span></span>' : '<span class="db2-tbar-rank' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>')
-      + '<span class="db2-tbar-name">' + (r.model ? '<b>' + esc(r.model) + '</b>' : '') + '<small>' + esc(desc) + '</small>' + stockTag(r.stock) + '</span>'
+      + '<span class="db2-tbar-name">' + (r.model ? '<b>' + esc(r.model) + '</b>' : '') + '<small>' + esc(desc) + '</small>' + stockTag(r.stock, r) + '</span>'
       + '<span class="db2-tbar-track"><i style="width:' + Math.max(1.5, w) + '%"></i></span>'
       + '<span class="db2-tbar-val">' + (mode === 'qty'
           ? '<b>' + q(r.qty) + ' pcs</b><small>' + db2Short(r.value) + ' · ' + r.cust.size + ' cust.</small>'
@@ -5032,6 +5035,63 @@ function db2Items(){
       + (noLines ? '<br>' + noLines + ' invoice' + (noLines === 1 ? '' : 's') + ' of ' + D.y + (noLines === 1 ? ' has' : ' have') + ' no item lines yet (old invoices without their Excel file) and ' + (noLines === 1 ? 'is' : 'are') + ' not counted.' : '') + '</div>'
       : '<div class="muted">No invoice item lines in ' + D.y + '.' + (noLines ? ' ' + noLines + ' invoice' + (noLines === 1 ? ' has' : 's have') + ' no item lines yet — upload their Excel files to see items here.' : '') + '</div>');
 }
+/* one item's year: who bought it, which invoices, at what rate (works for items not in the product list too) */
+function db2ItemShow(keyEnc){
+  const key = decodeURIComponent(keyEnc), r = (DB2.tiMap || {})[key];
+  if (!r) return toast('Item not found — refresh the dashboard.', true);
+  const y = Number(DB2.tiYear) || db2Y(), p = r.model ? findProd(r.model) : null, desc = (p && p.Description) || r.desc || '';
+  const q = v => Number(v || 0).toLocaleString('en-US', {maximumFractionDigits:2});
+  const lines = r.lines.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const byC = {}; lines.forEach(l => { const k = norm(l.customer); const c = byC[k] || (byC[k] = {name:l.customer, qty:0, value:0, n:0}); c.qty += l.qty; c.value += l.value; c.n++; });
+  const custs = Object.values(byC).sort((a, b) => b.value - a.value);
+  const rates = lines.map(l => l.rate).filter(v => v > 0), last = lines[0];
+  const kv = (k, v) => '<div class="db2-ikv"><span>' + k + '</span><b>' + v + '</b></div>';
+  const xr = (t, id, text) => '<span class="xref xr-' + t.toLowerCase() + '" data-t="' + t + '" data-id="' + esc(id) + '">' + esc(text || id) + '</span>';
+  modal((r.model ? esc(r.model) : 'Item') + ' — sold in ' + y,
+    '<div class="db2-idesc">' + esc(desc) + '</div>'
+    + '<div class="db2-ikvs">' + kv('Sold', q(r.qty) + ' pcs') + kv('Sales (excl. GST)', 'Rs ' + money(r.value)) + kv('Customers', custs.length) + kv('Invoices', r.inv.size)
+    + (rates.length ? kv('Rate', rates.length > 1 && Math.min(...rates) !== Math.max(...rates) ? money(Math.min(...rates)) + ' – ' + money(Math.max(...rates)) : money(rates[0])) : '')
+    + (last ? kv('Last sold', esc(fmtDate(last.date))) : '')
+    + (p ? kv('Stock now', '<span class="' + ((Number(p.currentStock) || 0) <= 0 ? 'neg' : '') + '">' + q(p.currentStock) + '</span>') + (p.Brand ? kv('Brand', esc(p.Brand)) : '') + (p.Category ? kv('Category', esc(p.Category)) : '') : kv('Product list', '<span class="muted">not in the product list</span>')) + '</div>'
+    + '<h4 class="db2-ih">Customers</h4><div class="table-wrap"><table class="db2-itab"><thead><tr><th>Customer</th><th class="right">Qty</th><th class="right">Sales (Rs)</th><th class="right">Invoices</th></tr></thead><tbody>'
+    + custs.map(c => '<tr><td>' + xr('Customer', c.name, c.name) + '</td><td class="right">' + q(c.qty) + '</td><td class="right">' + money(c.value) + '</td><td class="right">' + c.n + '</td></tr>').join('') + '</tbody></table></div>'
+    + '<h4 class="db2-ih">Invoices</h4><div class="table-wrap"><table class="db2-itab"><thead><tr><th>Date</th><th>Invoice</th><th class="db2-ic">Customer</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amount</th></tr></thead><tbody>'
+    + lines.map(l => '<tr><td>' + esc(fmtDate(l.date)) + '</td><td>' + xr('Invoice', l.no, l.no) + '<div class="db2-imob">' + esc(l.customer) + '</div></td><td class="db2-ic">' + esc(l.customer) + '</td><td class="right">' + q(l.qty) + '</td><td class="right">' + money(l.rate) + '</td><td class="right">' + money(l.value) + '</td></tr>').join('') + '</tbody></table></div>'
+    + '<div class="actions">' + (p ? '<button class="btn" onclick="closeModal();xrOpen(\'Model\',decodeURIComponent(\'' + encA(r.model) + '\'))">Product details</button>' : (db2CanAddProd() ? '<button class="btn" onclick="db2AddProduct(\'' + encA(r.key) + '\')">+ Add to products</button>' : '')) + '<button class="btn primary" onclick="closeModal()">Close</button></div>');
+}
+window.db2ItemShow = db2ItemShow;
+/* add an item that is only on old invoices to the product list (stock 0; the cost can be added later) */
+function db2CanAddProd(){ return hasMod(['prodedit', 'imports']); }
+function db2AddProduct(keyEnc){
+  const key = decodeURIComponent(keyEnc), r = (DB2.tiMap || {})[key]; if (!r) return toast('Item not found — refresh the dashboard.', true);
+  if (!db2CanAddProd()) return toast('You do not have access to add products.', true);
+  const L = (r.lines || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)), last = L[0];
+  const brands = Array.from(new Set((S.products || []).map(p => String(p.Brand || '').trim()).filter(Boolean))).sort();
+  const D = String(r.desc || '').toUpperCase(), guessBrand = brands.find(b => b.length > 2 && D.split(/[^A-Z0-9]+/).indexOf(b.toUpperCase()) !== -1) || '';
+  window.DB2_ADD = key;
+  modal('Add to products',
+    '<div class="muted small" style="margin-bottom:10px">The item is added to the product list with stock 0 — receive stock later on the Inward page. Nothing on the invoices changes.</div>'
+    + '<div class="form-grid">'
+    + '<label>Model / Part No. *<input id="apModel" value="' + esc(r.model || '') + '" placeholder="Part number"></label>'
+    + '<label>Brand<input id="apBrand" list="apBrands" value="' + esc(guessBrand) + '" placeholder="e.g. SMC"><datalist id="apBrands">' + brands.map(b => '<option value="' + esc(b) + '">').join('') + '</datalist></label>'
+    + '<label class="wide">Description<input id="apDesc" value="' + esc(r.desc || '') + '"></label>'
+    + '<label>Category<select id="apCat">' + CATS.map(c => '<option' + (c === 'Others' ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></label>'
+    + '<label>Unit<input id="apUnit" value="Pcs"></label>'
+    + (canPrice() ? '<label>Sale price (Rs) <small class="muted">— last sold rate</small><input id="apSale" type="number" min="0" step="any" value="' + esc(last ? last.rate : '') + '"></label><label>Cost price (Rs)<input id="apCost" type="number" min="0" step="any" placeholder="leave empty if not known"></label>' : '')
+    + '</div><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="apGo" onclick="db2AddProductSave()">Add product</button></div>');
+}
+async function db2AddProductSave(){
+  const model = ($('apModel').value || '').trim();
+  if (!model) return toast('Enter the model / part number.', true);
+  if (findProd(model)) return toast(model + ' is already in the product list.', true);
+  const b = $('apGo'); if (b) { b.disabled = true; b.textContent = 'Adding…'; }
+  const r = await api('saveProduct', {model:model, description:$('apDesc').value.trim(), brand:$('apBrand').value.trim(), category:$('apCat').value, unit:$('apUnit').value.trim() || 'Pcs', location:'',
+    salePrice:$('apSale') ? $('apSale').value : '', costPrice:$('apCost') ? $('apCost').value : '', openingStock:0, reorderLevel:'', remarks:'Added from Top selling items', imageBase64:''});
+  if (!r || !r.ok) { if (b) { b.disabled = false; b.textContent = 'Add product'; } return toast((r && r.error) || 'Could not add the product.', true); }
+  closeModal(); toast(model + ' added to the product list.');
+  await refresh();
+}
+Object.assign(window, {db2AddProduct, db2AddProductSave});
 function db2ItemsPdf(){
   const T = DB2.tiLast; if (!T || !T.list.length) return toast('Nothing to print yet.', true);
   const grp = T.mode === 'brand' || T.mode === 'cat', head = T.mode === 'brand' ? 'BRANDS' : T.mode === 'cat' ? 'CATEGORIES' : 'ITEMS';
