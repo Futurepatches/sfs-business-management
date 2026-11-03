@@ -1907,3 +1907,10 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .db2-ti .db2-stk.out{color:#c0392b}
 .db2-ti.grp .db2-tbar-name b{font-size:13px}
 .db2-tsub .db2-ti.sub{padding-left:4px;background:#fafbfd}
+
+/* Imports: delete / edit */
+.imp-dedit{background:#eef4ff;border-color:#b9cdf5}
+.imp-undo{margin:0 0 10px 18px;padding:0;font-size:13px;line-height:1.6}
+.imp-warn{background:#fff4e5;border:1px solid #f5c98a;color:#8a4b00;border-radius:8px;padding:8px 12px;font-size:13px;margin:0 0 10px}
+.imp-tag{font-size:10.5px;color:#64748b;white-space:nowrap}.imp-tag.ok{color:#15803d}.imp-tag.est{color:#b45309;font-weight:700}
+.imp-table .neg{color:#c0392b}
