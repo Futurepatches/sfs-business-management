@@ -1840,3 +1840,11 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 .gst-gdsel select{margin-left:6px;border:1px solid #d5dce8;border-radius:8px;padding:5px 8px}
 .gd-pop{margin-top:10px;border:1px solid #d5dce8;border-radius:10px;padding:10px;background:#fff}
 .btn.gst-has{border-color:#93c5fd;background:#eff6ff;color:#1d4ed8}
+
+/* Dashboard: top selling items */
+.db2-ti{grid-template-columns:24px minmax(150px,36%) 1fr 112px}
+.db2-ti .db2-tbar-name{display:flex;flex-direction:column;line-height:1.25}
+.db2-ti .db2-tbar-name b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
+.db2-ti .db2-tbar-name small{color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db2-ti .db2-tbar-val small{display:block;color:#64748b;font-size:10.5px}
+@media (max-width:640px){.db2-ti{grid-template-columns:22px 1fr 96px}.db2-ti .db2-tbar-track{display:none}}
