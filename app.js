@@ -40,7 +40,8 @@ const ALL_MODULES = [
   {id:'accounts',  group:'Accounts & Parties', label:'Payments / Outstanding'},
   {id:'parties',   group:'Accounts & Parties', label:'Customers & Suppliers'},
   {id:'reports',   group:'Accounts & Parties', label:'Reports'},
-  {id:'topitems',  group:'Accounts & Parties', label:'Top selling items — dashboard list (value, quantity, brand, category) & PDF'}
+  {id:'topitems',  group:'Accounts & Parties', label:'Top selling items — dashboard list (value, quantity, brand, category) & PDF'},
+  {id:'monthlyreport', group:'Accounts & Parties', label:'Monthly Report — sale, payments received, stock sold, profit (PDF)'}
 ];
 /* permissions saved before the detailed list still work: an old name means its whole group */
 const MODULE_GROUPS = {products:['prodview','prodedit','inward'], sales:['dc','invoice','quotation']};
@@ -111,6 +112,7 @@ function nav(){
     {id:'customers', label:'Customers',   mod:'parties',  section:'Parties'},
     {id:'suppliers', label:'Suppliers',   mod:'parties',  section:'Parties'},
     {id:'reports',   label:'Reports',     mod:'reports',  section:'Reports'},
+    {id:'monthlyreport', label:'Monthly Report', mod:'monthlyreport', section:'Reports'},
     {id:'settings',  label:'Settings',    mod:null,       section:'System'}
   ];
   if (isAdmin()) all.push({id:'users', label:'Users / Staff', mod:null, section:'System'});
@@ -147,19 +149,23 @@ function nav(){
     users:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>'
   };
 
+  icons.monthlyreport = icons.monthlyreport || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 17v-3M12 17v-5M16 17v-2"/></svg>';
   $('nav').innerHTML = sections.map(sec =>
     `<div class="nav-section">${sec.name}</div>` +
     sec.items.map(it =>
-      `<button class="navbtn" onclick="showPage('${it.id}',this)">
+      `<a class="navbtn" href="#${it.id}" onclick="return sfsNavClick(event,'${it.id}',this)" title="${esc(it.label)} — right-click to open in a new tab or window">
          <span class="nav-icon">${icons[it.id]||''}</span>
          <span class="nav-label">${it.label}</span>${it.id === 'inbox' ? '<span class="nav-count" id="ibxNavCount"></span>' : ''}
-       </button>`
+       </a>`
     ).join('')
   ).join('');
 
   // Default: Dashboard if available, otherwise the first item
   const keepBtn = !document.querySelector('.navbtn.active') && window.SFS_NAV_KEEP ? document.querySelector(`.navbtn[onclick*="'${window.SFS_NAV_KEEP}'"]`) : null;
   if (keepBtn) keepBtn.classList.add('active');
+  /* opened from a link in a new tab / window (…/#invoices): start on that page */
+  const want = !keepBtn && !document.querySelector('.navbtn.active') ? String(location.hash || '').replace(/^#/, '').split(/[/?]/)[0] : '';
+  if (want && items.some(x => x.id === want)) { const b = document.querySelector(`.navbtn[onclick*="'${want}'"]`); if (b) showPage(want, b); }
   if (!document.querySelector('.navbtn.active')) {
     const first = items.find(x => x.id === 'dashboard') || items[0];
     if (first) {
@@ -330,6 +336,7 @@ async function logout(){
       ]);
     } catch(e){}
   }
+  try { if (SFS_AUTH) SFS_AUTH.postMessage({logout:true}); } catch (e) {}   /* every ERP tab of this browser signs out too */
   sessionStorage.clear();
   localStorage.removeItem('sfsSession');
   localStorage.removeItem('sfsUser');
@@ -392,7 +399,17 @@ function renderCurrent(){
 }
 
 /* ---------- PAGE ROUTER ---------- */
+/* sidebar link: a normal click opens the page here; Ctrl / Cmd / Shift-click, middle-click and
+   right-click → "Open in new tab / window" are left to the browser (the new tab opens on that page) */
+function sfsNavClick(e, p, el){
+  if (e && (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button === 1)) return true;
+  if (e) e.preventDefault();
+  showPage(p, el);
+  return false;
+}
+window.sfsNavClick = sfsNavClick;
 function showPage(p, btn){
+  try { if (pages[p] && location.hash !== '#' + p) history.replaceState(null, '', '#' + p); } catch (e) {}   /* the address shows the page, so a copied / new-tab link opens it */
   document.querySelectorAll('.navbtn').forEach(x => x.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (p === 'quotations' && btn) { QT_EDIT_MODE = false; REVISION_QUOTATION = null; }   /* menu click = a new quotation, never a half-finished edit */
@@ -402,7 +419,7 @@ function showPage(p, btn){
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
   const PAGE_MOD = {products:['prodview','prodedit','setstock','imports'], inward:'inward', dc:'dc', dchistory:'dc', invoices:'invoice', ivhistory:'invoice', quotations:'quotation', qthistory:'quotation',
-    inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports'};
+    inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports', monthlyreport:'monthlyreport'};
   if ((PAGE_MOD[p] && !hasMod(PAGE_MOD[p])) || (p === 'users' && !isAdmin()) || (p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
@@ -431,6 +448,7 @@ function showPage(p, btn){
   if (p === 'customers')  renderCustomers();
   if (p === 'suppliers')  renderSuppliers();
   if (p === 'reports')    renderReports();
+  if (p === 'monthlyreport') renderMonthlyReport();
   if (p === 'settings')   renderSettings();
   if (p === 'users')      renderUsers();
 }
@@ -451,14 +469,17 @@ const pages = {
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div id="qtEnqRef"></div><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description / Item Remarks</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button id="qtsavebtn" class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
   qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search Quotation #, Customer, Ref #, Model, Description..." oninput="filterQTHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option value="Pending">Open — sent / waiting</option><option value="Won">Won — PO received</option><option value="Lost">Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  inbox:()=>`<div class="wrap ibx-page"><div class="toolbar no-dirty-track"><div id="ibxTabs" class="enq-tabs"></div><input id="ibxSearch" placeholder="Search sender, subject, attachment, enquiry #…" oninput="ibxRenderList()" style="flex:1;min-width:220px"></div><div class="ibx" id="ibx"><div class="ibx-list" id="ibxList"><div class="muted" style="padding:16px">Loading…</div></div><div class="ibx-read" id="ibxRead"><div class="ibx-empty">✉<div>Select a mail to read it</div></div></div></div></div>`,
   enquiries:()=>`<div class="wrap enq-page"><div id="enqKpis" class="enq-kpis"></div><div class="toolbar"><button class="btn primary" onclick="enquiryForm()">+ New Enquiry</button><button class="btn" onclick="renderEnquiries()">↻ Refresh</button><input id="enqSearch" placeholder="Search enquiry #, customer, contact, phone, item, e-mail…" oninput="filterEnquiries()" style="flex:1;min-width:260px"></div><div class="toolbar enq-bar" style="flex-wrap:wrap"><div id="enqTabs" class="enq-tabs"></div><select id="enqStatus" onchange="filterEnquiries()" style="display:none"><option value="">All</option><option>New</option><option>Quoted</option><option>Lost</option><option>Closed</option></select>${periodSelectHtml('enqPer','filterEnquiries()')}<select id="enqAssign" onchange="filterEnquiries()"><option value="">Assigned: everyone</option><option value="~me">Assigned to me</option><option value="~none">Unassigned</option></select><button class="btn ghost small" onclick="clearFilters(['enqSearch','enqPer','enqStatus','enqAssign'],filterEnquiries)">Clear</button><span id="enqInfo" class="muted small"></span></div><div class="panel table-wrap"><table class="enq-tbl"><thead><tr><th style="width:120px">Enquiry</th><th style="width:22%">Customer</th><th>Requirement</th><th style="width:130px">Assigned</th><th style="width:120px">Status</th><th style="width:190px"></th></tr></thead><tbody id="enqRows"><tr><td colspan="6">Loading...</td></tr></tbody></table></div></div>`,
-  accounts:()=>`<div class="wrap">
-<div class="panel"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="toolbar" style="flex-wrap:wrap"><select id="custOutCust" onchange="filterCustOut()"><option value="">All Customers</option></select><select id="custOutSt" onchange="filterCustOut()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select>${periodSelectHtml('custOutPer','filterCustOut()')}<button class="btn ghost small" onclick="clearFilters(['custOutSearch','custOutCust','custOutSt','custOutPer'],filterCustOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('custPayPer','filterCustPay()')}<select id="custPayCust" onchange="filterCustPay()"><option value="">All Customers</option></select><select id="custPayMeth" onchange="filterCustPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['custPaySearch','custPayPer','custPayCust','custPayMeth'],filterCustPay)">Clear all filters</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap"><input id="supOutSearch" type="search" placeholder="Search supplier…" oninput="filterSupOut()" style="flex:1;min-width:200px"><select id="supOutSt" onchange="filterSupOut()"><option value="">All suppliers</option><option value="due">Outstanding only</option></select><button class="btn ghost small" onclick="clearFilters(['supOutSearch','supOutSt'],filterSupOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
-<div class="panel"><h3>Recent Supplier Payments</h3><div class="toolbar" style="flex-wrap:wrap"><input id="supPaySearch" type="search" placeholder="Search supplier / reference…" oninput="filterSupPay()" style="flex:1;min-width:200px">${periodSelectHtml('supPayPer','filterSupPay()')}<select id="supPayMeth" onchange="filterSupPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['supPaySearch','supPayPer','supPayMeth'],filterSupPay)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+  accounts:()=>`<div class="wrap acc-wrap" data-acc="">
+<div class="acc-tabs no-dirty-track">${ACC_TABS.map(t => `<button type="button" class="acc-tab" data-tab="${t[0]}" onclick="accTab('${t[0]}')"><i>${t[2]}</i><span><b>${t[1]}</b><small id="accSum_${t[0]}">${t[3]}</small></span></button>`).join('')}</div>
+<div class="acc-hint muted">Choose what you want to work on.</div>
+<div class="panel acc-pane" data-pane="out"><div class="panel-head"><h3>Customer Outstanding</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar"><input id="custOutSearch" type="search" placeholder="Search invoice #, customer, amount, date…" oninput="filterCustOut()" style="flex:1;min-width:260px"><span id="custOutInfo" class="muted small"></span></div><div class="toolbar" style="flex-wrap:wrap"><select id="custOutCust" onchange="filterCustOut()"><option value="">All Customers</option></select><select id="custOutSt" onchange="filterCustOut()"><option value="">All due statuses</option><option value="over">Overdue</option><option value="soon">Due in next 7 days</option><option value="later">Not yet due</option></select>${periodSelectHtml('custOutPer','filterCustOut()')}<button class="btn ghost small" onclick="clearFilters(['custOutSearch','custOutCust','custOutSt','custOutPer'],filterCustOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody id="custOutRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel acc-pane" data-pane="pay"><div class="panel-head"><h3>Customer Payments</h3><span id="custPayInfo" class="muted small"></span></div><div class="toolbar"><input id="custPaySearch" type="search" placeholder="Search invoice #, reference, customer, method, amount, date…" oninput="filterCustPay()" style="flex:1;min-width:260px"><button class="btn small ghost" onclick="clearPaySearch()">Clear</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('custPayPer','filterCustPay()')}<select id="custPayCust" onchange="filterCustPay()"><option value="">All Customers</option></select><select id="custPayMeth" onchange="filterCustPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['custPaySearch','custPayPer','custPayCust','custPayMeth'],filterCustPay)">Clear all filters</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Remarks</th></tr></thead><tbody id="custPayRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel acc-pane" data-pane="sup"><div class="panel-head"><h3>Supplier Payable</h3><button class="btn" onclick="loadAccounts()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap"><input id="supOutSearch" type="search" placeholder="Search supplier…" oninput="filterSupOut()" style="flex:1;min-width:200px"><select id="supOutSt" onchange="filterSupOut()"><option value="">All suppliers</option><option value="due">Outstanding only</option></select><button class="btn ghost small" onclick="clearFilters(['supOutSearch','supOutSt'],filterSupOut)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Purchased</th><th>Paid</th><th>Outstanding</th><th></th></tr></thead><tbody id="supOutRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+<div class="panel acc-pane" data-pane="suppay"><h3>Recent Supplier Payments</h3><div class="toolbar" style="flex-wrap:wrap"><input id="supPaySearch" type="search" placeholder="Search supplier / reference…" oninput="filterSupPay()" style="flex:1;min-width:200px">${periodSelectHtml('supPayPer','filterSupPay()')}<select id="supPayMeth" onchange="filterSupPay()"><option value="">All methods</option></select><button class="btn ghost small" onclick="clearFilters(['supPaySearch','supPayPer','supPayMeth'],filterSupPay)">Clear</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody id="supPayRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
 </div>`,
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
+  monthlyreport:()=>'<div class="wrap mrp-wrap" id="mrpPage"><div class="muted">Loading…</div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
   settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel sr-panel" id="srPanel"><h3>📥 Import sales register</h3><div class="muted">Checking…</div></div>':''}${hasMod('pricing')?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
@@ -1640,8 +1661,30 @@ async function loadAccounts(){
   ACC.supPays = supPay.ok ? (supPay.payments||[]) : [];
   filterSupOut();
   filterSupPay();
+  accSums();
 }
-function renderAccounts(){ loadAccounts(); }
+function renderAccounts(){ accTab(null); loadAccounts(); }
+/* Accounts: four buttons; only the chosen section is shown (remembered for this tab) */
+const ACC_TABS = [['out', 'Customer Outstanding', 'Rs', 'Who owes us'], ['pay', 'Customer Payments', '⬇', 'Money received'], ['sup', 'Supplier Payable', '⬆', 'What we owe'], ['suppay', 'Supplier Payments', '↗', 'Money paid']];
+function accTab(t){
+  const w = document.querySelector('.acc-wrap'); if (!w) return;
+  if (t === null) { try { t = sessionStorage.sfsAccTab || ''; } catch (e) { t = ''; } }
+  if (t && !ACC_TABS.some(x => x[0] === t)) t = '';
+  w.dataset.acc = t || '';
+  w.querySelectorAll('.acc-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  try { sessionStorage.sfsAccTab = t || ''; } catch (e) {}
+  const f = t && w.querySelector('.acc-pane[data-pane="' + t + '"] input[type=search]'); if (f && document.activeElement && document.activeElement.classList.contains('acc-tab')) setTimeout(() => f.focus(), 0);
+}
+function accSums(){
+  const set = (k, v) => { const e = $('accSum_' + k); if (e) e.textContent = v; };
+  const due = (ACC.out || []).reduce((a, r) => a + (Number(r.outstanding) || 0), 0);
+  if (ACC.out) set('out', 'Rs ' + money(due) + ' · ' + ACC.out.length + ' invoice' + (ACC.out.length === 1 ? '' : 's'));
+  const m = new Date(), thisMonth = x => { const d = new Date(x); return !isNaN(d) && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth(); };
+  if (ACC.pays) set('pay', 'Rs ' + money((ACC.pays || []).filter(x => thisMonth(x.Date)).reduce((a, x) => a + (Number(x.Amount) || 0), 0)) + ' this month');
+  if (ACC.sup) set('sup', 'Rs ' + money((ACC.sup || []).reduce((a, r) => a + Math.max(0, Number(r.outstanding) || 0), 0)) + ' to pay');
+  if (ACC.supPays) set('suppay', 'Rs ' + money((ACC.supPays || []).filter(x => thisMonth(x.Date)).reduce((a, x) => a + (Number(x.Amount) || 0), 0)) + ' this month');
+}
+window.accTab = accTab;
 
 /* ---------- ACCOUNTS SEARCH (Customer Outstanding + Customer Payments) ---------- */
 let ACC = {out:[], pays:[], outErr:'', payErr:''};
@@ -3763,7 +3806,7 @@ function showLogin(){
   $('loginUser')?.focus();
 }
 
-function init(){
+function initCore(){
   S.api = DEFAULT_API;
   if (S.session && S.api){
     SFS_BOOTING = true;
@@ -3786,6 +3829,32 @@ function init(){
   } else {
     showLogin();
   }
+}
+/* a new tab / window opened from the ERP has no session of its own: borrow it from an open ERP tab */
+const SFS_AUTH = (function(){ try { return new BroadcastChannel('sfs-auth'); } catch (e) { return null; } })();
+if (SFS_AUTH) SFS_AUTH.onmessage = ev => {
+  const m = ev.data || {};
+  if (m.need && S.session && !window.SFS_SIGNING_OUT) SFS_AUTH.postMessage({session:S.session, user:sessionStorage.sfsUser || JSON.stringify(S.user || {}), offK:sessionStorage.sfsOffK || ''});
+  if (m.logout && S.session) sfsSignOutHere();   /* sign-out in one ERP tab signs out all of them */
+};
+/* never cut off a running send of the offline outbox (it would be sent twice): finish it, then sign out */
+function sfsSignOutHere(){
+  window.SFS_SIGNING_OUT = true;               /* from now on this tab does not hand its session to new tabs */
+  if (typeof OFF_SYNCING !== 'undefined' && OFF_SYNCING) return setTimeout(sfsSignOutHere, 300);
+  S.session = ''; try { sessionStorage.clear(); } catch (e) {} window.SFS_ALLOW_UNLOAD = true; location.reload();
+}
+function init(){
+  S.api = DEFAULT_API;
+  if (S.session || !SFS_AUTH) return initCore();
+  initCore();                              /* login screen at once … */
+  let done = false;
+  const take = ev => { const m = ev.data || {}; if (done || !m.session) return; done = true; SFS_AUTH.removeEventListener('message', take);
+    if (S.session) return;                 /* … unless someone signed in meanwhile */
+    S.session = m.session; sessionStorage.sfsSession = m.session; if (m.user) { sessionStorage.sfsUser = m.user; try { S.user = JSON.parse(m.user); } catch (e) {} } if (m.offK) sessionStorage.sfsOffK = m.offK;
+    initCore(); };                         /* … and straight in when another ERP tab shares its session */
+  SFS_AUTH.addEventListener('message', take);
+  SFS_AUTH.postMessage({need:true});
+  setTimeout(() => { if (!done) { done = true; SFS_AUTH.removeEventListener('message', take); } }, 1500);
 }
 init();
 
@@ -8922,3 +8991,87 @@ function dxDel(k, i){ const L = DX[k].list(); L.splice(i, 1); DX[k].render(); }
   pickCustomer = function(kind){ const r = pc.apply(this, arguments); if (kind === 'iv') ivxAddr(); else if ($('dcaddr')) qtxGrow($('dcaddr')); return r; };
 })();
 Object.assign(window, {dxSwitch, dxModel, dxAdd, dxKey, dxPaste, dxMenu, dxDup, dxMove, dxDel, ivxAddr, dcxRenderLines, ivxRenderLines, renderDcLines, renderIvLines, ivModelChanged, pickCustomer});
+
+
+/* ============================================================
+   MONTHLY REPORT (permission "monthlyreport")
+   Month: sale, payments received, stock sold, profit — with the whole year beside it and a PDF.
+   ============================================================ */
+const MRP = {year:new Date().getFullYear(), month:new Date().getMonth() + 1, cache:{}};
+const MRP_M = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+async function renderMonthlyReport(){
+  const host = $('mrpPage'); if (!host) return;
+  if (!hasMod('monthlyreport')) { host.innerHTML = '<div class="panel">You do not have access to the Monthly Report.</div>'; return; }
+  const k = MRP.year + '-' + MRP.month;
+  let r = MRP.cache[k];
+  if (!r) {
+    host.innerHTML = mrpBar() + '<div class="panel muted">Loading ' + MRP_M[MRP.month - 1] + ' ' + MRP.year + '…</div>';
+    r = await api('monthlyReport', {year:MRP.year, month:MRP.month});
+    if (!r || !r.ok) { host.innerHTML = mrpBar() + '<div class="panel">' + esc((r && r.error) || 'Could not load the report.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : '') + '</div>'; return; }
+    MRP.cache[k] = r;
+  }
+  if (!$('mrpPage')) return;
+  $('mrpPage').innerHTML = mrpBar() + mrpBody(r);
+}
+function mrpBar(){
+  const cy = new Date().getFullYear(), years = []; for (let y = cy; y >= cy - 6; y--) years.push(y);
+  return '<div class="mrp-bar no-dirty-track"><div class="muted">Sale, payments received, stock sold and profit — pick a month</div><span class="mrp-ctl">'
+    + '<select class="db2-sel" onchange="MRP.month=Number(this.value);renderMonthlyReport()">' + MRP_M.map((m, i) => '<option value="' + (i + 1) + '"' + (i + 1 === MRP.month ? ' selected' : '') + '>' + m + '</option>').join('') + '</select>'
+    + '<select class="db2-sel" onchange="MRP.year=Number(this.value);renderMonthlyReport()">' + years.map(y => '<option' + (y === MRP.year ? ' selected' : '') + '>' + y + '</option>').join('') + '</select>'
+    + '<button class="btn" onclick="MRP.cache={};renderMonthlyReport()">↻</button><button class="btn primary" onclick="mrpPdf()">⬇ PDF</button></span></div>';
+}
+function mrpChange(cur, prev){
+  if (!(prev > 0)) return '';
+  const pct = Math.round((cur - prev) / prev * 100);
+  return '<em class="mrp-ch ' + (pct >= 0 ? 'up' : 'dn') + '">' + (pct >= 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '% vs ' + MRP_M[(MRP.month + 10) % 12].slice(0, 3) + '</em>';
+}
+function mrpBody(r){
+  const m = r.months[r.month - 1], pv = r.month > 1 ? r.months[r.month - 2] : null;
+  const q = v => Number(v || 0).toLocaleString('en-US', {maximumFractionDigits:2});
+  const card = (cls, title, big, lines) => '<div class="mrp-card ' + cls + '"><span>' + title + '</span><b>' + big + '</b>' + lines + '</div>';
+  const tot = r.months.reduce((a, x) => { ['sales','salesIncl','received','cash','tax','qty','delivered','profit','noCostSales'].forEach(k => a[k] = (a[k] || 0) + x[k]); return a; }, {});
+  return '<div class="mrp-cards">'
+    + card('c1', 'Total sale — ' + MRP_M[r.month - 1], 'Rs ' + money(m.sales), '<small>excl. GST · ' + m.invoices + ' invoice' + (m.invoices === 1 ? '' : 's') + ' · ' + m.customers + ' customer' + (m.customers === 1 ? '' : 's') + '</small><small>Incl. GST Rs ' + money(m.salesIncl) + '</small>' + (pv ? mrpChange(m.sales, pv.sales) : ''))
+    + card('c2', 'Payments received', 'Rs ' + money(m.received), '<small>Cash / bank Rs ' + money(m.cash) + '</small><small>Tax deducted Rs ' + money(m.tax) + ' · ' + m.payments + ' payment' + (m.payments === 1 ? '' : 's') + '</small>' + (pv ? mrpChange(m.received, pv.received) : ''))
+    + card('c3', 'Stock sold', q(m.qty) + ' pcs', '<small>' + m.items + ' different item' + (m.items === 1 ? '' : 's') + ' on invoices</small><small>Delivered on DCs: ' + q(m.delivered) + ' pcs</small>' + (pv ? mrpChange(m.qty, pv.qty) : ''))
+    + card('c4', 'Profit', 'Rs ' + money(m.profit), '<small>' + (m.marginPct === null ? 'no cost prices yet' : 'Margin ' + m.marginPct + '% · cost Rs ' + money(m.cost)) + '</small>' + (m.noCostSales > 0 ? '<small class="mrp-warn">Rs ' + money(m.noCostSales) + ' of sale has no cost price — not in the profit</small>' : '') + (pv ? mrpChange(m.profit, pv.profit) : ''))
+    + '</div>'
+    + '<div class="mrp-grid"><div class="panel"><h3>Top customers — ' + MRP_M[r.month - 1] + '</h3>' + mrpTop(r.topCustomers.map(c => [esc(c.name), c.sales]), m.sales)
+    + '</div><div class="panel"><h3>Top items — ' + MRP_M[r.month - 1] + '</h3>' + mrpTop(r.topItems.map(i => ['<b>' + esc(i.model || '—') + '</b> <span class="muted small">' + esc(String(i.desc || '').slice(0, 50)) + '</span><span class="muted small"> · ' + q(i.qty) + ' pcs</span>', i.sales]), m.sales) + '</div></div>'
+    + '<div class="panel"><h3>' + r.year + ' month by month <span class="muted small">— click a month to open it</span></h3><div class="table-wrap"><table class="mrp-year"><thead><tr><th>Month</th><th class="right">Sale (excl. GST)</th><th class="right">Incl. GST</th><th class="right">Received</th><th class="right">Pcs sold</th><th class="right">Profit</th><th class="right">Margin</th></tr></thead><tbody>'
+    + r.months.map(x => '<tr class="' + (x.month === r.month ? 'on' : '') + '" onclick="MRP.month=' + x.month + ';renderMonthlyReport()"><td>' + MRP_M[x.month - 1] + '</td><td class="right">' + money(x.sales) + '</td><td class="right">' + money(x.salesIncl) + '</td><td class="right">' + money(x.received) + '</td><td class="right">' + q(x.qty) + '</td><td class="right">' + money(x.profit) + '</td><td class="right">' + (x.marginPct === null ? '—' : x.marginPct + '%') + '</td></tr>').join('')
+    + '</tbody><tfoot><tr><td><b>Total ' + r.year + '</b></td><td class="right"><b>' + money(tot.sales) + '</b></td><td class="right"><b>' + money(tot.salesIncl) + '</b></td><td class="right"><b>' + money(tot.received) + '</b></td><td class="right"><b>' + q(tot.qty) + '</b></td><td class="right"><b>' + money(tot.profit) + '</b></td><td></td></tr></tfoot></table></div>'
+    + '<div class="muted small" style="margin-top:8px">Profit = sale minus quantity × the product’s current cost price (same rule as the Imports profit report). Received = cash / bank plus income tax and WHT deducted by the customer.</div></div>';
+}
+function mrpTop(list, total){
+  if (!list.length) return '<div class="muted">No sales in this month.</div>';
+  const max = Math.max(1, ...list.map(x => x[1]));
+  return '<div class="mrp-top">' + list.map((x, i) => '<div class="mrp-tr"><span class="mrp-n">' + (i + 1) + '</span><span class="mrp-nm">' + x[0] + '</span><span class="mrp-bar2"><i style="width:' + Math.max(2, x[1] / max * 100) + '%"></i></span><span class="mrp-v">' + db2Short(x[1]) + (total ? '<small>' + Math.round(x[1] / total * 100) + '%</small>' : '') + '</span></div>').join('') + '</div>';
+}
+function mrpPdf(){
+  const r = MRP.cache[MRP.year + '-' + MRP.month]; if (!r) return toast('Load the report first.', true);
+  const m = r.months[r.month - 1], q = v => Number(v || 0).toLocaleString('en-US', {maximumFractionDigits:2}), rs = v => money(v);
+  const box = (t, v, sub) => '<div class="mr-b"><div class="t">' + t + '</div><div class="v">' + v + '</div><div class="s">' + sub + '</div></div>';
+  const tbl = (head, rows, cols) => '<table class="mr-t"><colgroup>' + cols + '</colgroup><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  const tot = r.months.reduce((a, x) => { ['sales','salesIncl','received','qty','profit'].forEach(k => a[k] = (a[k] || 0) + x[k]); return a; }, {});
+  const body = '<style>.mr *{color:#111}.mr{font-family:Arial,Helvetica,sans-serif}.mr-k{display:flex;gap:8px;margin:0 0 14px}.mr-k .mr-b{flex:1;min-width:0;border:1px solid #999;border-radius:6px;padding:9px 10px;background:#fff}'
+    + '.mr-k .t{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555!important}.mr-k .v{font-size:17px;font-weight:bold;margin:3px 0}.mr-k .s{font-size:10px;color:#444!important;line-height:1.4}'
+    + '.mr h4{font-size:12.5px;margin:14px 0 6px}.mr-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5px}.mr-t th,.mr-t td{border:1px solid #999!important;padding:3px 6px!important;background:#fff!important;text-transform:none!important;letter-spacing:normal!important}'
+    + '.mr-t thead th{background:#eef1f5!important;text-align:left}.mr-t .r{text-align:right}.mr-t tr.on td{font-weight:bold;background:#f6f7f9!important}.mr-two{display:flex;gap:14px}.mr-two>div{flex:1;min-width:0}.mr-n{font-size:9.5px;color:#555!important;margin-top:8px}</style>'
+    + '<div class="mr"><div class="doc-head"><div class="doc-head-left"><img src="' + printLogoSrc() + '" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">MONTHLY REPORT — ' + MRP_M[r.month - 1].toUpperCase() + ' ' + r.year + '</div></div></div>'
+    + '<div class="mr-k">'
+    + box('Total sale (excl. GST)', 'Rs ' + rs(m.sales), 'Incl. GST Rs ' + rs(m.salesIncl) + '<br>' + m.invoices + ' invoices · ' + m.customers + ' customers')
+    + box('Payments received', 'Rs ' + rs(m.received), 'Cash / bank Rs ' + rs(m.cash) + '<br>Tax deducted Rs ' + rs(m.tax))
+    + box('Stock sold', q(m.qty) + ' pcs', m.items + ' different items on invoices<br>Delivered on DCs ' + q(m.delivered) + ' pcs')
+    + box('Profit', 'Rs ' + rs(m.profit), (m.marginPct === null ? 'no cost prices yet' : 'Margin ' + m.marginPct + '%') + (m.noCostSales > 0 ? '<br>Sale without cost price: Rs ' + rs(m.noCostSales) : ''))
+    + '</div>'
+    + '<div class="mr-two"><div><h4>Top customers</h4>' + tbl('<th>#</th><th>Customer</th><th class="r">Sale (Rs)</th>', r.topCustomers.map((c, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(c.name) + '</td><td class="r">' + rs(c.sales) + '</td></tr>').join('') || '<tr><td colspan="3">—</td></tr>', '<col style="width:8%"><col><col style="width:32%">')
+    + '</div><div><h4>Top items</h4>' + tbl('<th>#</th><th>Item</th><th class="r">Pcs</th><th class="r">Sale (Rs)</th>', r.topItems.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(x.model || '—') + '</b> ' + esc(String(x.desc || '').slice(0, 40)) + '</td><td class="r">' + q(x.qty) + '</td><td class="r">' + rs(x.sales) + '</td></tr>').join('') || '<tr><td colspan="4">—</td></tr>', '<col style="width:8%"><col><col style="width:14%"><col style="width:26%">') + '</div></div>'
+    + '<h4>' + r.year + ' month by month</h4>' + tbl('<th>Month</th><th class="r">Sale (excl. GST)</th><th class="r">Incl. GST</th><th class="r">Received</th><th class="r">Pcs sold</th><th class="r">Profit</th><th class="r">Margin</th>',
+        r.months.map(x => '<tr class="' + (x.month === r.month ? 'on' : '') + '"><td>' + MRP_M[x.month - 1] + '</td><td class="r">' + rs(x.sales) + '</td><td class="r">' + rs(x.salesIncl) + '</td><td class="r">' + rs(x.received) + '</td><td class="r">' + q(x.qty) + '</td><td class="r">' + rs(x.profit) + '</td><td class="r">' + (x.marginPct === null ? '—' : x.marginPct + '%') + '</td></tr>').join('')
+        + '<tr class="on"><td>Total</td><td class="r">' + rs(tot.sales) + '</td><td class="r">' + rs(tot.salesIncl) + '</td><td class="r">' + rs(tot.received) + '</td><td class="r">' + q(tot.qty) + '</td><td class="r">' + rs(tot.profit) + '</td><td></td></tr>',
+        '<col style="width:16%"><col><col><col><col style="width:11%"><col><col style="width:10%">')
+    + '<div class="mr-n">Profit = sale minus quantity × current cost price. Received = cash / bank plus income tax and WHT deducted by customers. Printed ' + esc(fmtDate(new Date())) + '.</div></div>';
+  printDoc(body, null, 'Monthly Report ' + MRP_M[r.month - 1] + ' ' + r.year);
+}
+Object.assign(window, {renderMonthlyReport, mrpPdf, MRP});
