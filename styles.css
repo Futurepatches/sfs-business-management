@@ -1932,3 +1932,49 @@ table.mr-offers tr.mr-pick td{background:#f0fdf4}
 
 .db2-ti .db2-stk.none{color:#94a3b8;font-weight:500}
 .db2-ti .db2-stk.none a{color:#2563eb;font-weight:700;cursor:pointer;white-space:nowrap}
+
+/* sidebar items are links now (right-click → open in a new tab / window) */
+a.navbtn{text-decoration:none;box-sizing:border-box;cursor:pointer}
+a.navbtn:visited{color:var(--nav-text)}
+a.navbtn.active,a.navbtn.active:visited{color:var(--nav-text-active)}
+
+/* Accounts: four buttons, one section at a time */
+.acc-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.acc-tab{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e3e8f0;border-radius:14px;padding:16px;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s,border-color .12s}
+.acc-tab:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(31,59,99,.12);border-color:#c9d6e8}
+.acc-tab i{flex:none;width:42px;height:42px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:16px;color:#fff;background:#1f3b63}
+.acc-tab[data-tab="pay"] i{background:#16a34a}.acc-tab[data-tab="sup"] i{background:#ea580c}.acc-tab[data-tab="suppay"] i{background:#7c3aed}
+.acc-tab b{display:block;font-size:14.5px;color:#1d2433}
+.acc-tab small{display:block;font-size:12px;color:#64748b;margin-top:2px}
+.acc-tab.on{border-color:#1f3b63;box-shadow:0 0 0 2px rgba(31,59,99,.15)}
+.acc-wrap[data-acc=""] .acc-tab{padding:26px 18px}
+.acc-wrap .acc-pane{display:none}
+.acc-wrap[data-acc="out"] .acc-pane[data-pane="out"],.acc-wrap[data-acc="pay"] .acc-pane[data-pane="pay"],.acc-wrap[data-acc="sup"] .acc-pane[data-pane="sup"],.acc-wrap[data-acc="suppay"] .acc-pane[data-pane="suppay"]{display:block}
+.acc-hint{display:none;text-align:center;padding:10px}.acc-wrap[data-acc=""] .acc-hint{display:block}
+@media(max-width:900px){.acc-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.acc-tab{padding:12px}.acc-wrap[data-acc=""] .acc-tab{padding:18px 12px}.acc-tab i{width:34px;height:34px}}
+
+/* Monthly report */
+.mrp-bar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.mrp-bar h2{margin:0;font-size:22px;color:#1f3b63}
+.mrp-ctl{display:flex;gap:8px;flex-wrap:wrap}
+.mrp-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.mrp-card{background:#fff;border:1px solid #e3e8f0;border-radius:14px;padding:16px;border-top:4px solid #1f3b63}
+.mrp-card.c2{border-top-color:#16a34a}.mrp-card.c3{border-top-color:#ea580c}.mrp-card.c4{border-top-color:#7c3aed}
+.mrp-card>span{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:700}
+.mrp-card>b{display:block;font-size:22px;color:#0f172a;margin:6px 0 4px}
+.mrp-card small{display:block;font-size:12px;color:#64748b;line-height:1.5}
+.mrp-card .mrp-warn{color:#b45309}
+.mrp-ch{display:inline-block;font-style:normal;font-size:11.5px;font-weight:700;margin-top:6px;border-radius:99px;padding:1px 8px}
+.mrp-ch.up{background:#dcfce7;color:#15803d}.mrp-ch.dn{background:#fee2e2;color:#b91c1c}
+.mrp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mrp-top{display:flex;flex-direction:column;gap:6px}
+.mrp-tr{display:grid;grid-template-columns:22px minmax(0,1.3fr) 1fr 90px;gap:8px;align-items:center;font-size:13px}
+.mrp-n{width:22px;height:22px;border-radius:50%;background:#eef2f7;color:#64748b;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.mrp-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrp-bar2{height:12px;background:#f1f5f9;border-radius:6px;overflow:hidden}.mrp-bar2 i{display:block;height:100%;background:linear-gradient(90deg,#1f3b63,#3b6fb6);border-radius:6px}
+.mrp-v{text-align:right;font-weight:700}.mrp-v small{display:block;font-weight:400;color:#94a3b8;font-size:10.5px}
+.mrp-year tbody tr{cursor:pointer}.mrp-year tbody tr:hover td{background:#f3f6fb}.mrp-year tr.on td{background:#eef4ff;font-weight:700}
+@media(max-width:1100px){.mrp-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.mrp-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.mrp-cards{grid-template-columns:1fr}.mrp-tr{grid-template-columns:22px minmax(0,1fr) 80px}.mrp-bar2{display:none}}
+.mrp-year tfoot td{padding:10px 14px;border-top:2px solid #dfe5ee}
