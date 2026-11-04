@@ -113,6 +113,7 @@ function nav(){
     {id:'suppliers', label:'Suppliers',   mod:'parties',  section:'Parties'},
     {id:'reports',   label:'Reports',     mod:'reports',  section:'Reports'},
     {id:'monthlyreport', label:'Monthly Report', mod:'monthlyreport', section:'Reports'},
+    ...(incCanSee() ? [{id:'incentive', label:'Sales Incentive', mod:null, section:'Reports'}] : []),
     {id:'settings',  label:'Settings',    mod:null,       section:'System'}
   ];
   if (isAdmin()) all.push({id:'users', label:'Users / Staff', mod:null, section:'System'});
@@ -149,6 +150,7 @@ function nav(){
     users:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>'
   };
 
+  icons.incentive = icons.incentive || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.6-.6-3-1.6M12 6.5v1.5M12 16v1.5"/></svg>';
   icons.monthlyreport = icons.monthlyreport || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 17v-3M12 17v-5M16 17v-2"/></svg>';
   $('nav').innerHTML = sections.map(sec =>
     `<div class="nav-section">${sec.name}</div>` +
@@ -166,6 +168,7 @@ function nav(){
   /* opened from a link in a new tab / window (…/#invoices): start on that page */
   const want = !keepBtn && !document.querySelector('.navbtn.active') ? String(location.hash || '').replace(/^#/, '').split(/[/?]/)[0] : '';
   if (want && items.some(x => x.id === want)) { const b = document.querySelector(`.navbtn[onclick*="'${want}'"]`); if (b) showPage(want, b); }
+  else if (want && pages[want]) window.SFS_HASH_WANT = want;   /* the link may appear once the full user data has loaded (refresh) */
   if (!document.querySelector('.navbtn.active')) {
     const first = items.find(x => x.id === 'dashboard') || items[0];
     if (first) {
@@ -369,7 +372,10 @@ async function refresh(){
   /* stay on the same page after a save / refresh (keep its search & filters and scroll position) */
   const keep = sfsCurrentPage(), filters = sfsSaveFilters(), y = window.scrollY;
   syncDatalists();
+  const want = window.SFS_HASH_WANT; window.SFS_HASH_WANT = null;
   window.SFS_NAV_KEEP = keep; nav(); window.SFS_NAV_KEEP = null;
+  const wb = want && keep === 'dashboard' ? document.querySelector(`.navbtn[onclick*="'${want}'"]`) : null;
+  if (wb) { showPage(want, wb); return; }
   renderCurrent();
   sfsRestoreFilters(filters);
   setTimeout(() => window.scrollTo(0, y), 60);
@@ -420,7 +426,7 @@ function showPage(p, btn){
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
   const PAGE_MOD = {products:['prodview','prodedit','setstock','imports'], inward:'inward', dc:'dc', dchistory:'dc', invoices:'invoice', ivhistory:'invoice', quotations:'quotation', qthistory:'quotation',
     inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports', monthlyreport:'monthlyreport'};
-  if ((PAGE_MOD[p] && !hasMod(PAGE_MOD[p])) || (p === 'users' && !isAdmin()) || (p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates'))) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
+  if ((PAGE_MOD[p] && !hasMod(PAGE_MOD[p])) || (p === 'users' && !isAdmin()) || (p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates')) || (p === 'incentive' && !incCanSee())) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
   if (p === 'dashboard')  renderDashboard();
@@ -449,6 +455,7 @@ function showPage(p, btn){
   if (p === 'suppliers')  renderSuppliers();
   if (p === 'reports')    renderReports();
   if (p === 'monthlyreport') renderMonthlyReport();
+  if (p === 'incentive') renderIncentive();
   if (p === 'settings')   renderSettings();
   if (p === 'users')      renderUsers();
 }
@@ -480,6 +487,7 @@ const pages = {
   customers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-customer"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Customers</h2><p>Manage customer contacts, tax details and account ledgers.</p></div><button class="btn" onclick="customerGroupsManager()">👥 Customer Groups</button><button class="btn primary" onclick="partyForm(\'Customer\')">+ Add Customer</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="customerSearch" placeholder="Search customer, contact, phone, email..." oninput="renderCustomers()"></div><select id="customerStatus" onchange="renderCustomers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="customerStats" class="party-stats"></span><span id="customerCount" class="party-count"></span></div><div id="customers" class="party-grid"></div></div>',
   suppliers:()=>'<div class="wrap parties-page"><div class="party-hero party-hero-supplier"><div><div class="eyebrow">PARTY DIRECTORY</div><h2>Suppliers</h2><p>Manage supplier contacts, tax details and account ledgers.</p></div><button class="btn primary" onclick="partyForm(\'Supplier\')">+ Add Supplier</button></div><div class="party-toolbar"><div class="party-search"><span>⌕</span><input id="supplierSearch" placeholder="Search supplier, contact, phone, email..." oninput="renderSuppliers()"></div><select id="supplierStatus" onchange="renderSuppliers()"><option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select><span id="supplierStats" class="party-stats"></span><span id="supplierCount" class="party-count"></span></div><div id="suppliers" class="party-grid"></div></div>',
   monthlyreport:()=>'<div class="wrap mrp-wrap" id="mrpPage"><div class="muted">Loading…</div></div>',
+  incentive:()=>'<div class="wrap inc-wrap" id="incPage"><div class="muted">Loading…</div></div>',
   reports:()=>`<div class="wrap"><div class="toolbar"><select id="ry" onchange="renderReports()"></select><select id="rm" onchange="renderReports()" title="Month"><option value="">All months</option>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<option value="${i}">${m}</option>`).join('')}</select><button class="btn" onclick="renderReports()">Refresh</button></div><div id="reports"></div></div>`,
   settings:()=>`<div class="wrap"><div class="panel"><h3>System Settings</h3><p class="muted">Original live inventory is read-only. This software writes only to its separate database.</p><p class="muted">Backend connection is configured in config.js (it cannot be changed here).</p><div class="actions"><button class="btn" onclick="changePasswordForm()">Change My Password</button>${isAdmin()?'<button class="btn" onclick="refreshSource()">Refresh Source Snapshot</button>':''}</div></div>${isAdmin()?'<div class="panel sr-panel" id="srPanel"><h3>📥 Import sales register</h3><div class="muted">Checking…</div></div>':''}${hasMod('pricing')?'<div class="panel pl-panel" id="plPanel"><h3>💲 Price list upload</h3><div class="muted">Checking…</div></div>':''}${isAdmin()?'<div class="panel bk-panel" id="bkPanel"><h3>🛡 Data Backup</h3><div class="muted">Checking…</div></div>':''}<div class="panel" id="offPanel"><h3>📴 Offline copy on this device</h3><div class="muted">Checking…</div></div></div>`,
   users:()=>`<div class="wrap"><div class="panel-head"><h3>Users / Staff</h3><button class="btn primary" onclick="userForm()">+ Add Staff</button></div><div class="panel"><div id="users"></div></div></div>`
@@ -2304,6 +2312,7 @@ async function renderUsers(){
       </div>
       <div class="user-actions">
         <button class="btn small" onclick="userForm('${encA(u.Username)}','${encA(u.Name||'')}','${encA(u.Role||'')}',${JSON.stringify(mods).replace(/"/g,'&quot;')})">Edit Modules</button>
+        <button class="btn small" onclick="incEditor('${encA(u.Username)}','${encA(u.Name||u.Username)}')" title="Customers whose sales earn this user an incentive">💰 Incentive</button>
         <button class="btn small" onclick="toggleUser('${encA(u.Username)}','${encA(u.Status)}')">${u.Status==='Active'?'Disable':'Enable'}</button>
       </div>
     </div>`;
@@ -9075,3 +9084,135 @@ function mrpPdf(){
   printDoc(body, null, 'Monthly Report ' + MRP_M[r.month - 1] + ' ' + r.year);
 }
 Object.assign(window, {renderMonthlyReport, mrpPdf, MRP});
+
+
+/* ============================================================
+   SALES INCENTIVE — Admin sets, per user, the customers and % (with a "from" date);
+   the report shows each user's incentive for a month or a year (a user sees only their own).
+   ============================================================ */
+function incCanSee(){ return isAdmin() || !!(S.user && S.user.incentive); }
+let INC_ED = null;
+async function incEditor(userEnc, nameEnc){
+  if (!isAdmin()) return toast('Only Admin can set incentives.', true);
+  const username = decodeURIComponent(userEnc), name = decodeURIComponent(nameEnc);
+  const r = await api('incentiveRules', {username:username});
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not load.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  INC_ED = {username:username, name:name, rows:(r.rules || []).map(x => ({customer:x.customer, percent:x.percent, from:x.from || ''}))};
+  if (!INC_ED.rows.length) INC_ED.rows.push({customer:'', percent:'', from:''});
+  incEdRender();
+}
+function incEdRender(){
+  const E = INC_ED;
+  modal('Sales incentive — ' + esc(E.name),
+    '<div class="muted small" style="margin-bottom:10px">Choose the customers whose sales earn <b>' + esc(E.name) + '</b> an incentive, and the % for each. The incentive is worked out on each invoice (amount excl. GST) by its date. '
+    + 'To change a rate from a certain month, add the same customer again with the new % and a <b>From</b> date — earlier invoices keep the old rate. A customer can be given to more than one user.</div>'
+    + '<div class="table-wrap"><table class="inc-ed"><thead><tr><th>Customer</th><th class="right">Incentive %</th><th>From <small class="muted">(empty = always)</small></th><th></th></tr></thead><tbody>'
+    + E.rows.map((x, i) => '<tr><td><input list="clist" value="' + esc(x.customer) + '" placeholder="Customer name" oninput="INC_ED.rows[' + i + '].customer=this.value"></td>'
+      + '<td><input class="right" type="number" min="0" max="100" step="0.01" value="' + esc(x.percent) + '" placeholder="e.g. 1" oninput="INC_ED.rows[' + i + '].percent=this.value"></td>'
+      + '<td><input type="date" value="' + esc(x.from) + '" oninput="INC_ED.rows[' + i + '].from=this.value"></td>'
+      + '<td><button class="btn small danger" title="Remove" onclick="INC_ED.rows.splice(' + i + ',1);incEdRender()">×</button></td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<details class="inc-bulk"' + (INC_ED.bulk ? ' open' : '') + ' ontoggle="INC_ED.bulk=this.open"><summary>+ Add several customers at the same %</summary>'
+    + '<div class="inc-bulk-in"><input type="search" placeholder="Search customers…" oninput="incBulkFilter(this.value)"><div class="inc-bulk-list" id="incBulkList">' + incBulkList() + '</div>'
+    + '<div class="inc-bulk-go"><label>% <input id="incBulkPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 5"></label><label>From <input id="incBulkFrom" type="date"></label><button class="btn small primary" onclick="incBulkAdd()">Add ticked customers</button></div></div></details>'
+    + '<div class="actions" style="justify-content:space-between"><button class="btn small" onclick="INC_ED.rows.push({customer:\'\',percent:\'\',from:\'\'});incEdRender()">+ Add customer</button>'
+    + '<span><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="incEdGo" onclick="incEdSave()">Save</button></span></div>');
+}
+function incBulkList(q){
+  const have = new Set(INC_ED.rows.map(x => norm(x.customer))), t = norm(q || '');
+  const L = (S.customers || []).map(c => String(c['Customer Name'] || '').trim()).filter(Boolean).filter(n => !t || norm(n).includes(t)).sort((a, b) => a.localeCompare(b));
+  return L.map(n => '<label class="' + (have.has(norm(n)) ? 'has' : '') + '"><input type="checkbox" value="' + esc(n) + '"' + (have.has(norm(n)) ? ' disabled title="Already in the list — change its % there, or add a new line with a From date"' : '') + '> ' + esc(n) + (have.has(norm(n)) ? ' <small>already added</small>' : '') + '</label>').join('') || '<div class="muted small">No customers found.</div>';
+}
+function incBulkFilter(q){ const el = $('incBulkList'); if (!el) return; const ticked = new Set(Array.from(el.querySelectorAll('input:checked')).map(x => x.value)); el.innerHTML = incBulkList(q); el.querySelectorAll('input').forEach(x => { if (ticked.has(x.value)) x.checked = true; }); }
+function incBulkAdd(){
+  const el = $('incBulkList'), names = el ? Array.from(el.querySelectorAll('input:checked')).map(x => x.value) : [];
+  const pct = ($('incBulkPct') || {}).value, from = ($('incBulkFrom') || {}).value || '';
+  if (!names.length) return toast('Tick one or more customers.', true);
+  if (pct === '' || isNaN(Number(pct)) || Number(pct) < 0 || Number(pct) > 100) return toast('Enter the % (0–100).', true);
+  INC_ED.rows = INC_ED.rows.filter(x => String(x.customer || '').trim() || x.percent !== '').concat(names.map(n => ({customer:n, percent:Number(pct), from:from})));
+  INC_ED.bulk = false; incEdRender(); toast(names.length + ' customer' + (names.length === 1 ? '' : 's') + ' added at ' + pct + '% — press Save.');
+}
+window.incBulkFilter = incBulkFilter; window.incBulkAdd = incBulkAdd;
+async function incEdSave(){
+  const E = INC_ED, rows = E.rows.filter(x => String(x.customer || '').trim());
+  for (const x of rows) {
+    if (x.percent === '' || isNaN(Number(x.percent)) || Number(x.percent) < 0 || Number(x.percent) > 100) return toast('Enter the incentive % (0–100) for ' + x.customer + '.', true);
+    if (!findCust(x.customer) && !confirm('"' + x.customer + '" is not in the Customers list — the name must match the invoices exactly. Save anyway?')) return;
+  }
+  const b = $('incEdGo'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  const r = await api('incentiveRuleSave', {username:E.username, rules:rows.map(x => ({customer:String(x.customer).trim(), percent:Number(x.percent), from:x.from || ''}))});
+  if (!r || !r.ok) { if (b) { b.disabled = false; b.textContent = 'Save'; } return toast((r && r.error) || 'Could not save.', true); }
+  closeModal(); toast('Incentive for ' + E.name + ' saved — ' + r.count + ' customer line' + (r.count === 1 ? '' : 's') + '.');
+  INC.cache = {};
+}
+const INC = {year:new Date().getFullYear(), from:new Date().getMonth() + 1, to:new Date().getMonth() + 1, user:'', cache:{}, open:{}};
+async function renderIncentive(){
+  const host = $('incPage'); if (!host) return;
+  const k = INC.year + '-' + INC.from + '-' + INC.to + '-' + INC.user;
+  let r = INC.cache[k];
+  if (!r) {
+    host.innerHTML = incBar(null) + '<div class="panel muted">Loading…</div>';
+    r = await api('incentiveReport', {year:INC.year, fromMonth:INC.from, toMonth:INC.to, username:INC.user});
+    if (!r || !r.ok) { host.innerHTML = incBar(null) + '<div class="panel">' + esc((r && r.error) || 'Could not load.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : '') + '</div>'; return; }
+    INC.cache[k] = r;
+  }
+  if (!$('incPage')) return;
+  if (isAdmin() && !INC.user) INC.users = r.users.map(u => ({username:u.username, name:u.name}));
+  $('incPage').innerHTML = incBar(r) + incBody(r);
+}
+function incPeriod(r){ const f = r.fromMonth || r.month || 1, t = r.toMonth || r.month || 12; return f === 1 && t === 12 ? 'Year ' + r.year : f === t ? MRP_M[f - 1] + ' ' + r.year : MRP_M[f - 1].slice(0, 3) + ' – ' + MRP_M[t - 1].slice(0, 3) + ' ' + r.year; }
+function incSetRange(f, t){ INC.from = Math.min(f, t); INC.to = Math.max(f, t); renderIncentive(); }
+function incBar(r){
+  const cy = new Date().getFullYear(), years = []; for (let y = cy; y >= cy - 6; y--) years.push(y);
+  const users = isAdmin() && INC.users ? INC.users : null;
+  return '<div class="mrp-bar no-dirty-track"><div class="muted">' + (isAdmin() ? 'Incentive of every user on the sales of their customers (excl. GST). Set customers and % in Users / Staff → 💰 Incentive.' : 'Your incentive on the sales of your customers (excl. GST).') + '</div><span class="mrp-ctl">'
+    + '<span class="inc-rng">From <select class="db2-sel" onchange="incSetRange(Number(this.value),INC.to)">' + MRP_M.map((m, i) => '<option value="' + (i + 1) + '"' + (i + 1 === INC.from ? ' selected' : '') + '>' + m + '</option>').join('') + '</select>'
+    + ' to <select class="db2-sel" onchange="incSetRange(INC.from,Number(this.value))">' + MRP_M.map((m, i) => '<option value="' + (i + 1) + '"' + (i + 1 === INC.to ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></span>'
+    + '<button class="btn small" onclick="incSetRange(' + (new Date().getMonth() + 1) + ',' + (new Date().getMonth() + 1) + ')">This month</button><button class="btn small" onclick="incSetRange(1,12)">Whole year</button>'
+    + '<select class="db2-sel" onchange="INC.year=Number(this.value);renderIncentive()">' + years.map(y => '<option' + (y === INC.year ? ' selected' : '') + '>' + y + '</option>').join('') + '</select>'
+    + (users ? '<select class="db2-sel" onchange="INC.user=this.value;renderIncentive()"><option value="">All users</option>' + users.map(u => '<option value="' + esc(u.username) + '"' + (u.username === INC.user ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '</select>' : '')
+    + '<button class="btn" onclick="INC.cache={};renderIncentive()">↻</button><button class="btn primary" onclick="incPdf()"' + (r ? '' : ' disabled') + '>⬇ PDF</button></span></div>';
+}
+function incBody(r){
+  if (!r.users.length) return '<div class="panel muted">' + (isAdmin() ? 'No incentives set yet — open Users / Staff and press 💰 Incentive on a user.' : 'No incentive is set for you.') + '</div>';
+  const tot = r.users.reduce((a, u) => a + u.incentive, 0);
+  return (r.users.length > 1 ? '<div class="panel"><h3>' + esc(incPeriod(r)) + ' — all users</h3><div class="table-wrap"><table><thead><tr><th>User</th><th class="right">Sale of their customers</th><th class="right">Invoices</th><th class="right">Incentive</th></tr></thead><tbody>'
+      + r.users.map(u => '<tr class="inc-click" onclick="document.getElementById(\'inc_' + esc(u.username) + '\').scrollIntoView({behavior:\'smooth\'})"><td><b>' + esc(u.name) + '</b></td><td class="right">' + money(u.sale) + '</td><td class="right">' + u.invoices.length + '</td><td class="right"><b>' + money(u.incentive) + '</b></td></tr>').join('')
+      + '</tbody><tfoot><tr><td><b>Total</b></td><td class="right"><b>' + money(r.users.reduce((a, u) => a + u.sale, 0)) + '</b></td><td></td><td class="right"><b>' + money(tot) + '</b></td></tr></tfoot></table></div></div>' : '')
+    + r.users.map(u => '<div class="panel inc-user" id="inc_' + esc(u.username) + '"><div class="panel-head"><h3>' + esc(u.name) + ' <span class="muted small">— ' + esc(incPeriod(r)) + '</span></h3>'
+      + '<span class="inc-big">Incentive <b>Rs ' + money(u.incentive) + '</b><small>on sale Rs ' + money(u.sale) + '</small></span></div>'
+      + '<div class="inc-rules">' + (u.rules.length ? u.rules.map(x => '<span>' + esc(x.customer) + ' <b>' + x.percent + '%</b>' + (x.from ? ' <small>from ' + esc(fmtDate(x.from)) + '</small>' : '') + '</span>').join('') : '<span class="muted">no customers set</span>') + '</div>'
+      + (u.invoices.length ? incGroups(u).map(g => '<div class="inc-grp"><div class="inc-gh"><b>' + g.percent + '% customers</b><span>' + g.customers.length + ' customer' + (g.customers.length === 1 ? '' : 's') + ' · ' + g.rows.length + ' invoice' + (g.rows.length === 1 ? '' : 's') + '</span></div>'
+        + '<div class="table-wrap"><table class="inc-gt"><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="right">Amount w/o GST</th></tr></thead><tbody>'
+        + g.rows.map(i => '<tr><td><span class="xref xr-invoice" data-t="Invoice" data-id="' + esc(i.no) + '">' + esc(i.no) + '</span></td><td>' + esc(fmtDate(i.date)) + '</td><td>' + esc(i.customer) + '</td><td class="right">' + money(i.sale) + '</td></tr>').join('')
+        + '</tbody><tfoot><tr><td colspan="3" class="right">Total amount w/o GST</td><td class="right"><b>' + money(g.sale) + '</b></td></tr><tr class="inc-gi"><td colspan="3" class="right">Incentive ' + g.percent + '%</td><td class="right"><b>' + money(g.incentive) + '</b></td></tr></tfoot></table></div></div>').join('')
+        + '<div class="inc-tot"><span>Total sale ' + esc(incPeriod(r)) + '<b>Rs ' + money(u.sale) + '</b></span><span>Total incentive ' + esc(incPeriod(r)) + '<b>Rs ' + money(u.incentive) + '</b></span></div>'
+        : '<div class="muted">No sales to these customers in ' + esc(incPeriod(r)) + '.</div>') + '</div>').join('');
+}
+function incGroups(u){
+  const g = {};
+  u.invoices.forEach(i => { const k = String(i.percent); (g[k] = g[k] || {percent:i.percent, rows:[], sale:0, incentive:0}).rows.push(i); g[k].sale += i.sale; g[k].incentive += i.incentive; });
+  return Object.values(g).sort((a, b) => b.percent - a.percent).map(x => {
+    x.rows.sort((a, b) => norm(a.customer) < norm(b.customer) ? -1 : norm(a.customer) > norm(b.customer) ? 1 : (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    x.customers = Array.from(new Set(x.rows.map(i => norm(i.customer)))); return x; });
+}
+function incPdf(){
+  const r = INC.cache[INC.year + '-' + INC.from + '-' + INC.to + '-' + INC.user]; if (!r || !r.users.length) return toast('Nothing to print.', true);
+  const T = (head, rows, cols) => '<table class="ic-t"><colgroup>' + cols + '</colgroup><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  const body = '<style>.ic *{color:#111}.ic{font-family:Arial,Helvetica,sans-serif}.ic h4{font-size:13px;margin:16px 0 4px}.ic .sub{font-size:11px;margin:0 0 6px;color:#444!important}.ic-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5px;margin-bottom:6px}'
+    + '.ic-t th,.ic-t td{border:1px solid #999!important;padding:3px 6px!important;background:#fff!important;text-transform:none!important;letter-spacing:normal!important}.ic-t thead th{background:#eef1f5!important;text-align:left}.ic-t .r{text-align:right}.ic-t tr.t td{font-weight:bold;background:#f6f7f9!important}.ic-multi .ic-u{break-before:page;page-break-before:always}.ic-t thead{display:table-header-group}.ic-t tr{break-inside:avoid}.ic-n{font-size:9.5px;color:#555!important;margin-top:8px}.ic-sign{margin-top:40px;display:flex;justify-content:space-between;font-size:11px}.ic-sign span{border-top:1px solid #333;padding-top:4px;min-width:180px;text-align:center}</style>'
+    + '<div class="ic' + (r.users.length > 1 ? ' ic-multi' : '') + '"><div class="doc-head"><div class="doc-head-left"><img src="' + printLogoSrc() + '" class="doc-logo"></div><div class="doc-head-right"><div class="doc-title" style="font-size:22px">SALES INCENTIVE — ' + esc(incPeriod(r).toUpperCase()) + '</div></div></div>'
+    + (r.users.length > 1 ? '<h4>Summary</h4>' + T('<th>User</th><th class="r">Sale (excl. GST)</th><th class="r">Invoices</th><th class="r">Incentive (Rs)</th>', r.users.map(u => '<tr><td>' + esc(u.name) + '</td><td class="r">' + money(u.sale) + '</td><td class="r">' + u.invoices.length + '</td><td class="r">' + money(u.incentive) + '</td></tr>').join('')
+        + '<tr class="t"><td>Total</td><td class="r">' + money(r.users.reduce((a, u) => a + u.sale, 0)) + '</td><td></td><td class="r">' + money(r.users.reduce((a, u) => a + u.incentive, 0)) + '</td></tr>', '<col><col style="width:24%"><col style="width:12%"><col style="width:22%">') : '')
+    + r.users.map(u => '<div class="ic-u"><h4>INCENTIVE REPORT OF ' + esc(String(u.name).toUpperCase()) + ' — ' + esc(incPeriod(r).toUpperCase()) + '</h4>'
+      + (incGroups(u).map(g => T('<th style="width:14%">Invoice</th><th style="width:18%">Date</th><th>Customer (' + g.percent + '%)</th><th class="r" style="width:22%">Amount w/o GST</th>',
+          g.rows.map(i => '<tr><td>' + esc(i.no) + '</td><td>' + esc(fmtDate(i.date)) + '</td><td>' + esc(i.customer) + '</td><td class="r">' + money(i.sale) + '</td></tr>').join('')
+          + '<tr class="t"><td colspan="3" class="r">Total amount w/o GST =</td><td class="r">' + money(g.sale) + '</td></tr><tr class="t"><td colspan="3" class="r">Incentive ' + g.percent + '% =</td><td class="r">' + money(g.incentive) + '</td></tr>',
+          '<col style="width:14%"><col style="width:18%"><col><col style="width:22%">')).join('') || '<div class="sub">No sales to these customers.</div>')
+      + '<table class="ic-t"><colgroup><col><col style="width:22%"></colgroup><tbody><tr class="t"><td class="r">TOTAL SALE ' + esc(incPeriod(r).toUpperCase()) + '</td><td class="r">' + money(u.sale) + '</td></tr><tr class="t"><td class="r">TOTAL INCENTIVE ' + esc(incPeriod(r).toUpperCase()) + '</td><td class="r">' + money(u.incentive) + '</td></tr></tbody></table>'
+      + '</div>').join('')
+    + '<div class="ic-n">Incentive = invoice amount excl. GST × the user’s % for that customer on the invoice date. Printed ' + esc(fmtDate(new Date())) + '.</div>'
+    + (r.users.length === 1 ? '<div class="ic-sign"><span>Prepared by</span><span>Approved by</span><span>Received by ' + esc(r.users[0].name) + '</span></div>' : '') + '</div>';
+  printDoc(body, null, 'Sales Incentive ' + incPeriod(r) + (r.users.length === 1 ? ' - ' + r.users[0].name : ''));
+}
+Object.assign(window, {incEditor, incEdRender, incEdSave, renderIncentive, incPdf, INC});
