@@ -99,6 +99,7 @@ function nav(){
     {id:'inward',    label:'Inward',      mod:'inward', section:'Inventory'},
     {id:'imports',   label:'Imports',     mod:'imports',  section:'Inventory'},
     {id:'purchaseorders', label:'Purchase Orders', mod:'purchase', section:'Inventory'},
+    {id:'upcoming',  label:'Upcoming Goods', mod:['purchase','imports'], section:'Inventory'},
     {id:'dc',        label:'New Delivery Challan', mod:'dc', section:'Sales'},
     {id:'dchistory', label:'DC History',  mod:'dc',       section:'Sales'},
     {id:'invoices',  label:'New Invoice', mod:'invoice',  section:'Sales'},
@@ -150,6 +151,7 @@ function nav(){
     users:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>'
   };
 
+  icons.upcoming = icons.upcoming || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7h13v10H1z"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="1.8"/><circle cx="17.5" cy="18.5" r="1.8"/><path d="M7 2v3M5.5 3.5 7 5l1.5-1.5"/></svg>';
   icons.incentive = icons.incentive || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.6-.6-3-1.6M12 6.5v1.5M12 16v1.5"/></svg>';
   icons.monthlyreport = icons.monthlyreport || '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 17v-3M12 17v-5M16 17v-2"/></svg>';
   $('nav').innerHTML = sections.map(sec =>
@@ -427,7 +429,7 @@ function showPage(p, btn){
 
   if (!pages[p]) { $('content').innerHTML = '<div class="wrap"><div class="panel">Page not found.</div></div>'; return; }
   const PAGE_MOD = {products:['prodview','prodedit','setstock','imports'], inward:'inward', dc:'dc', dchistory:'dc', invoices:'invoice', ivhistory:'invoice', quotations:'quotation', qthistory:'quotation',
-    inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports', monthlyreport:'monthlyreport'};
+    inbox:'enquiries', enquiries:'enquiries', accounts:'accounts', customers:'parties', suppliers:'parties', reports:'reports', monthlyreport:'monthlyreport', upcoming:['purchase','imports']};
   if ((PAGE_MOD[p] && !hasMod(PAGE_MOD[p])) || (p === 'users' && !isAdmin()) || (p === 'imports' && !hasMod('imports')) || (p === 'purchaseorders' && !hasMod('purchase')) || (p === 'marketrates' && !hasMod('marketrates')) || (p === 'incentive' && !incCanSee())) { $('content').innerHTML = '<div class="wrap"><div class="panel">You do not have access to this page.</div></div>'; return; }
   $('content').innerHTML = pages[p]();
 
@@ -443,6 +445,7 @@ function showPage(p, btn){
   if (p === 'inbox')      renderInbox();
   if (p === 'imports')    renderImports();
   if (p === 'purchaseorders') { PO.view = 'list'; PO.f = null; renderPurchaseOrders(); }
+  if (p === 'upcoming') renderUpcoming();
   if (p === 'marketrates') {
     const pend = MR.pending && Date.now() - MR.pending.at < 120000 ? MR.pending : null; MR.pending = null;
     MR.view = 'list'; MR.f = null;
@@ -465,9 +468,10 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select>${hasMod(['prodedit','imports'])?'<button class="btn primary" onclick="productForm()">+ Add Product</button>':''}${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}${hasMod(['prodedit','imports'])?'<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button>':''}</div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select>${hasMod(['prodedit','imports'])?'<button class="btn primary" onclick="productForm()">+ Add Product</button>':''}${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}${hasMod(['prodedit','imports'])?'<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button>':''}</div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="up">Upcoming (on order)</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   imports:()=>impPageHtml(),
   purchaseorders:()=>`<div class="wrap" id="poPage"></div>`,
+  upcoming:()=>`<div class="wrap" id="upPage"></div>`,
   marketrates:()=>`<div class="wrap" id="mrPage"></div>`,
   inward:()=>`<div class="wrap"><div class="panel"><h3>Inward / Local Purchase</h3><div class="form-grid"><label>Date<input id="idate" type="date"></label><label>Source Type<select id="itype"><option>Local Purchase</option><option>Import</option><option>Opening</option><option>Customer Return</option></select></label><label>Model / Part No.<input id="imodel" list="mlist"></label><label>Quantity<input id="iqty" type="number" min="0" step="any"></label><label>Supplier<input id="isupplier" list="suplist"></label><label>Supplier Reference<input id="iref"></label>${canPrice()?'<label>Landed cost per piece (Rs.) <small class="muted">optional — or add it later in Imports → Parcels waiting for cost</small><input id="icost" type="number" min="0" step="0.01"></label>':''}<label>Remarks<input id="irem"></label></div><button class="btn primary" onclick="saveInward()">Save Inward</button><button class="btn" onclick="bulkInwardForm()">+ Bulk Inward / Import</button></div></div>`,
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label><label class="wide">Note on the challan <small class="muted">(optional — printed in a box under “To:”, e.g. Partial Delivery)</small><input id="dcnote" list="dcNotes" placeholder="Leave empty for no box"><datalist id="dcNotes"><option value="Partial Delivery"><option value="Balance to follow"><option value="Complete Delivery"><option value="Replacement"><option value="Sample — not for sale"><option value="Returnable"></datalist></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
@@ -957,6 +961,7 @@ function renderProducts(){
     if (pstv === 'in' && !(stock > 0)) return false;
     if (pstv === 'out' && !(stock <= 0)) return false;
     if (pstv === 'low' && !(stock <= reorderOf(p))) return false;
+    if (pstv === 'up' && !(upQty(p) > 0)) return false;
     return true;
   });
   const pc2 = $('pcount'); if (pc2) pc2.textContent = 'Showing ' + Math.min(a.length, 1000) + ' of ' + S.products.length + ' product(s)' + (a.length > 1000 ? ' (first 1000 shown — narrow the filters)' : '');
@@ -968,7 +973,7 @@ function renderProducts(){
        <td>${esc(p.Description)}</td>
        <td>${esc(p.Category)}</td>
        <td>${esc(p.Location)}</td>
-       <td>${low?'<b style="color:#c0392b">':''}${p.currentStock}${low?' ⚠</b>':''}</td>
+       <td>${low?'<b style="color:#c0392b">':''}${p.currentStock}${low?' ⚠</b>':''}${upBadge(p)}</td>
      </tr>`;
   }).join('') || '<tr><td colspan="6" class="empty">No products found.</td></tr>';
 }
@@ -988,7 +993,7 @@ function productDetail(em){
          <div class="kv"><b>Description</b>${esc(p.Description)}</div>
          <div class="kv"><b>Category</b>${esc(p.Category)}</div>
          <div class="kv"><b>Location</b>${esc(p.Location)}</div>
-         <div class="kv"><b>Current Stock</b>${p.currentStock}${low?' <span style="color:#c0392b">⚠ Low Stock</span>':''}</div>
+         <div class="kv"><b>Current Stock</b>${p.currentStock}${low?' <span style="color:#c0392b">⚠ Low Stock</span>':''}${upBadge(p, true)}</div>
          <div class="kv"><b>Reorder Level</b>${reorderOf(p)}</div>
          <div class="kv"><b>Sale Price</b>${esc(p['Sale Price'])}</div>
          <div class="kv"><b>Status</b>${esc(status)}</div>
@@ -2765,7 +2770,7 @@ function addQuotationLine(){ QTL.push({model:'',desc:'',itemRemarks:'',make:'',q
 function removeQuotationLine(i){ QTL.splice(i,1); if(!QTL.length)QTL.push({model:'',make:'',qty:'',unit:'Pcs',rate:'',rateAuto:true,deliveryStatus:'Pending',history:null}); renderQuotationLines(); updateQuotationTotal(); }
 function quotationModelChanged(i){ const x=QTL[i],p=findProd(x.model); qtAutoPhoto(x,p); if(p){x.unit=p.Unit||'Pcs'; if(!x.make)x.make=p.Brand||''; const base=Number(p['Sale Price']||0); if(base>0){x.rate=quotationAdjustedRate(base);x.rateAuto=true;} } x.history=null; renderQuotationLines(); updateQuotationTotal(); loadQuotationItemHistory(i); }
 async function loadQuotationItemHistory(i){const x=QTL[i];if(!x||!x.model)return;const model=String(x.model||'').trim(),customer=String($('qtcustomer')?.value||'').trim(),c=findCust(customer);const r=await api('quotationItemHistory',{customerId:c?(c['Customer ID']||''):'',customer:c?customer:'',model:model});if(QTL[i]!==x||String(x.model||'').trim()!==model||String($('qtcustomer')?.value||'').trim()!==customer)return;x.history=r&&r.ok?r.history:null;x.lastSale=r&&r.ok?r.last:null;renderQuotationLines();}
-function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b></div>':''; const hist=(x.history?'<div class="muted small qt-prev" style="margin-top:4px;color:#315b86">Previous sale to this customer: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+(x.history.date?' · '+fmtDate(x.history.date):'')+' · Rate '+money(x.history.rate)+'</div>':'')+(x.lastSale?'<div class="muted small qt-prev" style="margin-top:3px;color:#64748b">Last sold: Invoice '+esc(x.lastSale.invoiceNo||'—')+(x.lastSale.date?' · '+fmtDate(x.lastSale.date):'')+' · '+esc(x.lastSale.customer||'')+' · Rate '+money(x.lastSale.rate)+'</div>':''); return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+qtSrcCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
+function renderQuotationLines(){ const h=$('qtlines'); if(!h)return; h.innerHTML=QTL.map((x,i)=>{const p=findProd(x.model)||{}; if(x.make==null||x.make==='')x.make=p.Brand||''; if(x.desc==null||x.desc==='')x.desc=p.Description||''; if(x.itemRemarks==null)x.itemRemarks=''; if(!x.deliveryStatus)x.deliveryStatus='Pending'; const stock=x.model&&p['Model / Part No.']?'<div class="muted small" style="margin-top:4px">Current stock: <b>'+esc(p.currentStock===undefined?p['Current Stock']||0:p.currentStock)+'</b>'+upBadge(p,true)+'</div>':''; const hist=(x.history?'<div class="muted small qt-prev" style="margin-top:4px;color:#315b86">Previous sale to this customer: '+(x.history.po?'PO '+esc(x.history.po)+' · ':'')+'Invoice '+esc(x.history.invoiceNo||'—')+(x.history.date?' · '+fmtDate(x.history.date):'')+' · Rate '+money(x.history.rate)+'</div>':'')+(x.lastSale?'<div class="muted small qt-prev" style="margin-top:3px;color:#64748b">Last sold: Invoice '+esc(x.lastSale.invoiceNo||'—')+(x.lastSale.date?' · '+fmtDate(x.lastSale.date):'')+' · '+esc(x.lastSale.customer||'')+' · Rate '+money(x.lastSale.rate)+'</div>':''); return '<tr><td><input value="'+esc(x.model)+'" list="mlist" placeholder="Part No. / custom item" onchange="QTL['+i+'].model=this.value;quotationModelChanged('+i+')">'+stock+hist+'</td><td><textarea rows="2" placeholder="Customer enquiry description / specification" onchange="QTL['+i+'].desc=this.value">'+esc(x.desc||'')+'</textarea><div style="font-size:11px;font-weight:600;color:#667085;margin:5px 0 3px">Remarks</div><textarea rows="2" placeholder="Remarks for this item (optional)" onchange="QTL['+i+'].itemRemarks=this.value">'+esc(x.itemRemarks||'')+'</textarea>'+qtPhotoCell(x,i)+qtSrcCell(x,i)+'</td><td><input value="'+esc(x.make||'')+'" placeholder="Make" onchange="QTL['+i+'].make=this.value"></td><td><input type="number" min="0" step="any" value="'+esc(x.qty)+'" oninput="QTL['+i+'].qty=this.value;updateQuotationTotal()"></td><td><input value="'+esc(x.unit||'Pcs')+'" oninput="QTL['+i+'].unit=this.value"></td><td><input type="number" min="0" step="0.01" value="'+esc(x.rate)+'" oninput="QTL['+i+'].rate=this.value;QTL['+i+'].rateAuto=false;updateQuotationTotal()"></td><td>'+money((+x.qty||0)*(+x.rate||0))+'</td><td><input list="qtdl" value="'+esc(x.deliveryStatus||'')+'" placeholder="Ready Stock / 8-10 Weeks" oninput="QTL['+i+'].deliveryStatus=this.value"></td><td><button class="btn danger" type="button" onclick="removeQuotationLine('+i+')">×</button></td></tr>';}).join(''); }
 function updateQuotationTotal(){ const gross=QTL.filter(x=>x.kind!=='opt'&&x.kind!=='text').reduce((a,x)=>a+(+x.qty||0)*(+x.rate||0),0); const pct=Math.min(100,Math.max(0,Number($('qtdiscount')?.value||0))); const disc=gross*pct/100; if($('qttotal'))$('qttotal').textContent=pct>0?('SUB TOTAL: '+money(gross)+'   |   LESS '+pct+'% DISCOUNT: '+money(disc)+'   |   TOTAL: '+money(gross-disc)):('TOTAL: '+money(gross)); }
 async function saveQuotation(){
   if(window.SFS_QT_SAVING)return;
@@ -3216,6 +3221,7 @@ function impPageHtml(){
     </section>
 
     <section class="imp-zone z-cost" id="zCost"><div class="imp-zhead"><i>📦</i><div><b>New Import Costing</b><span>A real shipment → landed cost, new products and stock</span></div></div>
+    <div class="no-dirty-track" id="impPoBar"></div>
     <div class="imp-drafts no-dirty-track" id="impDrafts"></div>
     <div class="panel"><h3>1. Shipment Details</h3>
       <div class="form-grid">
@@ -3273,12 +3279,12 @@ function renderImports(){
   $('impDate').value = h.date || todayStr(); $('impSupplier').value = h.supplier; $('impRef').value = h.ref;
   $('impCur').value = h.cur; $('impRate').value = h.rate; $('impAlloc').value = h.alloc; $('impMode').value = h.mode; $('impPayable').checked = !!h.payable;
   IMP.h = h; impSyncRateBox();
-  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab(); pcLoad(); impDraftLoad();
+  impRenderCharges(); impRenderGrid(); impRecalc(); impRenderHistory(); impRenderProfit(); impRenderInvProfit(); impLoadHistory(); icRender(); impTab(); pcLoad(); impDraftLoad(); upImpBar();
 }
 function impSyncRateBox(){ const pk = $('impCur').value === 'PKR'; $('impRate').disabled = pk; if (pk) $('impRate').value = 1; }
 function impHdr(){
   const prevCur = IMP.h ? IMP.h.cur : null;
-  IMP.h = {date:$('impDate').value, supplier:$('impSupplier').value.trim(), ref:$('impRef').value.trim(), cur:$('impCur').value, rate:$('impRate').value, alloc:$('impAlloc').value, mode:$('impMode').value, payable:$('impPayable').checked};
+  IMP.h = {date:$('impDate').value, supplier:$('impSupplier').value.trim(), ref:$('impRef').value.trim(), cur:$('impCur').value, rate:$('impRate').value, alloc:$('impAlloc').value, mode:$('impMode').value, payable:$('impPayable').checked, po:(IMP.h && IMP.h.po) || ''};
   impSyncRateBox();
   if (prevCur !== IMP.h.cur) { impRenderCharges(); impRenderGrid(); }
   impRecalc();
@@ -3497,10 +3503,16 @@ async function impSave(){
     const costingSaved = !!(cs && cs.ok);
     if (costingSaved) { entry.id = cs.id; IMP_HIST.unshift(entry); }
     if (IMP.draftId) { const did = IMP.draftId; api('impDraftDelete', {id:did}).then(() => impDraftLoad()); }
-    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:''}); IMP.draftId = null; IMP.draftName = null; IMP.editId = null; IMP.editUndone = false;
+    let poDone = null;
+    if (h.po) {   /* costing of an uploaded PO: its goods have arrived */
+      poDone = await api('poReceive', {no:h.po, ref:(cs && cs.id) || h.ref, items:c.rows.map(r => ({model:r.model, qty:r.qty}))});
+      if (!poDone || !poDone.ok) toast('Import saved, but ' + h.po + ' could not be marked arrived (' + ((poDone && poDone.error) || 'error') + ') — change its status on Upcoming Goods.', true);
+    }
+    IMP.rows = [impBlankRow()]; IMP.charges = impDefaultCharges(); IMP.h = Object.assign({}, h, {ref:'', po:''}); IMP.draftId = null; IMP.draftName = null; IMP.editId = null; IMP.editUndone = false;
     if (prog) prog.textContent = '';
     await refresh();
     modal('Import Saved ✓', `<p><b>${c.rows.length}</b> item(s) saved — ${nNew} new product(s) created and stock increased.<br>Landed cost per unit has been saved as the product Cost Price.</p>`
+      + (poDone && poDone.ok ? '<p>📦 <b>' + esc(h.po) + '</b> — ' + (poDone.pending > 0 ? 'part received, ' + poDone.pending + ' pcs still upcoming.' : 'all goods arrived; it no longer shows as upcoming.') + '</p>' : '')
       + (costingSaved ? '<p class="muted small">Costing sheet saved securely on the server (Imports access only).</p>'
                       : '<p style="color:#c0392b"><b>Warning:</b> products and stock were saved, but the costing sheet could not be stored on the server (' + esc((cs && cs.error) || 'unknown error') + '). Please download the PDF / CSV below now and keep it.</p>')
       + impSheetModalHtml(entry, true) );
@@ -3508,7 +3520,7 @@ async function impSave(){
 }
 function impClear(){
   if (!confirm('Clear everything on this page?')) return;
-  IMP = {h:Object.assign({}, IMP.h, {ref:'', rate:IMP.h ? IMP.h.rate : ''}), rows:[impBlankRow()], charges:impDefaultCharges()}; renderImports();
+  IMP = {h:Object.assign({}, IMP.h, {ref:'', po:'', rate:IMP.h ? IMP.h.rate : ''}), rows:[impBlankRow()], charges:impDefaultCharges()}; renderImports();
 }
 
 /* ---------- drafts: unfinished costing kept on the server ---------- */
@@ -6766,15 +6778,17 @@ const IMP_TABS = [
   {id:'zCost',   cls:'z-cost',   icon:'📦', t:'New Import',         d:'Shipment costing → products + stock'},
   {id:'zProfit', cls:'z-profit', icon:'📈', t:'Profit Reports',     d:'Monthly profit & profit per invoice'},
   {id:'zHist',   cls:'z-hist',   icon:'🗂', t:'Past Imports',       d:'Saved costing sheets'},
-  {id:'zParcel', cls:'z-parcel', icon:'📮', t:'Parcels waiting for cost', d:'Inward entries without a cost'}
+  {id:'zParcel', cls:'z-parcel', icon:'📮', t:'Parcels waiting for cost', d:'Inward entries without a cost'},
+  {id:'zUp',     cls:'z-up',     icon:'🚢', t:'Upcoming Goods',      d:'Upload PO (Excel) · on order', go:'upcoming'}
 ];
-function impCurTab(){ let k = ''; try { k = localStorage.getItem('sfsImpTab') || ''; } catch (e) {} return IMP_TABS.some(x => x.id === k) ? k : 'zCalc'; }
+function impCurTab(){ let k = ''; try { k = localStorage.getItem('sfsImpTab') || ''; } catch (e) {} return IMP_TABS.some(x => x.id === k && !x.go) ? k : 'zCalc'; }
 function impTiles(){
   const host = $('impTiles'); if (!host) return;
   const cur = impCurTab();
   const filled = (IMP.rows || []).filter(r => r.model || r.qty || r.price).length;
   const badge = {zCost:filled ? filled + ' item' + (filled === 1 ? '' : 's') + ' in progress' : '', zHist:(IMP_HIST || []).length ? IMP_HIST.length + ' saved' : '', zParcel:PC.pending.length ? PC.pending.length + ' waiting' : ''};
-  host.innerHTML = IMP_TABS.map(x => '<button type="button" class="imp-tile ' + x.cls + (x.id === cur ? ' on' : '') + '" onclick="impTab(\'' + x.id + '\')">'
+  badge.zUp = (S.products || []).filter(p => upQty(p) > 0).length ? (S.products || []).filter(p => upQty(p) > 0).length + ' items coming' : '';
+  host.innerHTML = IMP_TABS.map(x => '<button type="button" class="imp-tile ' + x.cls + (x.id === cur ? ' on' : '') + '" onclick="' + (x.go ? 'db2Go(\'' + x.go + '\')' : 'impTab(\'' + x.id + '\')') + '">'
     + '<i>' + x.icon + '</i><div><b>' + x.t + '</b><span>' + x.d + '</span>' + (badge[x.id] ? '<em>' + badge[x.id] + '</em>' : '') + '</div></button>').join('');
 }
 function impTab(id){
@@ -6832,7 +6846,7 @@ Object.assign(window, {bkLoad, bkNow});
 const OFF_DAYS = 7;
 const OFF_READ = {bootstrap:1, getReports:1, getOutstanding:1, getEnquiries:1, quotationHistory:1, getSalesSummary:1, getInbox:1, getInboxMail:1,
   stockMovement:1, getUserActivity:1, getSupplierPaymentHistory:1, getSupplierOutstanding:1, getSourceRecords:1, getPaymentHistory:1, getLedger:1,
-  quotationItemHistory:1, listUsers:1, getProfit:1, getInvoiceProfit:1, getImportCostings:1, getEnquiryMail:1, enquiryAssignees:1, backupStatus:1, getPurchaseOrders:1};
+  quotationItemHistory:1, listUsers:1, getProfit:1, getInvoiceProfit:1, getImportCostings:1, getEnquiryMail:1, enquiryAssignees:1, backupStatus:1, getPurchaseOrders:1, getUpcoming:1};
 const OFF = {key:null, meta:null, mode:false};   /* mode = signed in without internet */
 const OFF_TE = new TextEncoder(), OFF_TD = new TextDecoder();
 
@@ -7223,7 +7237,7 @@ function poRenderList(){
   const hit = o => !q || [o.no, o.supplier, o.ref, o.status, o.statusNote].concat(o.items.map(i => i.model + ' ' + i.desc)).some(v => norm(v).includes(q));
   const rows = PO.list.filter(o => inTab(o, PO.tab) && hit(o));
   const keepQ = ($('poSearch') || {}).value || '';
-  host.innerHTML = '<div class="toolbar no-dirty-track"><button class="btn primary" onclick="poNew()">+ New Purchase Order</button>'
+  host.innerHTML = '<div class="toolbar no-dirty-track"><button class="btn primary" onclick="poNew()">+ New Purchase Order</button><button class="btn" onclick="upPick()" title="Read a PO made in Excel — it becomes an upcoming order">⬆ Upload PO (Excel)</button>'
     + '<input id="poSearch" placeholder="Search PO #, supplier, part number…" oninput="poRenderList()" style="flex:1;min-width:240px" value="' + esc(keepQ) + '"><button class="btn" onclick="renderPurchaseOrders()">↻ Refresh</button></div>'
     + '<div class="enq-tabs" style="margin:0 0 12px">' + PO_TABS.map(t => '<button type="button" class="' + (PO.tab === t[0] ? 'on' : '') + '" onclick="PO.tab=\'' + t[0] + '\';poRenderList()">' + t[1] + '<i>' + PO.list.filter(o => inTab(o, t[0])).length + '</i></button>').join('') + '</div>'
     + '<div class="panel table-wrap"><table class="po-list"><thead><tr><th>PO #</th><th>Date</th><th>Supplier</th><th class="r">Items</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody>'
@@ -7542,7 +7556,7 @@ function xrIngest(action, data, r){
   if (action === 'getReports' && data && data.mode === 'docs') put(String(data.type).toUpperCase() === 'DC' ? 'DC' : 'Invoice', r.documents, 'no');
   else if (action === 'quotationHistory') put('Quotation', r.documents, 'no');
   else if (action === 'getEnquiries') put('Enquiry', r.documents, 'id');
-  else if (action === 'getPurchaseOrders') put('PO', r.orders, 'no');
+  else if (action === 'getPurchaseOrders' || action === 'getUpcoming') put('PO', r.orders, 'no');
   else if (action === 'getMarketRates') put('MR', r.sheets, 'no');
   else if (action === 'bootstrap') XR.dirty = true;
   if (XR.dirty) xrSchedule(document.body);
@@ -7663,7 +7677,7 @@ async function xrRender(t, id){
     const seeCost = canSeeCost();
     h = (img ? '<img class="xr-img" src="' + esc(img) + '" alt="">' : '')
       + '<div class="xr-big">' + esc(p.Description || '') + '</div>'
-      + kv('Brand', esc(p.Brand || '')) + kv('Category', esc(p.Category || '')) + kv('Stock', '<span class="' + ((Number(p.currentStock) || 0) <= 0 ? 'dn' : '') + '">' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + ' ' + esc(p.Unit || '') + '</span>')
+      + kv('Brand', esc(p.Brand || '')) + kv('Category', esc(p.Category || '')) + kv('Stock', '<span class="' + ((Number(p.currentStock) || 0) <= 0 ? 'dn' : '') + '">' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + ' ' + esc(p.Unit || '') + '</span>' + upBadge(p, true))
       + kv('Sale price', p['Sale Price'] ? 'Rs. ' + money(p['Sale Price']) : '') + (seeCost ? kv('Cost price', p['Cost Price'] ? 'Rs. ' + money(p['Cost Price']) : '') : '') + kv('Location', esc(p.Location || ''))
       + (pos.length ? '<h4>On order</h4>' + pos.map(o => { const it = o.items.find(x => xrKey(x.model) === xrKey(id)); return '<div class="xr-row">' + esc(o.no) + ' · ' + esc(o.status) + ' · ' + esc((Number(it.qty) || 0) - (Number(it.received) || 0)) + ' pcs' + (o.eta ? ' · ETA ' + fmtDate(o.eta) : '') + '</div>'; }).join('') : '')
       + (dcs.length ? '<h4>Recent deliveries</h4>' + dcs.map(dc => '<div class="xr-row">' + esc(dc.no) + ' · ' + fmtDate(dc.date) + ' · ' + esc(dc.customer) + ' · ' + esc((dc.items.find(x => xrKey(x.model) === xrKey(id)) || {}).qty) + '</div>').join('') : '')
@@ -8805,7 +8819,7 @@ function qtxRenderLines(){
     if ((x.desc == null || x.desc === '') && p.Description) x.desc = p.Description;
     if ((x.make == null || x.make === '') && p.Brand) x.make = p.Brand;
     const info = [];
-    if (x.model && p['Model / Part No.']) info.push('Stock <b>' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + '</b>');
+    if (x.model && p['Model / Part No.']) info.push('Stock <b>' + esc(p.currentStock === undefined ? (p['Current Stock'] || 0) : p.currentStock) + '</b>' + upBadge(p, true));
     if (x.history) info.push('Last to this customer: Rs ' + money(x.history.rate) + (x.history.date ? ' · ' + fmtDate(x.history.date) : ''));
     else if (x.lastSale) info.push('Last sold: Rs ' + money(x.lastSale.rate) + ' · ' + esc(x.lastSale.customer || ''));
     const pill = n.opt > 1 ? '<span class="qx-opt o2">Option ' + n.opt + '</span>' : (n.hasOpts ? '<span class="qx-opt">Option 1</span>' : '');
@@ -10847,6 +10861,248 @@ function sfsOpenPending(){
   setTimeout(() => { try { xrOpen(o.t, o.id); } catch (e) {} }, 400);
 }
 window.addEventListener('hashchange', () => { const o = sfsOpenFromHash(); if (o && S.session) { window.SFS_OPEN_DOC = o; sfsOpenPending(); } });
+
+
+/* ============================================================
+   UPCOMING GOODS (Nov 2026)
+   Upload a PO made in Excel (SFS purchase-order format) → it becomes a Purchase Order
+   with status "Sent" (ordered). Until the goods arrive every product shows
+   "Upcoming" and the quantity (Products list, product panel, quotation / DC lines).
+   New part numbers are added to Products (stock 0) at upload.
+   When the goods arrive: "Goods arrived → Costing" fills New Import with the PO's
+   items; saving that costing adds the stock and marks the PO "Arrived".
+   Page: Purchase Orders or Imports users. The badge on products: everyone (no prices).
+   ============================================================ */
+const UP = {list:[], loaded:false, tab:'up', view:'po', open:{}, q:''};
+const UP_OPEN_ST = ['Sent', 'Confirmed', 'Ready', 'Shipped'];
+const UP_ST_LABEL = {Sent:'Ordered', Confirmed:'Confirmed', Ready:'Ready at supplier', Shipped:'Shipped', Arrived:'Arrived', Closed:'Closed', Cancelled:'Cancelled', Draft:'Draft'};
+function upCan(){ return hasMod(['purchase', 'imports']); }
+function upQty(p){ return Number(p && p.upcoming) || 0; }
+/* small blue "+10 upcoming" tag next to a stock figure */
+function upBadge(p, long){
+  const q = upQty(p); if (!(q > 0)) return '';
+  const pos = (p.upcomingPOs || []), eta = pos.map(x => x.eta).filter(Boolean).sort()[0];
+  const tip = pos.map(x => x.no + ': ' + x.qty + ' pcs — ' + (UP_ST_LABEL[x.status] || x.status) + (x.eta ? ', ETA ' + fmtDate(x.eta) : (x.delivery ? ', ' + x.delivery : ''))).join('\n');
+  return ' <span class="up-badge" title="' + esc('Upcoming (on order)\n' + tip) + '">+' + q.toLocaleString('en-US') + ' upcoming' + (long && eta ? ' · ETA ' + esc(fmtDate(eta)) : '') + '</span>';
+}
+function upPend(i){ return Math.max(0, poNum(i.qty) - poNum(i.received)); }
+function upIsOpen(o){ return UP_OPEN_ST.indexOf(o.status) !== -1; }
+
+async function renderUpcoming(){
+  const host = $('upPage'); if (!host) return;
+  if (!upCan()) { host.innerHTML = '<div class="panel">You do not have access to Upcoming Goods.</div>'; return; }
+  if (!UP.loaded) host.innerHTML = '<div class="muted" style="padding:20px">Loading…</div>';
+  const r = await api('getUpcoming');
+  if (!r || !r.ok) { host.innerHTML = '<div class="panel">' + esc((r && /unknown action/i.test(r.error || '')) ? 'Upcoming Goods need the new Code.gs — paste it in Apps Script and deploy a New version.' : ((r && r.error) || 'Could not load.')) + '</div>'; return; }
+  UP.list = r.orders || []; UP.loaded = true; PO.list = UP.list;   /* the PO print / status dialogs work on this list too */
+  upDraw();
+}
+function upDraw(){
+  const host = $('upPage'); if (!host) return;
+  const q = norm(UP.q), hit = o => !q || [o.no, o.supplier, o.ref, o.status].concat(o.items.map(i => i.model + ' ' + i.desc)).some(v => norm(v).includes(q));
+  const tabs = [['up', 'Upcoming', o => upIsOpen(o)], ['arrived', 'Arrived', o => o.status === 'Arrived' || o.status === 'Closed'], ['all', 'All', o => o.status !== 'Draft']];
+  const tf = (tabs.find(t => t[0] === UP.tab) || tabs[0])[2], rows = UP.list.filter(o => tf(o) && hit(o));
+  const open = UP.list.filter(upIsOpen), pcs = open.reduce((a, o) => a + o.items.reduce((b, i) => b + upPend(i), 0), 0);
+  const parts = new Set(); open.forEach(o => o.items.forEach(i => { if (upPend(i) > 0) parts.add(xrKey(i.model)); }));
+  const byCur = {}; open.forEach(o => { const v = o.items.reduce((a, i) => a + upPend(i) * poNum(i.price), 0); byCur[o.currency || 'EUR'] = (byCur[o.currency || 'EUR'] || 0) + v; });
+  const ship = open.filter(o => o.status === 'Shipped').length;
+  const keep = $('upQ') && document.activeElement === $('upQ');
+  host.innerHTML = '<div class="up-head no-dirty-track"><div><h2>Upcoming goods</h2><p>Purchase orders that are ordered but not received yet. Upload the PO you made in Excel — the items show as “upcoming” in Products until the goods arrive.</p></div>'
+    + '<div class="up-hbtn"><button class="btn primary" onclick="upPick()">⬆ Upload PO (Excel)</button><button class="btn" onclick="renderUpcoming()">↻ Refresh</button></div></div>'
+    + '<div class="up-tiles"><div><b>' + open.length + '</b><span>Open POs</span></div><div><b>' + ship + '</b><span>Shipped / on the way</span></div><div><b>' + parts.size + '</b><span>Part numbers coming</span></div><div><b>' + pcs.toLocaleString('en-US') + '</b><span>Pieces coming</span></div>'
+    + '<div><b>' + (Object.keys(byCur).map(c => esc(c) + ' ' + poMoney(byCur[c])).join('<br>') || '—') + '</b><span>Value still to come</span></div></div>'
+    + '<div class="toolbar no-dirty-track" style="flex-wrap:wrap"><div class="enq-tabs" style="margin:0">' + tabs.map(t => '<button type="button" class="' + (UP.tab === t[0] ? 'on' : '') + '" onclick="UP.tab=\'' + t[0] + '\';upDraw()">' + t[1] + '<i>' + UP.list.filter(o => t[2](o)).length + '</i></button>').join('') + '</div>'
+    + '<span class="db2-seg"><button type="button" class="' + (UP.view === 'po' ? 'on' : '') + '" onclick="UP.view=\'po\';upDraw()">By PO</button><button type="button" class="' + (UP.view === 'item' ? 'on' : '') + '" onclick="UP.view=\'item\';upDraw()">By item</button></span>'
+    + '<input id="upQ" type="search" placeholder="Search PO #, supplier, part number…" value="' + esc(UP.q) + '" oninput="UP.q=this.value;upDraw()" style="flex:1;min-width:220px"></div>'
+    + (UP.view === 'item' ? upItemsHtml(rows) : upPosHtml(rows));
+  if (keep) { const s = $('upQ'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+}
+function upPosHtml(rows){
+  if (!rows.length) return '<div class="panel empty-state"><b>' + (UP.list.length ? 'Nothing here.' : 'No purchase orders yet.') + '</b><p class="muted">Press “⬆ Upload PO (Excel)” and pick the PO file you sent to the supplier.</p></div>';
+  return rows.map(o => {
+    const id = encA(o.no), on = !!UP.open[o.no], pend = o.items.reduce((a, i) => a + upPend(i), 0), all = o.items.reduce((a, i) => a + poNum(i.qty), 0);
+    const nNew = o.items.filter(i => !findProd(i.model)).length;
+    return '<div class="up-po' + (on ? ' on' : '') + '"><div class="up-po-h" onclick="upToggle(\'' + id + '\')">'
+      + '<div class="up-po-t"><b>' + ptX('PO', o.no) + '</b><span>' + esc(o.supplier) + '</span><small>' + fmtDate(o.date) + (o.ref ? ' · Ref ' + esc(o.ref) : '') + (o.mode ? ' · by ' + esc(o.mode) : '') + '</small></div>'
+      + '<div class="up-po-s">' + poPill(o.status) + (o.status !== 'Arrived' && o.eta ? '<small>ETA ' + fmtDate(o.eta) + '</small>' : '') + '</div>'
+      + '<div class="up-po-n"><b>' + o.items.length + '</b><small>items</small></div>'
+      + '<div class="up-po-n"><b>' + pend.toLocaleString('en-US') + '</b><small>' + (pend === all ? 'pcs coming' : 'of ' + all + ' pcs to come') + '</small></div>'
+      + '<div class="up-po-n r"><b>' + esc(o.currency || 'EUR') + ' ' + poMoney(o.total) + '</b><small>PO value</small></div>'
+      + '<div class="up-po-x">' + (on ? '▴' : '▾') + '</div></div>'
+      + (on ? '<div class="up-po-b"><div class="up-act">'
+        + (upIsOpen(o) && hasMod('imports') ? '<button class="btn primary small" onclick="upToCosting(\'' + id + '\')">📦 Goods arrived → Costing</button>' : '')
+        + (upIsOpen(o) ? '<button class="btn small" onclick="poStatusForm(\'' + id + '\')">Status / ETA</button>' : '')
+        + '<button class="btn small" onclick="poPrint(\'' + id + '\')">Print / PDF</button>'
+        + '<button class="btn small" onclick="upXl(\'' + id + '\')">⬇ Excel</button>'
+        + (o.statusNote ? '<span class="muted small">' + esc(o.statusNote) + '</span>' : '') + '</div>'
+        + '<div class="table-wrap no-xl"><table class="pt-t"><thead><tr><th>#</th><th>Part No.</th><th>Description</th><th>Delivery</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Coming</th><th class="r">Stock now</th><th class="r">Price</th><th class="r">Amount</th></tr></thead><tbody>'
+        + o.items.map((i, k) => { const p = findProd(i.model); return '<tr><td>' + (k + 1) + '</td><td>' + (p ? ptX('Model', i.model) : esc(i.model) + ' <span class="up-new">not in products</span>') + '</td><td>' + esc(i.desc) + '</td><td class="nw">' + esc(i.delivery || '') + '</td>'
+          + '<td class="r">' + poNum(i.qty) + '</td><td class="r">' + (poNum(i.received) || '—') + '</td><td class="r"><b>' + (upPend(i) || '—') + '</b></td><td class="r">' + (p ? esc(p.currentStock) : '—') + '</td><td class="r">' + poMoney(i.price) + '</td><td class="r">' + poMoney(poNum(i.qty) * poNum(i.price)) + '</td></tr>'; }).join('')
+        + '</tbody></table></div>' + (nNew ? '<div class="muted small" style="padding:6px 12px">' + nNew + ' part number(s) of this PO are not in Products.</div>' : '') + '</div>' : '')
+      + '</div>';
+  }).join('');
+}
+function upItemsHtml(rows){
+  const by = {};
+  rows.forEach(o => o.items.forEach(i => { const k = xrKey(i.model || i.desc); if (!k) return; const r = by[k] || (by[k] = {model:i.model, desc:i.desc, ordered:0, coming:0, pos:[]}); r.ordered += poNum(i.qty); r.coming += upIsOpen(o) ? upPend(i) : 0; r.pos.push(o.no + (upPend(i) && upIsOpen(o) ? ' (' + upPend(i) + ')' : '')); }));
+  const list = Object.values(by).sort((a, b) => b.coming - a.coming || String(a.model).localeCompare(String(b.model)));
+  if (!list.length) return '<div class="panel empty-state"><b>Nothing here.</b></div>';
+  return '<div class="panel table-wrap" style="padding:0"><table><thead><tr><th>Part No.</th><th>Description</th><th class="right">Stock now</th><th class="right">Coming</th><th class="right">Ordered</th><th>PO #</th></tr></thead><tbody>'
+    + list.map(r => { const p = findProd(r.model); return '<tr><td>' + (p ? ptX('Model', r.model) : esc(r.model)) + '</td><td>' + esc((p && p.Description) || r.desc) + '</td><td class="right">' + (p ? esc(p.currentStock) : '—') + '</td><td class="right"><b>' + (r.coming || '—') + '</b></td><td class="right">' + r.ordered + '</td><td>' + esc(r.pos.join(', ')) + '</td></tr>'; }).join('')
+    + '</tbody></table></div>';
+}
+function upToggle(idEnc){ const no = decodeURIComponent(idEnc); UP.open[no] = !UP.open[no]; upDraw(); }
+function upXl(idEnc){
+  const o = UP.list.find(x => x.no === decodeURIComponent(idEnc)); if (!o) return;
+  sfsXlDownload(o.no + ' ' + o.supplier, [{name:o.no, title:'Purchase Order ' + o.no + ' — ' + o.supplier + ' — ' + fmtDate(o.date) + ' — ' + (UP_ST_LABEL[o.status] || o.status) + (o.eta ? ' — ETA ' + fmtDate(o.eta) : ''),
+    rows:[['#', 'Part No.', 'Description', 'Delivery', 'Ordered', 'Received', 'Coming', 'Unit price (' + (o.currency || 'EUR') + ')', 'Amount']].concat(o.items.map((i, k) => [k + 1, i.model, i.desc, i.delivery || '', poNum(i.qty), poNum(i.received), upPend(i), poNum(i.price), Math.round(poNum(i.qty) * poNum(i.price) * 100) / 100]))}]);
+}
+
+/* ---------- upload: read the SFS Excel PO ---------- */
+function upPick(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.xls';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) upRead(f); };
+  inp.click();
+}
+async function upRead(file){
+  const buf = await file.arrayBuffer();
+  let wb = null; try { wb = await oiReadXlsx(buf); } catch (e) { wb = null; }
+  if (!wb) {
+    let XL; try { XL = await oiLoadXlsx(); } catch (e) { return toast('This file could not be read. Save it as .xlsx in Excel and try again.', true); }
+    try { const w = XL.read(buf, {type:'array', cellDates:true}); wb = {SheetNames:w.SheetNames, rows:{}}; w.SheetNames.forEach(n => wb.rows[n] = XL.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''})); }
+    catch (e) { return toast('This file could not be read as Excel.', true); }
+  }
+  const all = wb.SheetNames.map(n => upParseSheet(wb.rows[n] || [], n)).filter(x => x && x.items.length);
+  if (!all.length) return toast('No purchase order was found in this file. It should have a “Part Number / Quantity / Unit Price” table.', true);
+  all.sort((a, b) => (b.no ? 1 : 0) - (a.no ? 1 : 0) || (b.date ? new Date(b.date) : 0) - (a.date ? new Date(a.date) : 0));   /* newest PO first */
+  UP.up = {file:file.name, sheets:all, pick:0};
+  upPreview();
+}
+/* one sheet → {no, date, supplier, contact, address, customerId, preparedBy, stn, ntn, mode, shipRemarks, ref, remarks, note, currency, items, sheetTotal} */
+function upParseSheet(raw, name){
+  const rows = raw.map(r => (r || []).map(oiCell)), txt = v => v instanceof Date ? v : String(v == null ? '' : v).replace(/^`/, '').trim();
+  const low = v => String(v instanceof Date ? '' : v).toLowerCase().replace(/\s+/g, ' ').trim();
+  /* item table header */
+  let hr = -1, C = {};
+  for (let r = 0; r < Math.min(rows.length, 60) && hr < 0; r++) {
+    const m = {}; rows[r].forEach((v, c) => { const t = low(v);
+      if (/^(part ?(number|no\.?|#)|item ?#|model( ?\/ ?part no\.?)?|part)$/.test(t)) m.model = c;
+      else if (/^descr/.test(t)) m.desc = c;
+      else if (/^(delivery|req\.?|lead ?time)$/.test(t)) m.delivery = c;
+      else if (/^(quantity|qty)$/.test(t)) m.qty = c;
+      else if (/^(unit price|net price|price)/.test(t) && m.price === undefined) { m.price = c; const cm = String(v).match(/\(([A-Z]{3})\)/); if (cm) m.cur = cm[1]; }
+      else if (/^(subtotal|amount|total)/.test(t)) m.amount = c;
+    });
+    if (m.model !== undefined && m.qty !== undefined) { hr = r; C = m; }
+  }
+  if (hr < 0 || C.price === undefined) return null;   /* a PO table has a price column (working sheets do not) */
+  const right = (r, c) => { for (let k = c + 1; k < (rows[r] || []).length; k++) if (txt(rows[r][k]) !== '') return txt(rows[r][k]); return ''; };
+  const find = re => { for (let r = 0; r < hr; r++) for (let c = 0; c < rows[r].length; c++) if (re.test(low(rows[r][c]))) return {r:r, c:c}; return null; };
+  const val = re => { const f = find(re); return f ? right(f.r, f.c) : ''; };
+  const out = {sheet:name, no:String(val(/^p\.?\s*o\.?\s*(#|no\.?)\s*:?$/) || ''), date:'', supplier:'', contact:'', address:'', customerId:String(val(/^customer id\s*:?$/) || ''),
+    preparedBy:String(val(/^prepared by\s*:?$/) || ''), stn:String(val(/^stn\s*:?$/) || ''), ntn:String(val(/^ntn\s*:?$/) || ''), mode:'', shipRemarks:'', ref:'', remarks:'', note:'', currency:C.cur || 'EUR', items:[], sheetTotal:NaN};
+  const dv = val(/^date\s*:?$/); out.date = dv instanceof Date ? toInputDate(dv) : (dv && !isNaN(new Date(dv)) ? toInputDate(new Date(dv)) : '');
+  /* supplier block: column A lines between the title and "Remarks:" */
+  const title = find(/^purchase order$/), rem = find(/^remarks\s*:?$/);
+  const lines = [];
+  for (let r = (title ? title.r + 1 : 0); r < (rem ? rem.r : hr); r++) { const v = txt(rows[r][0]); if (v && !(v instanceof Date) && !/^to\s*:?$/i.test(v)) lines.push(String(v)); }
+  if (lines.length && /\b(mr|mrs|miss|ms|sir|madam|attn)\b/i.test(lines[0])) out.contact = lines.shift();
+  out.supplier = lines.shift() || ''; out.address = lines.join('\n');
+  if (rem) { const after = txt(rows[rem.r + 1] && rows[rem.r + 1][0]); if (after && !(after instanceof Date) && !/^mode of delivery/i.test(after)) out.remarks = String(after); }
+  const md = find(/^mode of delivery$/);
+  if (md) {
+    const hdr = rows[md.r], nx = rows[md.r + 1] || [];
+    const a = txt(nx[md.c]), b = txt(nx[md.c + 1]);
+    out.mode = String(/^by$/i.test(a) ? b : a || '').toUpperCase();
+    hdr.forEach((v, c) => { const t = low(v), x = txt(nx[c]); if (!x || c === md.c) return; if (t === 'remarks' && !out.shipRemarks) out.shipRemarks = String(x); else if (t === 'ref') out.ref = String(x); });
+  }
+  /* items until TOTAL / Note */
+  for (let r = hr + 1; r < rows.length; r++) {
+    const row = rows[r], first = low(row[0]), line = row.map(low).join(' ');
+    if (/^note\b/.test(first) || /\btotal\b/.test(line)) {
+      if (/\btotal\b/.test(line)) { const nums = row.filter(v => String(v).trim() !== '' && !isNaN(oiNum(v))).map(oiNum); if (nums.length) out.sheetTotal = nums[nums.length - 1]; }
+      break;
+    }
+    const model = String(txt(row[C.model]) || '').trim(), desc = C.desc !== undefined ? String(txt(row[C.desc]) || '').trim() : '';
+    const qty = oiNum(row[C.qty]), price = C.price !== undefined ? oiNum(row[C.price]) : 0;
+    if (!model && !desc) continue;
+    if (!(qty > 0)) continue;
+    out.items.push({model:model, desc:desc, delivery:C.delivery !== undefined ? String(txt(row[C.delivery]) || '') : '', qty:qty, price:isNaN(price) ? 0 : price, received:0});
+  }
+  /* note lines under the table */
+  const ni = rows.findIndex((r, i) => i > hr && /^note\b/.test(low(r[0])));
+  if (ni > 0) { const nl = []; for (let r = ni; r < Math.min(rows.length, ni + 4); r++) { const v = rows[r].map(txt).filter(x => x && !/^note:?$/i.test(String(x))).join(' '); if (!v || /authori[sz]ed by/i.test(v)) break; nl.push(v); } out.note = nl.join('\n'); }
+  return out;
+}
+function upPreview(){
+  const U = UP.up, d = U.sheets[U.pick];
+  const brands = Array.from(new Set((S.products || []).map(p => String(p.Brand || '').trim()).filter(Boolean))).sort();
+  const guess = (brands.find(b => norm(d.supplier).includes(norm(b))) || String(d.supplier).split(/[\s\/,]+/)[0] || '').toUpperCase();
+  if (U.brand === undefined) U.brand = guess;
+  const nNew = d.items.filter(i => !findProd(i.model)).length, tot = d.items.reduce((a, i) => a + i.qty * i.price, 0);
+  const totOk = isNaN(d.sheetTotal) || Math.abs(d.sheetTotal - tot) < 0.05;
+  modal('Upload PO — ' + (d.no || U.file), '<div class="up-pv">'
+    + (U.sheets.length > 1 ? '<label class="up-sheet">This file has ' + U.sheets.length + ' purchase orders. Upload: <select onchange="upSheet(this.value)">' + U.sheets.map((s, i) => '<option value="' + i + '"' + (i === U.pick ? ' selected' : '') + '>' + esc((s.no || s.sheet) + (s.date ? ' — ' + fmtDate(s.date) : '') + ' — ' + s.items.length + ' items') + '</option>').join('') + '</select></label>' : '')
+    + '<div class="form-grid">'
+    + '<label>PO #<input id="upNo" value="' + esc(d.no) + '"></label><label>Date<input id="upDate" type="date" value="' + esc(d.date || todayStr()) + '"></label>'
+    + '<label>Supplier<input id="upSup" list="suplist" value="' + esc(d.supplier) + '"></label><label>Currency<select id="upCur">' + ['EUR', 'USD', 'GBP', 'CNY', 'AED', 'JPY', 'PKR'].map(c => '<option' + (c === d.currency ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></label>'
+    + '<label>Status<select id="upSt"><option value="Sent">Ordered (sent to the supplier)</option><option value="Confirmed">Confirmed by the supplier</option><option value="Shipped">Shipped / on the way</option></select></label>'
+    + '<label>Expected arrival (ETA) <small>optional</small><input id="upEta" type="date"></label>'
+    + (nNew ? '<label>Brand for the new items<input id="upBrand" list="upBrands" value="' + esc(U.brand) + '" oninput="UP.up.brand=this.value"><datalist id="upBrands">' + brands.map(b => '<option value="' + esc(b) + '">').join('') + '</datalist></label>' : '')
+    + '</div>'
+    + '<div class="up-pv-meta muted small">' + [d.contact && 'Attn: ' + esc(d.contact), d.mode && 'By ' + esc(d.mode), d.ref && 'Ref ' + esc(d.ref), d.preparedBy && 'Prepared by ' + esc(d.preparedBy)].filter(Boolean).join(' · ') + '</div>'
+    + '<div class="table-wrap no-xl" style="max-height:46vh;overflow:auto"><table class="pt-t"><thead><tr><th>#</th><th>Part No.</th><th>Description</th><th>Delivery</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th><th>In products?</th></tr></thead><tbody>'
+    + d.items.map((i, k) => { const p = findProd(i.model); return '<tr><td>' + (k + 1) + '</td><td><b>' + esc(i.model) + '</b></td><td>' + esc(i.desc) + '</td><td class="nw">' + esc(i.delivery) + '</td><td class="r">' + i.qty + '</td><td class="r">' + poMoney(i.price) + '</td><td class="r">' + poMoney(i.qty * i.price) + '</td>'
+      + '<td>' + (p ? '<span class="up-ok">✓ stock ' + esc(p.currentStock) + '</span>' : '<span class="up-new">NEW — will be added</span>') + '</td></tr>'; }).join('')
+    + '</tbody><tfoot><tr><td colspan="4"><b>' + d.items.length + ' items · ' + d.items.reduce((a, i) => a + i.qty, 0) + ' pcs</b></td><td></td><td class="r"><b>Total</b></td><td class="r"><b>' + poMoney(tot) + '</b></td><td>' + (totOk ? '<span class="up-ok">✓ matches the sheet</span>' : '<span class="up-new">sheet says ' + poMoney(d.sheetTotal) + '</span>') + '</td></tr></tfoot></table></div>'
+    + '<p class="muted small" style="margin:8px 0 0">' + (nNew ? '<b>' + nNew + ' new part number(s)</b> will be added to Products with stock 0 (category “Others” — change it later). ' : '') + 'All ' + d.items.length + ' items will show as <b>upcoming</b> until the goods arrive.</p>'
+    + '<div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="upGo" onclick="upSave()">Save PO → Upcoming</button></div></div>');
+}
+function upSheet(i){ UP.up.pick = Number(i) || 0; upPreview(); }
+async function upSave(replace){
+  const U = UP.up, d = U.sheets[U.pick]; if (!d) return;
+  const no = $('upNo').value.trim(), sup = $('upSup').value.trim();
+  if (!no) return toast('PO # is missing.', true);
+  if (!sup) return toast('Supplier is missing.', true);
+  const brand = $('upBrand') ? $('upBrand').value.trim() : '';
+  const newProducts = d.items.filter(i => i.model && !findProd(i.model)).map(i => ({model:i.model, desc:i.desc, brand:brand, category:'Others'}));
+  const b = $('upGo'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  const r = await api('poUpload', {no:no, date:$('upDate').value || todayStr(), supplier:sup, contact:d.contact, address:d.address, customerId:d.customerId, currency:$('upCur').value,
+    preparedBy:d.preparedBy, authorisedBy:d.preparedBy, remarks:d.remarks, mode:d.mode, shipRemarks:d.shipRemarks, ref:d.ref, note:d.note, stn:d.stn, ntn:d.ntn, heading:'Purchase Order',
+    items:d.items, status:$('upSt').value, eta:$('upEta').value || '', brand:brand, newProducts:newProducts, replace:!!replace});
+  if (b) { b.disabled = false; b.textContent = 'Save PO → Upcoming'; }
+  if (r && r.exists && !replace) {
+    if (confirm('PO ' + no + ' is already in the system (' + (UP_ST_LABEL[r.status] || r.status) + ').\n\nReplace it with this file? Quantities already received are kept.')) return upSave(true);
+    return;
+  }
+  if (!r || !r.ok) return toast(((r && r.error) || 'Could not save.') + (r && /unknown action/i.test(r.error || '') ? ' — paste the new Code.gs in Apps Script and deploy a New version.' : ''), true);
+  closeModal();
+  toast('PO ' + r.id + (r.replaced ? ' replaced' : ' saved') + ' — ' + d.items.length + ' items upcoming' + ((r.newProducts || []).length ? ', ' + r.newProducts.length + ' new product(s) added' : '') + '.');
+  UP.up = null; UP.tab = 'up'; UP.open[r.id] = true;
+  await refresh();   /* products (with the new ones and the upcoming badge) */
+  if ($('upPage')) renderUpcoming(); else db2Go('upcoming');
+}
+
+/* ---------- goods arrived → New Import costing filled from the PO ---------- */
+function upToCosting(idEnc){
+  const o = UP.list.find(x => x.no === decodeURIComponent(idEnc)); if (!o) return;
+  if (!hasMod('imports')) return toast('Import costing needs the Imports permission.', true);
+  if (impHasWork() && !confirm('New Import already has items in progress. Replace them with the items of ' + o.no + '?')) return;
+  const items = o.items.filter(i => upPend(i) > 0);
+  if (!items.length) return toast('Everything on ' + o.no + ' was already received.', true);
+  IMP.rows = items.map(i => { const p = findProd(i.model) || {}; return {model:i.model, desc:p.Description || i.desc, cat:p.Category || 'Others', brand:p.Brand || '', unit:p.Unit || 'Pcs', qty:upPend(i), price:poNum(i.price), sale:''}; });
+  const cur = IMP_CURRENCIES.indexOf(o.currency) !== -1 ? o.currency : 'EUR';
+  IMP.h = Object.assign({date:todayStr(), alloc:'value', mode:'avg', payable:true, rate:''}, IMP.h || {}, {supplier:o.supplier, ref:o.no, cur:cur, po:o.no});
+  if (!IMP.charges || !IMP.charges.length) IMP.charges = impDefaultCharges();
+  IMP.draftId = null; IMP.draftName = null; IMP.editId = null; IMP.editUndone = false;
+  try { localStorage.setItem('sfsImpTab', 'zCost'); } catch (e) {}
+  db2Go('imports', () => { impTab('zCost'); toast(items.length + ' item(s) of ' + o.no + ' are in New Import. Enter the exchange rate, freight and duty, then save — ' + o.no + ' will be marked arrived.'); });
+}
+function upImpBar(){
+  const h = IMP.h || {}, host = $('impPoBar'); if (!host) return;
+  host.innerHTML = h.po ? '<div class="up-impbar">📦 Costing for <b>' + esc(h.po) + '</b> — when this import is saved, its goods are marked <b>arrived</b> and stop showing as upcoming. <a onclick="IMP.h.po=\'\';upImpBar()">Not for this PO</a></div>' : '';
+}
+Object.assign(window, {renderUpcoming, upDraw, upToggle, upXl, upPick, upSheet, upSave, upToCosting, upImpBar, UP});
 
 
 /* ============================================================
