@@ -473,7 +473,7 @@ const pages = {
   dc:()=>`<div class="wrap"><div class="panel"><h3 id="dcTitle">Delivery Challan</h3><div id="dcEditBanner"></div><div class="form-grid"><label>Challan #<input id="dcno" placeholder="Auto"></label><label>Date<input id="dcdate" type="date"></label><label>Customer<input id="dccust" list="clist" onchange="pickCustomer('dc')"></label><label>Customer ID<input id="dcid"></label><label>PO #<input id="dcpo"></label><label>PO Date<input id="dcpodate" type="date"></label><label>STN<input id="dcstn"></label><label>NTN<input id="dcntn"></label><label class="wide">Address<textarea id="dcaddr"></textarea></label><label class="wide">Note on the challan <small class="muted">(optional — printed in a box under “To:”, e.g. Partial Delivery)</small><input id="dcnote" list="dcNotes" placeholder="Leave empty for no box"><datalist id="dcNotes"><option value="Partial Delivery"><option value="Balance to follow"><option value="Complete Delivery"><option value="Replacement"><option value="Sample — not for sale"><option value="Returnable"></datalist></label></div><div class="panel"><button class="btn small" onclick="addDc()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dclines"></tbody></table></div></div><div class="actions"><button class="btn primary" onclick="saveDC(false)">Save DC</button><button class="btn ghost" onclick="saveDC(true)">Save &amp; Print</button></div></div></div>`,
   dchistory:()=>`<div class="wrap"><div class="toolbar"><input id="dchSearch" placeholder="Search Challan #, Customer, PO #, Model..." oninput="filterDCHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadDCHistory()">↻ Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('dchPer','filterDCHistory()')}<select id="dchCust" onchange="filterDCHistory()"><option value="">All Customers</option></select><select id="dchInv" onchange="filterDCHistory()"><option value="">All challans</option><option value="no">Not invoiced yet</option><option value="yes">Invoiced</option></select><button class="btn ghost small" onclick="clearFilters(['dchSearch','dchPer','dchCust','dchInv'],filterDCHistory)">Clear</button><span id="dchInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Challan #</th><th>Date</th><th>Customer</th><th>PO #</th><th>Items</th><th>Total Qty</th><th>Actions</th></tr></thead><tbody id="dchRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
   invoices:()=>`<div class="wrap"><div class="panel"><h3>Invoice</h3><div class="form-grid"><label>Invoice #<input id="ivno" placeholder="Auto"></label><label>Date<input id="ivdate" type="date"></label><label>Customer<input id="ivcust" list="clist" onchange="pickCustomer('iv')"></label><label>Customer ID<input id="ivcid"></label><label>PO #<input id="ivpo"></label><label>PO Date<input id="ivpodate" type="date"></label><label>Delivery Challan #<span style="display:flex;gap:6px"><input id="ivdc" style="flex:1" placeholder="DC-000001, DC-000002"><button type="button" class="btn small" onclick="loadDcIntoInvoice()">Load DC(s)</button></span></label><label>DC Date<input id="ivdcdate" type="date"></label><label>STN<input id="ivstn"></label><label>NTN<input id="ivntn"></label><label>GST %<input id="ivgst" type="number" min="0" max="100" step="0.01" value="18" oninput="updateIvTotals()"></label></div><div class="panel"><button class="btn small" onclick="addInv()">+ Add Item</button><div class="table-wrap"><table><thead><tr><th>Model</th><th>Description</th><th>Make</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="ivlines"></tbody></table></div><h3 class="right">Subtotal: <span id="ivtotal">0.00</span></h3><h3 class="right">GST: <span id="ivgstamt">0.00</span> &nbsp; Total: <span id="ivgrand">0.00</span></h3></div><div class="actions"><button class="btn primary" onclick="saveInvoice(false)">Save Invoice</button><button class="btn ghost" onclick="saveInvoice(true)">Save &amp; Print</button></div></div></div>`,
-  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button>${hasMod('invoice')?'<button class="btn" title="Upload many old Excel invoices at once" onclick="obPick()">⬆ Upload old invoices</button>':''}</div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>`,
+  ivhistory:()=>`<div class="wrap"><div class="toolbar"><input id="ivhSearch" placeholder="Search Invoice #, Customer, DC #, PO #, Model..." oninput="filterIVHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadIVHistory()">↻ Refresh</button>${hasMod('invoice')?'<button class="btn" title="Upload many old Excel invoices at once" onclick="obPick()">⬆ Upload old invoices</button>':''}</div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('ivhPer','filterIVHistory()')}<select id="ivhCust" onchange="filterIVHistory()"><option value="">All Customers</option></select><button class="btn ghost small" onclick="clearFilters(['ivhSearch','ivhPer','ivhCust'],filterIVHistory)">Clear</button><span id="ivhInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC #</th><th>PO #</th><th class="right">Without GST</th><th class="right">GST</th><th class="right">Total</th><th>Actions</th></tr></thead><tbody id="ivhRows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div></div>`,
 
   quotations:()=>`<div class="wrap"><div class="panel"><h3>Quotation</h3><div id="qtEnqRef"></div><datalist id="qtdl"><option value="Ready Stock"><option value="In Stock"><option value="On Order"><option value="Partial"><option value="1-2 Weeks"><option value="2-3 Weeks"><option value="4-6 Weeks"><option value="6-8 Weeks"><option value="8-10 Weeks"><option value="Pending"></datalist><div class="form-grid"><label>Quotation #<input id="qtno" placeholder="Auto"></label><label>Date<input id="qtdate" type="date"></label><label>Customer<input id="qtcustomer" list="clist" autocomplete="off" onchange="pickQuotationCustomer()" onblur="quotationCustomerBlur()"></label><label>Customer ID<input id="qtcustomerId" readonly></label><label class="wide">Address<input id="qtaddress"></label><label>Enquiry #<input id="qtenquiry" readonly></label><label>Enquiry Date<input id="qtenquiryDate" type="date"></label><label>Contact<input id="qtcontact"></label><label>Ref #<input id="qtref"></label><label>Ref Date<input id="qtrefDate" type="date"></label><label>Validity<input id="qtvalidity" value="7 Days"></label><label>Payment Terms<input id="qtpaymentTerms" value="20 Days"></label><label>STN<input id="qtstn"></label><label>NTN<input id="qtnTN"></label><label>GST %<input id="qtgst" type="number" min="0" max="100" step="0.01" value="18"></label><label>Discount %<input id="qtdiscount" type="number" min="0" max="100" step="0.01" placeholder="0" oninput="updateQuotationTotal()"></label></div><div class="table-wrap"><table><thead><tr><th>Model / Part No.</th><th>Description / Item Remarks</th><th>Make</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th><th>Delivery / Remarks</th><th></th></tr></thead><tbody id="qtlines"></tbody></table></div><div style="margin-top:12px"><button class="btn" onclick="addQuotationLine()">+ Add Item</button></div><div id="qttotal" style="text-align:right;font-weight:bold;margin-top:12px">TOTAL: 0.00</div><div style="margin-top:14px"><button id="qtsavebtn" class="btn primary" onclick="saveQuotation()">Save Quotation</button><button class="btn" onclick="printQuotationFromForm()">Print</button></div></div></div>`,
   qthistory:()=>`<div class="wrap"><div class="toolbar"><input id="qts" placeholder="Search Quotation #, Customer, Ref #, Model, Description..." oninput="filterQTHistory()" style="flex:1;min-width:280px"><button class="btn" onclick="loadQTHistory()">Refresh</button></div><div class="toolbar" style="flex-wrap:wrap">${periodSelectHtml('qtPer','filterQTHistory()')}<select id="qtCust" onchange="filterQTHistory()"><option value="">All Customers</option></select><select id="qtSt" onchange="filterQTHistory()"><option value="">All statuses</option><option value="Pending">Open — sent / waiting</option><option value="Won">Won — PO received</option><option value="Lost">Lost</option></select><button class="btn ghost small" onclick="clearFilters(['qts','qtPer','qtCust','qtSt'],filterQTHistory)">Clear</button><span id="qtInfo" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Quotation #</th><th>Date</th><th>Customer</th><th>Ref #</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="qtrows"><tr><td colspan="7">Loading...</td></tr></tbody></table></div></div>`,  inbox:()=>`<div class="wrap ibx-page"><div class="toolbar no-dirty-track"><div id="ibxTabs" class="enq-tabs"></div><input id="ibxSearch" placeholder="Search sender, subject, attachment, enquiry #…" oninput="ibxRenderList()" style="flex:1;min-width:220px"></div><div class="ibx" id="ibx"><div class="ibx-list" id="ibxList"><div class="muted" style="padding:16px">Loading…</div></div><div class="ibx-read" id="ibxRead"><div class="ibx-empty">✉<div>Select a mail to read it</div></div></div></div></div>`,
@@ -1554,10 +1554,10 @@ function cancelEditInvoice(){EDIT_INVOICE=null;showPage('invoices',document.quer
 async function loadIVHistory(){
   const tbody = $('ivhRows');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="empty">Loading…</td></tr>';
   const r = await api('getReports', {mode:'docs', type:'INVOICE'});
   if (!r.ok) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">${esc(r.error||'Could not load history')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">${esc(r.error||'Could not load history')}</td></tr>`;
     return;
   }
   IVH_CACHE = (r.documents||[]).map(d => {
@@ -1579,9 +1579,10 @@ function filterIVHistory(){
   fillSelect('ivhCust', IVH_CACHE.map(d => d.customer), 'All Customers');
   const rng = periodRange('ivhPer'), cust = ($('ivhCust') || {}).value || '';
   const rows = IVH_CACHE.filter(d => (!q || d.searchText.includes(q)) && inPeriod(d.date, rng) && (!cust || d.customer === cust));
-  const iInfo = $('ivhInfo'); if (iInfo) iInfo.textContent = 'Showing ' + rows.length + ' of ' + IVH_CACHE.length + ' invoice(s) • Total (incl. GST) ' + money(rows.reduce((a, d) => a + (+d.grandTotal || 0), 0));
+  const ivSub = d => Number(d.subtotal) || 0, ivGst = d => Math.max(0, (Number(d.grandTotal) || 0) - ivSub(d));
+  const iInfo = $('ivhInfo'); if (iInfo) iInfo.textContent = 'Showing ' + rows.length + ' of ' + IVH_CACHE.length + ' invoice(s) • Without GST ' + money(rows.reduce((a, d) => a + ivSub(d), 0)) + ' • GST ' + money(rows.reduce((a, d) => a + ivGst(d), 0)) + ' • Total ' + money(rows.reduce((a, d) => a + (+d.grandTotal || 0), 0));
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">No Invoices found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">No Invoices found.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(d => `
@@ -1591,7 +1592,9 @@ function filterIVHistory(){
       <td>${esc(d.customer)}${d.summary && oiIsOld(d) ? `<div class="muted small" title="Items (from the sales register)">${esc(String(d.summary).slice(0, 90))}</div>` : ''}</td>
       <td>${esc(d.dc||'—')}</td>
       <td>${esc(d.po||'—')}</td>
-      <td class="right">${money(d.grandTotal)}</td>
+      <td class="right">${money(ivSub(d))}</td>
+      <td class="right">${money(ivGst(d))}</td>
+      <td class="right"><b>${money(d.grandTotal)}</b></td>
       <td>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}')">View</button>
         <button class="btn small" onclick="viewInvoice('${encA(d.no)}',true)">Print</button>
@@ -4712,11 +4715,19 @@ function renderDashboard(){
     + (qa.length ? '<div class="db2-qa">' + qa.map((x, i) => '<button type="button" onclick="DB2_QA[' + i + '].go()" title="Shortcut: ' + x.k + '"><i style="background:' + x.color + '">' + x.icon + '</i><span>' + esc(x.label) + '<small>' + x.k + '</small></span></button>').join('') + '</div>' : '')
     + '<div class="db2-kpis" id="db2Kpis"></div>'
     + db2TabsHtml()
-    + '<div class="db2-pane" data-pane="overview"><div class="db2-grid"><div class="db2-col">'
-    + (db2Can('reports') ? '<div class="db2-card" id="db2Chart"><div class="muted">Loading sales…</div></div>' : '')
-    + '</div><div class="db2-col">'
-    + '<div class="db2-card" id="db2Todo"><div class="muted">Checking what needs attention…</div></div>'
-    + (db2Can('accounts') ? '<div class="db2-card" id="db2Over"><div class="muted">Loading…</div></div>' : '')
+    + '<div class="db2-pane" data-pane="overview"><div class="pt-grid no-xl" id="ptGrid"><div class="pt-l">'
+    + '<div class="pt" id="ptRem"></div>'
+    + (db2Can('accounts') ? '<div class="pt" id="ptOver"></div>' : '')
+    + (db2Can('reports') ? '<div class="pt" id="ptChart"></div>' : '')
+    + '<div class="pt" id="ptShort"></div>'
+    + '</div><div class="pt-r">'
+    + '<div class="pt" id="ptGlance"></div>'
+    + '<div class="pt" id="ptKpi"></div>'
+    + '<div class="pt-two">'
+    + ((db2Can('invoice') || db2Can('reports') || db2Can('dc')) ? '<div class="pt" id="ptInv"></div>' : '')
+    + (db2Can('reports') ? '<div class="pt" id="ptCust"></div>' : '')
+    + '</div>'
+    + (db2SeeItems() ? '<div class="pt" id="ptItems"></div>' : '')
     + '</div></div></div>'
     + '<div class="db2-pane" data-pane="sales"><div class="db2-grid db2-even"><div class="db2-col">'
     + ((db2Can('reports') || db2Can('invoice')) ? '<div class="db2-card" id="db2YSales"><div class="muted">Loading sales by year…</div></div>' : '')
@@ -4735,6 +4746,7 @@ function renderDashboard(){
 
   db2ShowTab();
   db2Kpis();   /* stock card can show at once */
+  try { ptPaint(); } catch (e) { console.error(e); }
   const yr = db2Y();
   DB2.topYear = yr;
   const jobs = [];
@@ -4749,6 +4761,7 @@ function renderDashboard(){
   if (db2Can('enquiries') || db2Can('sales')) take('enq', api('getEnquiries'));
   if (db2Can('enquiries')) take('ibx', api('getInbox', {countOnly:true}));
   if (isAdmin()) take('act', api('getUserActivity', {year:yr}));
+  if (db2Can('accounts')) take('pay', api('getPaymentHistory', {}));   /* payments received (KPI) */
   Promise.all(jobs).then(() => { if (seq === DB2.seq) { DB2.done = true; db2Paint(); } });
 }
 
@@ -4770,7 +4783,7 @@ function db2SetTab(t){ DB2.tab = t; try { localStorage.setItem('sfsDashTab', t);
 window.db2SetTab = db2SetTab;
 function db2MoreToggle(el){ if (el.open && !el.dataset.loaded) { el.dataset.loaded = '1'; renderDashboardClassic(); } }
 
-function db2Paint(){ db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Items(); db2Act(); db2YSales(); db2YOut(); }
+function db2Paint(){ try { ptPaint(); } catch (e) { console.error(e); } db2Kpis(); db2Chart(); db2Todo(); db2Over(); db2Pipe(); db2Top(); db2Items(); db2Act(); db2YSales(); db2YOut(); }
 
 /* ---------- year-wise charts (sales, outstanding) ---------- */
 function db2Tip(e, html){
@@ -4850,7 +4863,7 @@ function db2Overdue(){
   const canon = pdCanonName();
   return (r.rows || []).filter(x => Number(x.outstanding) > 0.5).map(x => {
     const cust = canon(x.customer), t = paymentTermsOf(cust), di = dueInfo(x.date, t.days);
-    return {no:x.no, customer:cust, terms:t.days, out:Number(x.outstanding) || 0, daysOver:di ? di.daysOver : null};
+    return {no:x.no, date:x.date, customer:cust, terms:t.days, out:Number(x.outstanding) || 0, paid:Number(x.paid) || 0, total:Number(x.total) || 0, daysOver:di ? di.daysOver : null};
   });
 }
 function db2Invoiced(){
@@ -4916,30 +4929,41 @@ function db2Chart(){
     + (mt > 0 ? '' : '<div class="muted small" style="margin-top:6px">No annual target set — open “Detailed views” below → Sales Target → Edit Target.</div>');
 }
 
-/* ---------- Today's to-do ---------- */
-function db2Todo(){
-  const host = $('db2Todo'); if (!host) return;
+/* ---------- Today's to-do (the list is shared with the portal "Reminders") ---------- */
+function db2TodoList(){
   const rows = [], pend = [];
-  const add = (cls, icon, text, badge, onclick) => rows.push('<button type="button" class="db2-todo-row" onclick="' + onclick + '"><i class="' + cls + '">' + icon + '</i><span>' + text + '</span><b class="' + cls + '">' + badge + '</b></button>');
+  const add = (cls, icon, text, badge, onclick, det) => rows.push({cls:cls, icon:icon, text:text, badge:badge, onclick:onclick, det:det || []});
+  const today = db2Day(new Date()), ago = v => { const d = db2Day(v); return d ? Math.round((today - d) / 864e5) : null; };
   if (db2Can('accounts')) {
     const od = db2Overdue();
-    if (od) { const ov = od.filter(x => x.daysOver > 0); if (ov.length) add('t-red', 'Rs', 'Overdue payments to follow up', ov.length + ' · ' + db2Short(ov.reduce((a, x) => a + x.out, 0)), "db2Go('accounts')"); } else pend.push(1);
+    if (od) { const ov = od.filter(x => x.daysOver > 0).sort((a, b) => b.daysOver - a.daysOver || b.out - a.out); if (ov.length) add('t-red', 'Rs', 'Overdue payments to follow up', ov.length + ' · ' + db2Short(ov.reduce((a, x) => a + x.out, 0)), "db2Go('accounts')",
+      ov.map(x => ({ref:['Invoice', x.no], party:x.customer, info:x.daysOver + ' day' + (x.daysOver === 1 ? '' : 's') + ' late', amt:x.out}))); } else pend.push(1);
   }
   if (db2Can('enquiries') || db2Can('sales')) {
     const e = DB2.data.enq;
-    if (e) { const n = (e.documents || []).filter(d => (d.status || 'New') === 'New').length; if (n) add('t-violet', '✉', 'Enquiries waiting for quotation', n, "db2Go('enquiries',()=>db2SetFilter('enqStatus','New',window.filterEnquiries))"); } else if (!DB2.done) pend.push(1);
+    if (e) { const L = (e.documents || []).filter(d => (d.status || 'New') === 'New').sort((a, b) => new Date(b.date) - new Date(a.date)); if (L.length) add('t-violet', '✉', 'Enquiries waiting for quotation', L.length, "db2Go('enquiries',()=>db2SetFilter('enqStatus','New',window.filterEnquiries))",
+      L.map(d => ({ref:['Enquiry', d.id], party:d.customerName || '', info:d.date ? fmtDate(d.date) : '', amt:''}))); } else if (!DB2.done) pend.push(1);
   }
   if (db2Can('enquiries') && DB2.data.ibx && DB2.data.ibx.unread) add('t-violet', '📥', 'Unread e-mails in the Inbox', DB2.data.ibx.unread, "db2Go('inbox')");
   if (db2Can('sales')) {
-    const q = DB2.data.qt, today = db2Day(new Date());
-    if (q) { const n = (q.documents || []).filter(d => (d.status || 'Pending') === 'Pending' && db2Day(d.date) && (today - db2Day(d.date)) / 864e5 > 7).length; if (n) add('t-amber', '⏳', 'Quotations sent 7+ days ago, no reply (follow up)', n, "db2Go('qthistory',()=>db2SetFilter('qtSt','Pending',window.filterQTHistory))"); } else pend.push(1);
+    const q = DB2.data.qt;
+    if (q) { const L = (q.documents || []).filter(d => (d.status || 'Pending') === 'Pending' && db2Day(d.date) && (today - db2Day(d.date)) / 864e5 > 7).sort((a, b) => new Date(a.date) - new Date(b.date)); if (L.length) add('t-amber', '⏳', 'Quotations sent 7+ days ago, no reply (follow up)', L.length, "db2Go('qthistory',()=>db2SetFilter('qtSt','Pending',window.filterQTHistory))",
+      L.map(d => ({ref:['Quotation', d.no], party:d.customer || '', info:'sent ' + ago(d.date) + ' days ago', amt:+d.subtotal || 0}))); } else pend.push(1);
     const dcs = DB2.data.dcs;
-    if (dcs && DB2.data.invs) { const inv = db2Invoiced(); const n = (dcs.documents || []).filter(d => !inv.has(String(d.no).trim())).length; if (n) add('t-blue', '⛟', 'Delivery challans not invoiced yet', n, "db2Go('dchistory',()=>db2SetFilter('dchInv','no',window.filterDCHistory))"); } else if (!DB2.done) pend.push(1);
+    if (dcs && DB2.data.invs) { const inv = db2Invoiced(); const L = (dcs.documents || []).filter(d => !inv.has(String(d.no).trim())).sort((a, b) => new Date(a.date) - new Date(b.date)); if (L.length) add('t-blue', '⛟', 'Delivery challans not invoiced yet', L.length, "db2Go('dchistory',()=>db2SetFilter('dchInv','no',window.filterDCHistory))",
+      L.map(d => ({ref:['DC', d.no], party:d.customer || '', info:d.date ? fmtDate(d.date) + ' · ' + ago(d.date) + ' days ago' : '', amt:''}))); } else if (!DB2.done) pend.push(1);
   }
   const P = (S.products || []).filter(p => (p.Status || 'Active') === 'Active');
-  const outN = P.filter(p => Number(p.currentStock) <= 0).length, lowN = P.filter(p => Number(p.currentStock) > 0 && Number(p.currentStock) <= reorderOf(p)).length;
-  if (outN) add('t-red', '!', 'Out of stock items', outN, 'openLowStock()');
-  if (lowN) add('t-amber', '↓', 'Low stock items (reorder)', lowN, 'openLowStock()');
+  const pm = p => p['Model / Part No.'] || p.Model || '';
+  const outL = P.filter(p => Number(p.currentStock) <= 0), lowL = P.filter(p => Number(p.currentStock) > 0 && Number(p.currentStock) <= reorderOf(p));
+  if (outL.length) add('t-red', '!', 'Out of stock items', outL.length, 'openLowStock()', outL.map(p => ({ref:['Model', pm(p)], party:'', info:String(p.Description || '').slice(0, 60), amt:'Stock ' + (Number(p.currentStock) || 0)})));
+  if (lowL.length) add('t-amber', '↓', 'Low stock items (reorder)', lowL.length, 'openLowStock()', lowL.sort((a, b) => Number(a.currentStock) - Number(b.currentStock)).map(p => ({ref:['Model', pm(p)], party:'', info:String(p.Description || '').slice(0, 60), amt:'Stock ' + (Number(p.currentStock) || 0) + ' / reorder ' + reorderOf(p)})));
+  return {rows:rows, pend:pend};
+}
+function db2Todo(){
+  const host = $('db2Todo'); if (!host) return;
+  const t = db2TodoList(), pend = t.pend;
+  const rows = t.rows.map(r => '<button type="button" class="db2-todo-row" onclick="' + r.onclick + '"><i class="' + r.cls + '">' + r.icon + '</i><span>' + r.text + '</span><b class="' + r.cls + '">' + r.badge + '</b></button>');
   host.innerHTML = '<h3>Today\'s to-do <span class="muted small">' + (rows.length ? rows.length + ' item' + (rows.length === 1 ? '' : 's') : '') + '</span></h3>'
     + (rows.length ? '<div class="db2-todo">' + rows.join('') + '</div>' : (pend.length && !DB2.done ? '<div class="muted">Checking…</div>' : '<div class="db2-ok">✓ All clear — nothing needs attention right now.</div>'));
 }
@@ -4956,6 +4980,285 @@ function db2Over(){
     + (list.length ? '<table class="db2-tbl">' + list.map(g => '<tr><td><b>' + esc(g.c) + '</b><div class="muted small">' + esc(g.inv.slice(0, 3).join(', ')) + (g.inv.length > 3 ? ' +' + (g.inv.length - 3) : '') + ' · ' + g.terms + ' days terms</div></td><td class="r"><b class="' + (g.max > 0 ? 'dn' : '') + '">' + money(g.max > 0 ? g.over : g.out) + '</b><div>' + badge(g.max) + '</div></td></tr>').join('') + '</table>'
       : '<div class="db2-ok">✓ No client is overdue or due this week.</div>');
 }
+
+/* ============================================================
+   PORTAL OVERVIEW (Nov 2026)
+   The Overview tab as portlets — left: Reminders, Overdue & due this week,
+   Sales by month, Shortcuts; right: Business at a glance, Key performance
+   indicators, Recent invoices, Top customers, Top selling items.
+   Every number links to its document / customer / item (quick-view panel),
+   every portlet has "Show more" for the details and "Excel" to download.
+   Read-only: it uses the data the dashboard already loads.
+   ============================================================ */
+function ptOn(k){ return !!(DB2.more || {})[k]; }
+function ptMore(k){ DB2.more = DB2.more || {}; DB2.more[k] = !DB2.more[k]; ptPaint(); }
+function ptX(t, id, label){ id = String(id == null ? '' : id).trim(); return id ? '<span class="xref" data-t="' + t + '" data-id="' + esc(id) + '">' + esc(label == null ? id : label) + '</span>' : '<span class="muted">—</span>'; }
+function ptHead(title, sub, xl, link){
+  return '<div class="ph"><b>' + title + '</b><span class="ph-r">' + (sub ? '<span class="ph-sub">' + sub + '</span>' : '') + (link || '')
+    + (xl ? '<button type="button" class="ph-xl" title="Download as Excel" onclick="ptXl(\'' + xl + '\')">⬇ Excel</button>' : '') + '</span></div>';
+}
+function ptLink(label, js){ return '<a class="ph-a" onclick="' + js + '">' + label + '</a>'; }
+function ptMoreBtn(k, hidden, lessOnly){
+  if (!hidden && !ptOn(k)) return '';
+  return '<button type="button" class="pt-more" aria-expanded="' + ptOn(k) + '" onclick="ptMore(\'' + k + '\')">' + (ptOn(k) ? 'Show less ▴' : 'Show more' + (typeof hidden === 'number' && hidden > 0 ? ' (' + hidden + ')' : '') + ' ▾') + '</button>';
+}
+function ptSetXl(k, name, rows){ (DB2.xl = DB2.xl || {})[k] = {name:name, rows:rows}; }
+function ptXl(k){
+  const x = (DB2.xl || {})[k];
+  if (!x || !x.rows || x.rows.length < 2) return toast('Nothing to download yet.', true);
+  sfsXlDownload('Dashboard - ' + x.name + ' ' + todayStr(), [{name:x.name.slice(0, 31), title:'Dashboard — ' + x.name + ' — ' + fmtDate(new Date()), rows:x.rows}]);
+  toast('Downloaded ' + (x.rows.length - 1) + ' row' + (x.rows.length === 2 ? '' : 's') + ' to Excel.');
+}
+function ptWait(host, head){ host.innerHTML = head + '<div class="pt-b muted">' + (DB2.done ? 'Could not load.' : 'Loading…') + '</div>'; }
+function ptMi(v){ const d = db2Day(v); return d ? d.getFullYear() * 12 + d.getMonth() : null; }
+function ptCurMi(){ const n = new Date(); return db2Past() ? db2Y() * 12 + 11 : n.getFullYear() * 12 + n.getMonth(); }
+function ptMName(mi){ return PS_MONTHS[((mi % 12) + 12) % 12]; }
+function ptInvDocs(){ const r = DB2.data.invs; return r ? (r.documents || []) : null; }
+function ptSub(d){ return Number(d.subtotal) || 0; }
+function ptGst(d){ return Math.max(0, (Number(d.grandTotal) || 0) - ptSub(d)); }
+function ptTot(d){ return Number(d.grandTotal) || ptSub(d); }
+
+function ptPaint(){ if (!$('ptGrid')) return; const two = document.querySelector('#ptGrid .pt-two'); if (two) two.classList.toggle('wide', ptOn('inv') || ptOn('cust')); ptRem(); ptOver(); ptChart(); ptShort(); ptGlance(); ptKpi(); ptInv(); ptCust(); ptItems(); }
+
+/* ---------- Reminders ---------- */
+function ptRem(){
+  const host = $('ptRem'); if (!host) return;
+  const t = db2TodoList(), on = ptOn('rem'), nDet = t.rows.reduce((a, r) => a + r.det.length, 0);
+  const head = ptHead('Reminders', 'today', nDet ? 'rem' : '');
+  ptSetXl('rem', 'Reminders', [['Reminder', 'Reference', 'Customer', 'Detail', 'Amount / Stock']].concat([].concat(...t.rows.map(r => r.det.length ? r.det.map(d => [r.text, String(d.ref[1] || ''), d.party || '', d.info || '', d.amt === '' ? '' : d.amt]) : [[r.text, '', '', String(r.badge), '']]))));
+  if (!t.rows.length) { host.innerHTML = head + '<div class="pt-b">' + (t.pend.length && !DB2.done ? '<span class="muted">Checking…</span>' : '<div class="db2-ok">✓ All clear — nothing needs attention right now.</div>') + '</div>'; return; }
+  const cnt = r => String(r.badge).split(' · ')[0];
+  host.innerHTML = head + '<div class="pt-rem">' + t.rows.map(r => {
+    let h = '<div class="pt-rr"><a class="pt-rl" onclick="' + r.onclick + '" title="Open">' + '<span>' + r.text + '</span><b class="' + r.cls + '">' + esc(cnt(r)) + '</b></a>';
+    if (on && r.det.length) {
+      const L = r.det.slice(0, 6);
+      h += '<div class="pt-rd">' + L.map(d => '<div class="pt-rdi"><span class="pt-rdr">' + ptX(d.ref[0], d.ref[1]) + (d.party ? ' · ' + ptX('Customer', d.party) : '') + (d.info ? '<small>' + esc(d.info) + '</small>' : '') + '</span>'
+        + (d.amt !== '' ? '<b>' + (typeof d.amt === 'number' ? money(d.amt) : esc(d.amt)) + '</b>' : '') + '</div>').join('')
+        + (r.det.length > L.length ? '<a class="pt-rall" onclick="' + r.onclick + '">All ' + r.det.length + ' →</a>' : '') + '</div>';
+    }
+    return h + '</div>';
+  }).join('') + '</div>' + ptMoreBtn('rem', nDet ? true : 0);
+}
+
+/* ---------- Overdue & due this week ---------- */
+function ptOver(){
+  const host = $('ptOver'); if (!host) return;
+  const head = ptHead('Overdue &amp; due this week', '', 'over', ptLink('Accounts', "db2Go('accounts')"));
+  const od = db2Overdue(); if (!od) return ptWait(host, head);
+  ptSetXl('over', 'Outstanding invoices', [['Invoice #', 'Date', 'Customer', 'Terms (days)', 'Days late', 'Invoice total', 'Received', 'Outstanding']].concat(
+    od.slice().sort((a, b) => (b.daysOver || -1e9) - (a.daysOver || -1e9)).map(x => [String(x.no), x.date ? fmtDate(x.date) : '', x.customer, x.terms, x.daysOver === null ? '' : x.daysOver, x.total || '', x.paid || 0, x.out])));
+  const by = {};
+  od.forEach(x => { const g = by[x.customer] || (by[x.customer] = {c:x.customer, over:0, out:0, max:-1e9, inv:[], terms:x.terms}); g.out += x.out; if (x.daysOver > 0) g.over += x.out; g.max = Math.max(g.max, x.daysOver === null ? -1e9 : x.daysOver); g.inv.push(x); });
+  const all = Object.values(by).filter(g => g.max >= -7).sort((a, b) => b.max - a.max || b.out - a.out), on = ptOn('over'), list = on ? all : all.slice(0, 5);
+  const badge = d => d > 0 ? '<span class="db2-pill t-red">' + d + ' day' + (d === 1 ? '' : 's') + ' late</span>' : d === 0 ? '<span class="db2-pill t-amber">due today</span>' : '<span class="db2-pill t-amber">due in ' + (-d) + ' day' + (d === -1 ? '' : 's') + '</span>';
+  host.innerHTML = head + (list.length ? '<table class="pt-t"><tbody>' + list.map(g => {
+      const inv = g.inv.sort((a, b) => (b.daysOver || 0) - (a.daysOver || 0)), shown = on ? inv : inv.slice(0, 3);
+      return '<tr><td>' + ptX('Customer', g.c) + '<div class="pt-sm">' + shown.map(x => ptX('Invoice', x.no) + (on ? ' <span class="muted">' + money(x.out) + (x.daysOver > 0 ? ', ' + x.daysOver + 'd late' : '') + '</span>' : '')).join(on ? '<br>' : ', ') + (inv.length > shown.length ? ' +' + (inv.length - shown.length) : '') + ' · ' + g.terms + ' days terms</div></td>'
+        + '<td class="r"><b class="' + (g.max > 0 ? 'dn' : '') + '">' + money(g.max > 0 ? g.over : g.out) + '</b><div>' + badge(g.max) + '</div></td></tr>';
+    }).join('') + '</tbody></table>' : '<div class="pt-b"><div class="db2-ok">✓ No client is overdue or due this week.</div></div>')
+    + ptMoreBtn('over', on ? true : Math.max(0, all.length - 5) || (all.some(g => g.inv.length > 3) ? true : 0));
+}
+
+/* ---------- Sales by month ---------- */
+function ptMonth(i){
+  if (isAdmin() || db2Can('monthlyreport')) { MRP.year = db2Y(); MRP.month = i + 1; db2Go('monthlyreport'); }
+  else db2Go('reports');
+}
+function ptChart(){
+  const host = $('ptChart'); if (!host) return;
+  const s = DB2.data.sales, head = ptHead('Sales by month', esc(db2Y()) + ' · excl. GST', 'chart');
+  if (!s) return ptWait(host, head);
+  const ms = (s.monthlySales || []).map(x => Number(x.amount) || 0), mt = (Number(s.target) || 0) / 12, m = db2Past() ? 12 : new Date().getMonth();
+  while (ms.length < 12) ms.push(0);
+  const max = Math.max(mt, ...ms, 1) * 1.08, canM = isAdmin() || db2Can('monthlyreport');
+  let cum = 0; const tbl = ms.map((v, i) => { cum += v; return [PS_MONTHS[i], v, mt, mt > 0 ? Math.round(v / mt * 100) : '', cum]; });
+  ptSetXl('chart', 'Sales by month ' + db2Y(), [['Month', 'Sales (excl. GST)', 'Monthly target', '% of target', 'Year to date']].concat(tbl.map(r => [r[0] + ' ' + db2Y(), r[1], r[2] ? Math.round(r[2]) : '', r[3], r[4]])));
+  const tip = 'Click a month to open ' + (canM ? 'its Monthly Report' : 'Reports');
+  host.innerHTML = head + '<div class="pt-chart"><div class="pt-bars">' + ms.map((v, i) => '<i class="' + (i === m ? 'c' : i > m ? 'f' : '') + '" style="height:' + Math.max(i > m ? 2 : 1.5, v / max * 100) + '%" title="' + PS_MONTHS[i] + ': Rs ' + money(v) + ' — ' + tip + '" onclick="ptMonth(' + i + ')"></i>').join('')
+    + (mt > 0 ? '<div class="pt-tl" style="bottom:' + (mt / max * 100) + '%" title="Monthly target ' + db2Short(mt) + '"></div>' : '') + '</div>'
+    + '<div class="pt-mo">' + PS_MONTHS.map(x => '<span>' + x[0] + '</span>').join('') + '</div>'
+    + '<div class="pt-sm" style="margin-top:6px">Year to date <b>' + db2Short(ms.reduce((a, v) => a + v, 0)) + '</b>' + (mt > 0 ? ' · monthly target ' + db2Short(mt) : '') + '</div></div>'
+    + (ptOn('chart') ? '<table class="pt-t"><thead><tr><th>Month</th><th class="r">Sales</th>' + (mt > 0 ? '<th class="r">% target</th>' : '') + '<th class="r">YTD</th></tr></thead><tbody>'
+      + tbl.map((r, i) => '<tr class="pt-click" onclick="ptMonth(' + i + ')"><td>' + r[0] + '</td><td class="r">' + (r[1] ? db2Short(r[1]) : '—') + '</td>' + (mt > 0 ? '<td class="r ' + (r[3] >= 100 ? 'up' : '') + '">' + (i <= m ? r[3] + '%' : '') + '</td>' : '') + '<td class="r">' + (i <= m ? db2Short(r[4]) : '') + '</td></tr>').join('') + '</tbody></table>' : '')
+    + ptMoreBtn('chart', true);
+}
+
+/* ---------- Shortcuts ---------- */
+function ptShort(){
+  const host = $('ptShort'); if (!host) return;
+  const L = [['ivhistory', 'Invoice History'], ['dchistory', 'DC History'], ['qthistory', 'Quotation History'], ['accounts', 'Accounts / Payments'], ['monthlyreport', 'Monthly Report'],
+    ['incentive', 'Sales Incentive'], ['reports', 'Reports'], ['customers', 'Customers'], ['products', 'Products'], ['enquiries', 'Enquiries'], ['purchaseorders', 'Purchase Orders'], ['imports', 'Imports']]
+    .filter(x => document.querySelector('#nav .navbtn[href="#' + x[0] + '"]'));
+  if (!L.length) { host.style.display = 'none'; return; }
+  const on = ptOn('short'), list = on ? L : L.slice(0, 5);
+  host.innerHTML = ptHead('Shortcuts', '', '') + '<div class="pt-rem">' + list.map(x => '<div class="pt-rr"><a class="pt-rl" href="#' + x[0] + '" onclick="return sfsNavClick(event,\'' + x[0] + '\',document.querySelector(\'#nav .navbtn[href=&quot;#' + x[0] + '&quot;]\'))" title="Right-click to open in a new tab"><span>' + esc(x[1]) + '</span><em>›</em></a></div>').join('') + '</div>'
+    + ptMoreBtn('short', Math.max(0, L.length - 5));
+}
+
+/* ---------- Business at a glance ---------- */
+function ptGlance(){
+  const host = $('ptGlance'); if (!host) return;
+  const y = db2Y(), tiles = [], mini = [], xl = [['Metric', 'Value', 'Note']];
+  const sales = DB2.data.sales, od = db2Can('accounts') ? db2Overdue() : null, q = DB2.data.qt, invs = ptInvDocs();
+  const tile = (cls, ic, n, l, s, js) => tiles.push('<button type="button" class="pt-tile ' + cls + '" onclick="' + js + '"><span class="ic">' + ic + '</span><span class="n">' + n + '</span><span class="l">' + l + '</span><span class="s">' + s + '</span></button>');
+  const mi = (n, l, js) => mini.push('<button type="button" class="pt-mini" onclick="' + js + '"><b>' + n + '</b><span>' + l + '</span></button>');
+  if (db2Can('reports')) {
+    if (sales) {
+      const ys = Number(sales.totalSales) || 0, tg = Number(sales.target) || 0, pct = tg > 0 ? Math.round(ys / tg * 100) : null;
+      tile('t1', '◔', db2Short(ys), 'Annual sales' + (pct !== null ? ' · ' + pct + '% of ' + db2Short(tg) + ' target' : ''), tg > 0 ? db2Short(Math.max(0, tg - ys)) + ' to go' : 'No annual target set', "db2Go('reports')");
+      xl.push(['Annual sales ' + y + ' (excl. GST)', ys, tg > 0 ? pct + '% of target ' + money(tg) : 'No target']);
+    } else tile('t1', '◔', '…', 'Annual sales', 'Loading', "db2Go('reports')");
+  }
+  if (db2Can('accounts')) {
+    if (od) {
+      const tot = od.reduce((a, x) => a + x.out, 0), ov = od.filter(x => x.daysOver > 0), ovAmt = ov.reduce((a, x) => a + x.out, 0), ovC = new Set(ov.map(x => x.customer)).size;
+      tile('t2', '!', db2Short(ovAmt), 'Overdue payments · ' + ovC + ' client' + (ovC === 1 ? '' : 's'), 'of ' + db2Short(tot) + ' outstanding', "db2Go('accounts')");
+      xl.push(['Overdue payments', ovAmt, ovC + ' clients']); xl.push(['Total outstanding', tot, od.length + ' invoices']);
+      mi(db2Short(tot), 'Outstanding · ' + od.length + ' invoice' + (od.length === 1 ? '' : 's'), "db2Go('accounts')");
+    } else tile('t2', '!', '…', 'Overdue payments', 'Loading', "db2Go('accounts')");
+  }
+  if (db2Can('sales')) {
+    if (q) {
+      const docs = q.documents || [], pend = docs.filter(d => (d.status || 'Pending') === 'Pending'), inY = docs.filter(d => { const x = db2Day(d.date); return x && x.getFullYear() === y; });
+      const won = inY.filter(d => d.status === 'Won').length, lost = inY.filter(d => d.status === 'Lost').length, rate = won + lost ? Math.round(won / (won + lost) * 100) + '%' : '—';
+      const pv = pend.reduce((a, d) => a + (+d.subtotal || 0), 0);
+      tile('t3', '✉', String(pend.length), 'Quotations waiting · ' + db2Short(pv), 'win rate ' + rate + ' in ' + y, "db2Go('qthistory',()=>db2SetFilter('qtSt','Pending',window.filterQTHistory))");
+      xl.push(['Quotations waiting', pend.length, 'value ' + money(pv)]); xl.push(['Quotations ' + y, inY.length, won + ' won, ' + lost + ' lost, win rate ' + rate]);
+      mi(String(inY.length), 'Quotations in ' + y + ' · ' + won + ' won', "db2Go('qthistory')");
+    } else tile('t3', '✉', '…', 'Quotations waiting', 'Loading', "db2Go('qthistory')");
+  }
+  const P = (S.products || []).filter(p => (p.Status || 'Active') === 'Active');
+  if (P.length) {
+    const low = P.filter(p => Number(p.currentStock) <= reorderOf(p)).length, outN = P.filter(p => Number(p.currentStock) <= 0).length;
+    if (isAdmin() || db2Can('stockvalue')) {
+      const val = P.reduce((a, p) => a + Math.max(0, Number(p.currentStock) || 0) * (Number(p['Sale Price']) || 0), 0);
+      tile('t4', '▦', db2Short(val), 'Stock value (sale price)', low + ' low · ' + outN + ' out of stock', "db2Go('products')");
+      xl.push(['Stock value (sale price)', Math.round(val), low + ' low, ' + outN + ' out of stock']);
+    } else { tile('t4', '▦', String(low), 'Low stock items', outN + ' out of stock', 'openLowStock()'); xl.push(['Low stock items', low, outN + ' out of stock']); }
+  }
+  if (invs) {
+    const inY = invs.filter(d => { const x = db2Day(d.date); return x && x.getFullYear() === y; }), sub = inY.reduce((a, d) => a + ptSub(d), 0), gst = inY.reduce((a, d) => a + ptGst(d), 0);
+    const cust = new Set(inY.map(d => norm(d.customer || ''))).size;
+    mi(String(inY.length), 'Invoices in ' + y + (inY.length ? ' · avg ' + db2Short(sub / inY.length) : ''), "db2Go('ivhistory')");
+    mi(db2Short(gst), 'GST charged in ' + y, "db2Go('ivhistory')");
+    mi(String(cust), 'Customers billed in ' + y, "db2SetTab('top')");
+    xl.push(['Invoices ' + y, inY.length, 'without GST ' + money(sub) + ', GST ' + money(gst) + ', total ' + money(sub + gst)]); xl.push(['Customers billed ' + y, cust, '']);
+  }
+  if (DB2.data.dcs && invs) { const inv = db2Invoiced(), dl = DB2.data.dcs.documents || [], ni = dl.filter(d => !inv.has(String(d.no).trim())).length; mi(String(ni), 'DCs not invoiced · ' + dl.length + ' DCs in all', "db2Go('dchistory',()=>db2SetFilter('dchInv','no',window.filterDCHistory))"); xl.push(['Delivery challans not invoiced', ni, dl.length + ' DCs in all']); }
+  if (DB2.data.enq) { const e = DB2.data.enq.documents || [], nw = e.filter(d => (d.status || 'New') === 'New').length, inY = e.filter(d => { const x = db2Day(d.date); return x && x.getFullYear() === y; }).length; mi(String(inY), 'Enquiries in ' + y + ' · ' + nw + ' new', "db2Go('enquiries')"); xl.push(['Enquiries ' + y, inY, nw + ' new']); }
+  ptSetXl('glance', 'Business at a glance ' + y, xl);
+  if (!tiles.length && !mini.length) { host.style.display = 'none'; return; }
+  host.innerHTML = ptHead('Business at a glance', esc(y), 'glance') + (tiles.length ? '<div class="pt-tiles">' + tiles.join('') + '</div>' : '')
+    + (ptOn('glance') && mini.length ? '<div class="pt-minis">' + mini.join('') + '</div>' : '') + ptMoreBtn('glance', mini.length);
+}
+
+/* ---------- Key performance indicators: this month so far vs the same days of last month ---------- */
+function ptKpi(){
+  const host = $('ptKpi'); if (!host) return;
+  const cm = ptCurMi(), pm = cm - 1, rows = [];
+  const sales = DB2.data.sales, invs = ptInvDocs(), q = DB2.data.qt, enq = DB2.data.enq, dcs = DB2.data.dcs, pay = DB2.data.pay;
+  /* windows: this month up to today, and the same days of last month (a fair comparison early in the month) */
+  const today = db2Day(new Date()), full = db2Past(), cy = Math.floor(cm / 12), cmo = cm % 12, py = Math.floor(pm / 12), pmo = ((pm % 12) + 12) % 12;
+  const pEnd = new Date(py, pmo + 1, 0).getDate(), upto = full ? 31 : today.getDate(), pUpto = Math.min(upto, pEnd);
+  const W = {cur:[new Date(cy, cmo, 1), new Date(cy, cmo, full ? new Date(cy, cmo + 1, 0).getDate() : upto)], prev:[new Date(py, pmo, 1), new Date(py, pmo, pUpto)], pfull:[new Date(py, pmo, 1), new Date(py, pmo, pEnd)]};
+  const inW = (list, w, f) => list.filter(d => { const x = db2Day(d[f || 'date']); return x && x >= w[0] && x <= w[1]; });
+  const add = (label, fn, kind, js) => rows.push({label:label, cur:fn(W.cur), prev:fn(W.prev), pfull:fn(W.pfull), kind:kind, js:js});
+  const sum = (L, g) => L.reduce((a, d) => a + g(d), 0);
+  if (invs && (db2Can('reports') || db2Can('invoice'))) {
+    add('Sales (excl. GST)', w => sum(inW(invs, w), ptSub), 'money', 'ptMonth(' + cmo + ')');
+    add('GST charged', w => sum(inW(invs, w), ptGst), 'money', "db2Go('ivhistory')");
+    add('Invoices issued', w => inW(invs, w).length, 'n', "db2Go('ivhistory')");
+  } else if (db2Can('reports') && sales) {
+    const ms = sales.monthlySales || [], sv = mi => Math.floor(mi / 12) === Number(sales.year) ? Number((ms[mi % 12] || {}).amount) || 0 : null;
+    rows.push({label:'Sales (excl. GST)', cur:sv(cm), prev:null, pfull:sv(pm), kind:'money', js:'ptMonth(' + cmo + ')'});
+  }
+  if (pay) { const P = (pay.payments || []).map(r => ({date:r['Date'], v:(Number(r['Amount']) || 0) + (Number(r['Income Tax Deducted']) || 0) + (Number(r['WHT Deducted']) || 0)}));
+    add('Payments received', w => sum(inW(P, w), x => x.v), 'money', "db2Go('accounts')"); }
+  if (q) { const d = q.documents || []; add('Quotations sent', w => inW(d, w).length, 'n', "db2Go('qthistory')"); add('Quotation value', w => sum(inW(d, w), x => +x.subtotal || 0), 'money', "db2Go('qthistory')");
+    add('Quotations won', w => inW(d, w).filter(x => x.status === 'Won').length, 'n', "db2Go('qthistory',()=>db2SetFilter('qtSt','Won',window.filterQTHistory))"); }
+  if (enq) { const d = enq.documents || []; add('New enquiries', w => inW(d, w).length, 'n', "db2Go('enquiries')"); }
+  if (dcs) { const d = dcs.documents || []; add('Delivery challans', w => inW(d, w).length, 'n', "db2Go('dchistory')"); }
+  const per = full ? ptMName(cm) + ' vs ' + ptMName(pm) : (upto === 1 ? '1 ' : '1–' + upto + ' ') + ptMName(cm) + ' vs ' + (pUpto === 1 ? '1 ' : '1–' + pUpto + ' ') + ptMName(pm);
+  const head = ptHead('Key performance indicators', full ? 'month vs previous month' : 'this month so far vs same days last month', 'kpi');
+  if (!rows.length) { if (DB2.done) host.style.display = 'none'; else ptWait(host, head); return; }
+  const nil = v => v === null || v === undefined;
+  const chg = r => nil(r.prev) ? null : r.prev > 0 ? (r.cur - r.prev) / r.prev * 100 : (r.cur > 0 ? null : 0);
+  const fmt = (r, v) => nil(v) ? '—' : r.kind === 'money' ? db2Short(v) : Number(v).toLocaleString('en-US');
+  const chH = r => { const c = chg(r); if (c === null) return '<span class="muted">' + (nil(r.prev) ? '—' : 'new') + '</span>'; return '<span class="pt-chg ' + (c > 0 ? 'up' : c < 0 ? 'dn' : '') + '">' + (c > 0 ? '▲ ' : c < 0 ? '▼ ' : '') + Math.abs(c).toFixed(1) + '%</span>'; };
+  ptSetXl('kpi', 'KPIs ' + per, [['Indicator', 'Period', 'Current', 'Previous (same days)', 'Change %', ptMName(pm) + ' full month']].concat(rows.map(r => { const c = chg(r); return [r.label, per, r.cur, nil(r.prev) ? '' : r.prev, c === null ? '' : Math.round(c * 10) / 10, nil(r.pfull) ? '' : r.pfull]; })));
+  const pick = ['Sales (excl. GST)', 'Payments received', 'Quotations sent', 'Invoices issued', 'New enquiries'];
+  const top3 = pick.map(l => rows.find(r => r.label === l)).filter(Boolean).concat(rows).filter((r, i, A) => A.indexOf(r) === i).slice(0, 3);
+  const on = ptOn('kpi'), list = on ? rows : rows.slice(0, 5);
+  host.innerHTML = head + '<div class="pt-k3">' + top3.map(r => '<button type="button" onclick="' + r.js + '"><span>' + esc(r.label.replace(' (excl. GST)', '')) + ' — ' + esc(ptMName(cm)) + '</span><strong>' + chH(r) + '</strong><small>' + fmt(r, r.cur) + ' vs ' + fmt(r, r.prev) + '</small></button>').join('') + '</div>'
+    + '<table class="pt-t"><thead><tr><th>Indicator</th><th class="pt-hm">Period</th><th class="r">Current</th><th class="r">Previous</th><th class="r">Change</th>' + (on ? '<th class="r">' + esc(ptMName(pm)) + ' (full)</th>' : '') + '</tr></thead><tbody>'
+    + list.map(r => '<tr class="pt-click" onclick="' + r.js + '"><td>' + esc(r.label) + '</td><td class="muted nw pt-hm">' + esc(per) + '</td><td class="r"><b>' + fmt(r, r.cur) + '</b></td><td class="r">' + fmt(r, r.prev) + '</td><td class="r">' + chH(r) + '</td>' + (on ? '<td class="r muted">' + fmt(r, r.pfull) + '</td>' : '') + '</tr>').join('') + '</tbody></table>'
+    + ptMoreBtn('kpi', on ? true : Math.max(0, rows.length - 5) || true);
+}
+
+/* ---------- Recent invoices ---------- */
+function ptInv(){
+  const host = $('ptInv'); if (!host) return;
+  const docs = ptInvDocs(), on = ptOn('inv');
+  const head = ptHead('Recent invoices', on ? 'last 20' : 'last 5', 'inv', ptLink('All', "db2Go('ivhistory')"));
+  if (!docs) return ptWait(host, head);
+  const y = db2Y(), outBy = {}, haveOut = db2Can('accounts') && DB2.data.out;
+  if (haveOut) (DB2.data.out.rows || []).forEach(r => { outBy[String(r.no).trim()] = r; });
+  const st = d => { if (!haveOut) return ''; const r = outBy[String(d.no).trim()]; return !r || Number(r.outstanding) <= 0.5 ? 'Paid' : Number(r.paid) > 0.5 ? 'Part paid' : 'Unpaid'; };
+  const nn = v => { const m = String(v || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : 0; };
+  const all = docs.filter(d => { const x = db2Day(d.date); return !db2Past() || (x && x.getFullYear() === y); }).sort((a, b) => (db2Day(b.date) || 0) - (db2Day(a.date) || 0) || nn(b.no) - nn(a.no));
+  ptSetXl('inv', 'Invoices' + (db2Past() ? ' ' + y : ''), [['Invoice #', 'Date', 'Customer', 'DC #', 'PO #', 'Without GST', 'GST', 'Total'].concat(haveOut ? ['Outstanding', 'Status'] : [])]
+    .concat(all.map(d => [String(d.no), d.date ? fmtDate(d.date) : '', d.customer || '', String(d.dc || ''), String(d.po || ''), ptSub(d), ptGst(d), ptTot(d)].concat(haveOut ? [Number((outBy[String(d.no).trim()] || {}).outstanding) || 0, st(d)] : []))));
+  const list = all.slice(0, on ? 20 : 5);
+  const sc = s => s === 'Paid' ? 'up' : s === 'Unpaid' ? 'dn' : s ? 'pt-amb' : '';
+  host.innerHTML = head + (list.length ? '<table class="pt-t"><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th>' + (on ? '<th class="r">Without GST</th><th class="r">GST</th>' : '') + '<th class="r">Total</th>' + (haveOut ? '<th>Status</th>' : '') + '</tr></thead><tbody>'
+    + list.map(d => { const s = st(d); return '<tr><td>' + ptX('Invoice', d.no) + '</td><td class="nw">' + esc(d.date ? new Date(d.date).toLocaleDateString('en-GB', {day:'numeric', month:'short'}) : '') + '</td><td>' + ptX('Customer', d.customer) + '</td>'
+      + (on ? '<td class="r">' + money(ptSub(d)) + '</td><td class="r">' + money(ptGst(d)) + '</td>' : '') + '<td class="r"><b>' + money(ptTot(d)) + '</b></td>' + (haveOut ? '<td class="' + sc(s) + '">' + s + '</td>' : '') + '</tr>'; }).join('')
+    + '</tbody></table>' : '<div class="pt-b muted">No invoices yet.</div>')
+    + (on && all.length > 20 ? '<div class="pt-b pt-sm"><a class="ph-a" onclick="db2Go(\'ivhistory\')">Open Invoice History for all ' + all.length + ' invoices →</a></div>' : '')
+    + ptMoreBtn('inv', on ? true : (all.length > 5 ? Math.min(15, all.length - 5) : (list.length ? true : 0)));
+}
+
+/* ---------- Top customers ---------- */
+function ptCust(){
+  const host = $('ptCust'); if (!host) return;
+  const s = DB2.data.sales, y = db2Y(), on = ptOn('cust');
+  const head = ptHead('Top customers', esc(y), 'cust', ptLink('All', "db2SetTab('top')"));
+  if (!s) return ptWait(host, head);
+  const all = (s.customerSales || []).filter(x => (+x.amount || 0) > 0).sort((a, b) => (+b.amount || 0) - (+a.amount || 0)), total = all.reduce((a, x) => a + (+x.amount || 0), 0) || 1;
+  const invs = ptInvDocs(), cnt = {}, outC = {};
+  if (invs) invs.forEach(d => { const x = db2Day(d.date); if (x && x.getFullYear() === y) { const k = norm(d.customer || ''); cnt[k] = (cnt[k] || 0) + 1; } });
+  const od = db2Can('accounts') ? db2Overdue() : null; if (od) od.forEach(x => { const k = norm(x.customer); outC[k] = (outC[k] || 0) + x.out; });
+  ptSetXl('cust', 'Top customers ' + y, [['#', 'Customer', 'Sales (excl. GST)', 'Share %'].concat(invs ? ['Invoices'] : [], od ? ['Outstanding now'] : [])]
+    .concat(all.map((x, i) => [i + 1, x.customer, +x.amount || 0, Math.round((+x.amount || 0) / total * 1000) / 10].concat(invs ? [cnt[norm(x.customer)] || 0] : [], od ? [Math.round((outC[norm(x.customer)] || 0) * 100) / 100] : []))));
+  const list = all.slice(0, on ? 15 : 5);
+  host.innerHTML = head + (list.length ? '<table class="pt-t"><thead><tr><th>#</th><th>Customer</th>' + (on && invs ? '<th class="r">Inv.</th>' : '') + (on && od ? '<th class="r">Outstanding</th>' : '') + '<th class="r">Sales</th><th class="r">Share</th></tr></thead><tbody>'
+    + list.map((x, i) => '<tr><td>' + (i + 1) + '</td><td>' + ptX('Customer', x.customer) + '</td>' + (on && invs ? '<td class="r">' + (cnt[norm(x.customer)] || 0) + '</td>' : '') + (on && od ? '<td class="r">' + (outC[norm(x.customer)] ? db2Short(outC[norm(x.customer)]) : '—') + '</td>' : '')
+      + '<td class="r"><b>' + db2Short(+x.amount || 0) + '</b></td><td class="r muted">' + (Math.round((+x.amount || 0) / total * 1000) / 10) + '%</td></tr>').join('') + '</tbody></table>'
+    : '<div class="pt-b muted">No invoice sales in ' + y + '.</div>')
+    + ptMoreBtn('cust', on ? true : (all.length > 5 ? Math.min(10, all.length - 5) : (list.length ? true : 0)));
+}
+
+/* ---------- Top selling items (Admin / "Top selling items" permission only) ---------- */
+function ptItems(){
+  const host = $('ptItems'); if (!host) return;
+  if (!db2SeeItems()) { host.style.display = 'none'; return; }
+  const on = ptOn('items'), y = db2Y(), head = ptHead('Top selling items', esc(y) + ' · by value', 'items', ptLink('All', "db2SetTab('top')"));
+  const sm = DB2.tiMode, sy = DB2.tiYear, sn = DB2.tiN;
+  DB2.tiMode = 'value'; DB2.tiYear = y; DB2.tiN = 100;
+  let d; try { d = db2ItemsData(); } finally { DB2.tiMode = sm; DB2.tiYear = sy; DB2.tiN = sn; }
+  if (sy && Number(sy) !== y) { try { db2ItemsData(); } catch (e) {} }   /* keep the "Top customers & items" tab's own year */
+  if (!d) return ptWait(host, head);
+  const q = v => Number(v || 0).toLocaleString('en-US', {maximumFractionDigits:2});
+  ptSetXl('items', 'Top selling items ' + y, [['#', 'Model / Part No.', 'Description', 'Brand', 'Category', 'Qty sold', 'Sales (excl. GST)', 'Invoices', 'Customers', 'Current stock']]
+    .concat(d.rows.map((r, i) => [i + 1, r.model || '', r.desc || '', r.brand || '', r.cat || '', r.qty, Math.round(r.value * 100) / 100, r.inv.size, r.cust.size, r.stock === null ? '' : r.stock])));
+  const list = d.rows.slice(0, on ? 15 : 5);
+  host.innerHTML = head + (list.length ? '<table class="pt-t"><thead><tr><th>#</th><th>Item</th><th class="r">Qty</th><th class="r">Sales</th>' + (on ? '<th class="r">Invoices</th><th class="r">Customers</th>' : '') + '<th class="r">Stock</th></tr></thead><tbody>'
+    + list.map((r, i) => '<tr class="pt-click" onclick="db2ItemShow(\'' + encA(r.key) + '\')" title="Who bought it, which invoices"><td>' + (i + 1) + '</td><td>' + (r.model ? ptX('Model', r.model) + ' ' : '') + '<span class="pt-sm">' + esc(String(r.desc || '').slice(0, on ? 70 : 40)) + '</span></td><td class="r">' + q(r.qty) + '</td><td class="r"><b>' + db2Short(r.value) + '</b></td>'
+      + (on ? '<td class="r">' + r.inv.size + '</td><td class="r">' + r.cust.size + '</td>' : '') + '<td class="r ' + (r.stock !== null && r.stock <= 0 ? 'dn' : '') + '">' + (r.stock === null ? '—' : q(r.stock)) + '</td></tr>').join('') + '</tbody></table>'
+    : '<div class="pt-b muted">No item sales in ' + y + '.</div>')
+    + ptMoreBtn('items', on ? true : (d.rows.length > 5 ? Math.min(10, d.rows.length - 5) : (list.length ? true : 0)));
+}
+Object.assign(window, {ptMore, ptXl, ptMonth});
 
 /* ---------- Pipeline ---------- */
 function db2PipeSet(v){ DB2.pipe = v; db2Pipe(); }
@@ -10537,3 +10840,125 @@ function sfsOpenPending(){
   setTimeout(() => { try { xrOpen(o.t, o.id); } catch (e) {} }, 400);
 }
 window.addEventListener('hashchange', () => { const o = sfsOpenFromHash(); if (o && S.session) { window.SFS_OPEN_DOC = o; sfsOpenPending(); } });
+
+
+/* ============================================================
+   EXCEL DOWNLOAD FOR EVERY TABLE
+   A small "⬇ Excel" button is put on every data table (lists, histories, accounts, reports, dialogs).
+   It saves what is on the screen (after search / filters) as a real .xlsx file; the Actions column is left out.
+   The .xlsx is written here (no internet needed).
+   ============================================================ */
+const SFS_XL = (function(){
+  const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const enc = s => new TextEncoder().encode(s);
+  function zip(files){   /* store-only zip */
+    const parts = [], central = []; let off = 0;
+    files.forEach(f => {
+      const name = enc(f.name), data = enc(f.data), crc = crc32(data), h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + data.length;
+    });
+    const csize = central.reduce((a, x) => a + x.length, 0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
+    return new Blob(parts.concat(central, [new Uint8Array(e.buffer)]), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
+  const x = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const col = n => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  function sheetXml(rows, title){
+    const widths = []; rows.forEach(r => r.forEach((v, i) => { widths[i] = Math.min(60, Math.max(widths[i] || 6, String(v == null ? '' : v).length + 2)); }));
+    const start = title ? 2 : 0;
+    const body = (title ? '<row r="1"><c r="A1" t="inlineStr" s="2"><is><t>' + x(title) + '</t></is></c></row>' : '')
+      + rows.map((r, ri) => '<row r="' + (ri + 1 + start) + '">' + r.map((v, ci) => {
+        const ref = col(ci) + (ri + 1 + start), st = ri === 0 ? ' s="1"' : '';
+        if (ri > 0 && typeof v === 'number' && isFinite(v)) return '<c r="' + ref + '"' + st + '><v>' + v + '</v></c>';
+        return '<c r="' + ref + '" t="inlineStr"' + st + '><is><t xml:space="preserve">' + x(v) + '</t></is></c>';
+      }).join('') + '</row>').join('');
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + (start + 1) + '" topLeftCell="A' + (start + 2) + '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+      + '<cols>' + widths.map((w, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('') + '</cols><sheetData>' + body + '</sheetData></worksheet>';
+  }
+  function book(sheets){
+    const names = sheets.map((s, i) => String(s.name || 'Sheet' + (i + 1)).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31) || 'Sheet' + (i + 1));
+    const files = [
+      {name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('') + '</Types>'},
+      {name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+      {name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + names.map((n, i) => '<sheet name="' + x(n) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets></workbook>'},
+      {name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((s, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+      {name:'xl/styles.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="13"/><color rgb="FF1F3B63"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F3B63"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'}
+    ];
+    sheets.forEach((s, i) => files.push({name:'xl/worksheets/sheet' + (i + 1) + '.xml', data:sheetXml(s.rows, s.title)}));
+    return zip(files);
+  }
+  return {book};
+})();
+function sfsXlDownload(fileName, sheets){
+  const blob = SFS_XL.book(sheets), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = String(fileName || 'SFS export').replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.xlsx';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+/* a cell's text as Excel should get it: "1,23,456.00" / "Rs 5,400" -> number; part numbers, dates and codes stay text */
+function sfsXlCell(td){
+  const t = String(td.innerText || td.textContent || '').replace(/\s+/g, ' ').trim();
+  const m = t.replace(/^(rs\.?|pkr)\s*/i, '').replace(/\s*(pcs|nos)$/i, '');
+  if (/^-?[\d,]+(\.\d+)?$/.test(m) && !/^0\d/.test(m) && (m.includes(',') || m.includes('.') || m.length < 12)) { const n = Number(m.replace(/,/g, '')); if (isFinite(n)) return n; }
+  return t;
+}
+function sfsTableRows(table){
+  const head = Array.from(table.querySelectorAll('thead tr')).pop();
+  const hc = head ? Array.from(head.children) : [];
+  const skip = new Set(hc.map((th, i) => /^(actions?|)$/i.test(th.innerText.trim()) || th.classList.contains('qx-mn') ? i : -1).filter(i => i >= 0));
+  const rows = [];
+  const hText = th => String(th.textContent || '').replace(/\s+/g, ' ').trim();
+  const asText = new Set(hc.map((th, i) => /(#|\bno\.?$|\bid$|part|model|code|phone|cell|ntn|strn|stn|ref)/i.test(hText(th)) ? i : -1).filter(i => i >= 0));   /* numbers that are really codes */
+  if (hc.length) rows.push(hc.filter((_, i) => !skip.has(i)).map(hText));
+  table.querySelectorAll('tbody tr, tfoot tr').forEach(tr => {
+    if (tr.offsetParent === null && tr.closest('.table-wrap, .panel, table') && getComputedStyle(tr).display === 'none') return;
+    const cells = Array.from(tr.children); if (!cells.length) return;
+    if (cells.length === 1 && (cells[0].classList.contains('empty') || /^(loading|no .* found)/i.test(cells[0].innerText.trim()))) return;
+    let out = [], ci = 0;
+    cells.forEach(td => { const span = Number(td.getAttribute('colspan')) || 1; if (!skip.has(ci)) { const v = sfsXlCell(td); out.push(asText.has(ci) && typeof v === 'number' ? String(td.innerText || '').trim() : v); for (let k = 1; k < span; k++) out.push(''); } ci += span; });
+    if (out.some(v => v !== '')) rows.push(out);
+  });
+  return rows;
+}
+function sfsTableTitle(table){
+  const box = table.closest('.panel, .db2-card, .pt, .modal, #modalBody, .mrp-wrap, .wrap');
+  const h = box && box.querySelector('h3, h2, .ph');
+  const page = ($('pageTitle') || {}).textContent || 'SFS';
+  const t = h && !h.contains(table) ? h.innerText.split('\n')[0].trim() : '';
+  const mt = table.closest('#modal') && $('modalTitle') ? $('modalTitle').textContent.trim() : '';
+  return (mt || (t && t !== page ? page + ' - ' + t : page)).replace(/\s+/g, ' ').slice(0, 80);
+}
+function sfsTableExport(btn){
+  const table = btn._sfsTable; if (!table) return;
+  const rows = sfsTableRows(table);
+  if (rows.length < 2) return toast('Nothing to download — the table is empty.', true);
+  const title = sfsTableTitle(table), info = (table.closest('.wrap') || document).querySelector('[id$="Info"]');
+  sfsXlDownload(title + ' ' + todayStr(), [{name:title.slice(0, 31), title:title + ' — ' + fmtDate(new Date()) + (info && info.textContent ? ' — ' + info.textContent.trim() : ''), rows:rows}]);
+  toast('Downloaded ' + (rows.length - 1) + ' row' + (rows.length === 2 ? '' : 's') + ' to Excel.');
+}
+function sfsXlScan(){
+  document.querySelectorAll('#content table, #modal table, #xrPanel table').forEach(t => {
+    if (t._sfsXl || t.closest('#printArea, .no-xl, .qx-paper, .inc-ed')) return;
+    if (t.querySelector('tbody input, tbody select, tbody textarea')) return;   /* entry grids (invoice lines etc.) */
+    if (!t.querySelector('thead th') || t.querySelectorAll('tbody tr').length < 1) return;
+    t._sfsXl = true;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'xl-btn no-dirty-track'; b.textContent = '⬇ Excel'; b.title = 'Download this table as an Excel file (what you see, after filters)';
+    b._sfsTable = t; b.onclick = ev => { ev.stopPropagation(); sfsTableExport(b); };
+    const host = t.closest('.table-wrap') || t.parentElement;
+    const prev = host.previousElementSibling;
+    if (prev && prev.classList.contains('xl-bar')) { prev.querySelector('.xl-btn')._sfsTable = t; return; }   /* table redrawn: reuse its button */
+    const bar = document.createElement('div'); bar.className = 'xl-bar no-dirty-track'; bar.appendChild(b);
+    host.parentElement.insertBefore(bar, host);
+  });
+}
+(function(){
+  let tm = null; const run = () => { clearTimeout(tm); tm = setTimeout(() => { try { sfsXlScan(); } catch (e) {} }, 350); };
+  new MutationObserver(run).observe(document.body, {childList:true, subtree:true});
+})();
+Object.assign(window, {sfsXlDownload, sfsTableExport});
