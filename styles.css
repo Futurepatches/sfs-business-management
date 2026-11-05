@@ -2125,3 +2125,23 @@ tr.inc-click{cursor:pointer}tr.inc-click:hover td{background:#f3f6fb}
 .imp-tile.z-up{--z:#1E40AF;--zd:#1E3A8A;--zs:#EEF3FF;--zl:#C7D7FB}
 @media (max-width:860px){.up-po-h{grid-template-columns:1fr auto;}.up-po-h .up-po-n:not(.r){display:none}.up-po-x{display:none}}
 .modal-card:has(.up-pv){max-width:1100px;width:96vw}
+
+/* ===== Stock count (Nov 2026) ===== */
+.sc-bar{background:#fff;border:1px solid #D5DDE8;border-left:4px solid #1F3B63;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:10px 16px;align-items:center}
+.sc-bar .sc-t>b{display:block;font-size:15px;color:#1F3B63}.sc-bar .sc-t>span{font-size:12.5px;color:#475569}
+.sc-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.sc-sum{grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.sc-clear{color:#C8102E;cursor:pointer;font-size:12px;text-decoration:underline}
+.sc-wrap table td{padding-top:4px;padding-bottom:4px;vertical-align:middle}
+.sc-in{width:100%;min-width:90px;border:1px solid #CBD5E1;border-radius:5px;padding:5px 8px;font:inherit;font-size:13px;background:#fff}
+.sc-in.sc-qty{width:96px;text-align:right}
+.sc-in:focus{outline:2px solid #3B5BDB;outline-offset:0;border-color:#3B5BDB}
+.sc-in.ed{background:#FFF7D6;border-color:#E0B100;font-weight:700}
+.sc-in.bad{background:#FDECEE;border-color:#C8102E}
+.sc-t tr.sc-chg td{background:#FFFBEA}.sc-t tr.sc-ok td{background:#F0FAF3}
+.sc-t .up{color:#15803D}.sc-t .dn{color:#C8102E}
+.sc-rv label{display:block;margin:8px 0}.sc-rv label input{width:100%}
+.modal-card:has(.sc-rv){max-width:900px;width:96vw}
+@media (max-width:860px){.sc-bar{grid-template-columns:1fr}.sc-btns{justify-content:flex-start}}
+.sc-in::placeholder{color:#CBD5E1}
+.sc-rv label input{border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;font:inherit;margin-top:4px}
