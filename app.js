@@ -3131,6 +3131,7 @@ function printDoc(body, footerHtml, fileName){
     .doc-head-right{display:flex;align-items:center;gap:12px}
     .doc-qr{display:flex;flex-direction:column;align-items:center;flex:none}
     .doc-qr svg{width:22mm;height:22mm;display:block}
+    .doc-qr:not([data-signed]){display:none}
     .doc-qr small{font-size:7.5px;color:#666;margin-top:1px;letter-spacing:.2px}
     .qt-wq{display:flex;align-items:center;gap:10px}
     .po-hq{display:flex;align-items:flex-start;gap:12px}
@@ -10811,9 +10812,10 @@ function sfsQrSvg(text){
 function sfsDocLink(t, id){ return location.origin + location.pathname + '#open/' + encodeURIComponent(t) + '/' + encodeURIComponent(String(id)); }
 function sfsDocQr(t, id){
   id = String(id || '').trim(); if (!id || /^(draft|auto)$/i.test(id)) return '';
-  /* first the ERP link (always works for staff); printDoc swaps in the public link that anyone can open */
-  const k = SFS_DOCKEYS[t + '|' + id], svg = sfsQrSvg(k ? sfsPublicLink(t, id, k) : sfsDocLink(t === 'GST' ? 'Invoice' : t, id)); if (!svg) return '';
-  return '<div class="doc-qr" data-qt="' + esc(t) + '" data-qid="' + esc(id) + '"' + (k ? ' data-signed="1"' : '') + ' title="Scan with a phone to open ' + esc(t + ' ' + id) + '">' + svg + '<small>Scan to open</small></div>';
+  /* only the signed public link (the VERIFIED page anyone can open) goes in the QR — never the ERP's own address,
+     which asks for a login. printDoc signs the code just before printing; if it cannot be signed the QR is left out. */
+  const k = SFS_DOCKEYS[t + '|' + id], svg = k ? sfsQrSvg(sfsPublicLink(t, id, k)) : '';
+  return '<div class="doc-qr" data-qt="' + esc(t) + '" data-qid="' + esc(id) + '"' + (svg ? ' data-signed="1"' : '') + ' title="Scan with a phone to verify ' + esc(t + ' ' + id) + '">' + (svg || '<i class="qr-slot"></i>') + '<small>Scan to verify</small></div>';
 }
 /* public, read-only view served by the Apps Script web app; the key (from the server) makes the link unguessable */
 const SFS_DOCKEYS = (function(){ try { return JSON.parse(sessionStorage.sfsDocKeys || '{}'); } catch (e) { return {}; } })();
@@ -10823,11 +10825,16 @@ async function sfsSignQrs(root){
   const need = els.map(e => ({t:e.dataset.qt, no:e.dataset.qid})).filter(d => !SFS_DOCKEYS[d.t + '|' + d.no]);
   if (need.length) {
     try {
-      const r = await Promise.race([api('docLinks', {docs:need}), new Promise(res => setTimeout(() => res(null), 5000))]);
+      const r = await Promise.race([api('docLinks', {docs:need}), new Promise(res => setTimeout(() => res(null), 12000))]);
       if (r && r.ok) { Object.assign(SFS_DOCKEYS, r.keys || {}); try { sessionStorage.sfsDocKeys = JSON.stringify(SFS_DOCKEYS); } catch (e) {} }
     } catch (e) {}
   }
-  els.forEach(e => { const k = SFS_DOCKEYS[e.dataset.qt + '|' + e.dataset.qid]; if (!k) return; const svg = sfsQrSvg(sfsPublicLink(e.dataset.qt, e.dataset.qid, k)); if (svg) { e.querySelector('svg').outerHTML = svg; e.dataset.signed = '1'; } });
+  els.forEach(e => {
+    const k = SFS_DOCKEYS[e.dataset.qt + '|' + e.dataset.qid], svg = k ? sfsQrSvg(sfsPublicLink(e.dataset.qt, e.dataset.qid, k)) : '';
+    if (!svg) { e.remove(); return; }   /* no verified link (offline / no permission): print without a QR rather than a login link */
+    const old = e.querySelector('svg, .qr-slot'); if (old) old.outerHTML = svg; else e.insertAdjacentHTML('afterbegin', svg);
+    e.dataset.signed = '1';
+  });
 }
 /* …/#open/Invoice/2101 — opened from a scanned QR: after sign-in and loading, show that document */
 function sfsOpenFromHash(){
