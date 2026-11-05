@@ -468,7 +468,7 @@ function showPage(p, btn){
 /* ---------- PAGES ---------- */
 const pages = {
   dashboard:()=>`<div class="wrap" id="dash"></div>`,
-  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select>${hasMod(['prodedit','imports'])?'<button class="btn primary" onclick="productForm()">+ Add Product</button>':''}${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}${hasMod(['prodedit','imports'])?'<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button>':''}</div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="up">Upcoming (on order)</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div class="panel table-wrap"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
+  products:()=>`<div class="wrap"><div class="toolbar"><input id="ps" placeholder="Search model / description / location" oninput="renderProducts()"><select id="pc" onchange="renderProducts()"><option value="">All Categories</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select>${hasMod(['prodedit','imports'])?'<button class="btn primary" onclick="productForm()">+ Add Product</button>':''}${isAdmin()?'<button class="btn" onclick="dcStockCheck()" title="Find DCs that cut the stock twice or did not give it back">🔎 DC Stock Check</button>':''}${hasMod(['prodedit','imports'])?'<button class="btn" onclick="bulkProductForm()">+ Bulk Add</button>':''}${(isAdmin()||hasMod('setstock'))?'<button class="btn" id="scBtn" onclick="scToggle()" title="Correct the stock and locations of many products at once (on screen or with Excel)">📝 Stock Count</button>':''}</div><div class="toolbar" style="flex-wrap:wrap"><select id="pb" onchange="renderProducts()"><option value="">All Brands</option></select><select id="pst" onchange="renderProducts()"><option value="">All stock levels</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="up">Upcoming (on order)</option></select><select id="pact" onchange="renderProducts()"><option value="">Active &amp; Inactive</option><option value="Active">Active only</option><option value="Inactive">Inactive only</option></select><button class="btn ghost small" onclick="clearFilters(['ps','pc','pb','pst','pact'],renderProducts)">Clear</button><span id="pcount" class="muted small"></span></div><div id="scHost"></div><div class="panel table-wrap" id="pPanel"><table><thead><tr><th>Image</th><th>Model / Part No.</th><th>Description</th><th>Category</th><th>Location</th><th>Stock</th></tr></thead><tbody id="prows"></tbody></table></div></div>`,
   imports:()=>impPageHtml(),
   purchaseorders:()=>`<div class="wrap" id="poPage"></div>`,
   upcoming:()=>`<div class="wrap" id="upPage"></div>`,
@@ -964,6 +964,11 @@ function renderProducts(){
     if (pstv === 'up' && !(upQty(p) > 0)) return false;
     return true;
   });
+  if (window.__scCollect) { window.__scCollect(a); return; }
+  const scOn = SC.on && scCan(), pp = $('pPanel'), sh = $('scHost'), sb = $('scBtn');
+  if (pp) pp.style.display = scOn ? 'none' : ''; if (sh) { sh.style.display = scOn ? '' : 'none'; if (!scOn) sh.innerHTML = ''; }
+  if (sb) sb.classList.toggle('primary', scOn);
+  if (scOn) { const pc3 = $('pcount'); if (pc3) pc3.textContent = a.length + ' product(s) in this list'; scRender(a); return; }
   const pc2 = $('pcount'); if (pc2) pc2.textContent = 'Showing ' + Math.min(a.length, 1000) + ' of ' + S.products.length + ' product(s)' + (a.length > 1000 ? ' (first 1000 shown — narrow the filters)' : '');
   $('prows').innerHTML = a.slice(0,1000).map(p => {
     const low = Number(p.currentStock) <= reorderOf(p);
@@ -11103,6 +11108,185 @@ function upImpBar(){
   host.innerHTML = h.po ? '<div class="up-impbar">📦 Costing for <b>' + esc(h.po) + '</b> — when this import is saved, its goods are marked <b>arrived</b> and stop showing as upcoming. <a onclick="IMP.h.po=\'\';upImpBar()">Not for this PO</a></div>' : '';
 }
 Object.assign(window, {renderUpcoming, upDraw, upToggle, upXl, upPick, upSheet, upSave, upToCosting, upImpBar, UP});
+
+
+/* ============================================================
+   STOCK COUNT (Nov 2026) — Products page, Admin / "Set Stock" permission.
+   An Excel-like list: type the counted quantity and the location of many products,
+   or download the count sheet, fill it in Excel and upload it back. Nothing changes
+   until "Apply"; the work in progress is kept on this computer (draft) so a count
+   can run over several days. Apply = one Stock Adjustment per changed product.
+   ============================================================ */
+const SC = {on:false, edits:{}, show:'all', reason:''};
+function scCan(){ return isAdmin() || hasMod('setstock'); }
+function scKey(){ return 'sfsStockCount:' + ((S.user && S.user.username) || ''); }
+function scLoad(){ try { const d = JSON.parse(localStorage.getItem(scKey()) || 'null'); if (d && d.edits) { SC.edits = d.edits; SC.reason = d.reason || ''; SC.savedAt = d.at || ''; } } catch (e) {} }
+function scStore(){ try { const n = Object.keys(SC.edits).length; if (n) localStorage.setItem(scKey(), JSON.stringify({edits:SC.edits, reason:SC.reason, at:new Date().toISOString()})); else localStorage.removeItem(scKey()); } catch (e) {} }
+function scProd(m){ return (S.products || []).find(p => p['Model / Part No.'] === m); }
+function scSys(p){ return Number(p.currentStock === undefined ? p['Current Stock'] : p.currentStock) || 0; }
+/* the effective change of one product (null = no change) */
+function scChange(p){
+  const e = SC.edits[p['Model / Part No.']]; if (!e) return null;
+  const out = {};
+  if (e.qty !== undefined && String(e.qty).trim() !== '') { const q = Number(String(e.qty).replace(/,/g, '')); if (isFinite(q) && q >= 0 && Math.abs(q - scSys(p)) > 0.0005) out.qty = q; else if (isFinite(q) && q >= 0) out.same = true; }
+  if (e.loc !== undefined && String(e.loc).trim() !== String(p.Location || '').trim()) out.loc = String(e.loc).trim();
+  return (out.qty !== undefined || out.loc !== undefined) ? out : (out.same ? {same:true} : null);
+}
+function scStats(){
+  let q = 0, l = 0, counted = 0;
+  Object.keys(SC.edits).forEach(m => { const p = scProd(m); if (!p) return; const c = scChange(p); if (!c) return; if (c.qty !== undefined) q++; if (c.loc !== undefined) l++; if (c.qty !== undefined || c.same) counted++; });
+  return {q:q, l:l, counted:counted, n:Object.keys(SC.edits).filter(m => { const p = scProd(m); const c = p && scChange(p); return c && (c.qty !== undefined || c.loc !== undefined); }).length};
+}
+function scToggle(){
+  if (!scCan()) return toast('Only an Admin or a user with the "Set Stock" permission can count stock.', true);
+  if (SC.on) { SC.on = false; renderProducts(); return; }
+  scLoad(); SC.on = true; SC.show = 'all';
+  if (!SC.reason) SC.reason = 'Stock count ' + new Date().toLocaleDateString('en-GB', {month:'long', year:'numeric'});
+  renderProducts();
+}
+/* called by renderProducts with the filtered list */
+function scRender(list){
+  const host = $('scHost'); if (!host) return;
+  const st = scStats();
+  const shown = list.filter(p => { if (SC.show === 'all') return true; const c = scChange(p); if (SC.show === 'changed') return c && (c.qty !== undefined || c.loc !== undefined); if (SC.show === 'todo') return !(c && (c.qty !== undefined || c.same)); return true; });
+  SC.rows = shown.slice(0, 1000).map(p => p['Model / Part No.']);
+  const keep = document.activeElement && document.activeElement.dataset ? {c:document.activeElement.dataset.c, i:document.activeElement.dataset.i} : null;
+  host.innerHTML = '<div class="sc-bar no-dirty-track"><div class="sc-t"><b>📝 Stock Count</b><span>Type the <b>counted quantity</b> and the <b>location</b>. Leave a box empty for no change. Enter / ↓ goes to the next line. Nothing changes until you press <b>Apply</b>.</span></div>'
+    + '<div class="sc-btns"><button class="btn" onclick="scDownload()">⬇ Download count sheet</button><button class="btn" onclick="scPick()">⬆ Upload counted sheet</button>'
+    + '<button class="btn primary" onclick="scReview()"' + (st.n ? '' : ' disabled') + '>Apply ' + st.n + ' change' + (st.n === 1 ? '' : 's') + '</button><button class="btn ghost" onclick="scToggle()">Close</button></div>'
+    + '<div class="sc-sum"><span class="db2-seg">' + [['all', 'All'], ['changed', 'Changed (' + st.n + ')'], ['todo', 'Not counted yet']].map(x => '<button type="button" class="' + (SC.show === x[0] ? 'on' : '') + '" onclick="SC.show=\'' + x[0] + '\';renderProducts()">' + x[1] + '</button>').join('') + '</span>'
+    + '<span class="muted small">' + st.counted + ' counted · ' + st.q + ' stock change' + (st.q === 1 ? '' : 's') + ' · ' + st.l + ' location change' + (st.l === 1 ? '' : 's') + (Object.keys(SC.edits).length ? ' · draft kept on this computer' : '') + '</span>'
+    + (Object.keys(SC.edits).length ? '<a class="sc-clear" onclick="scDiscard()">Discard draft</a>' : '') + '</div></div>'
+    + '<div class="panel table-wrap sc-wrap no-xl"><table class="sc-t"><thead><tr><th>Part No.</th><th>Description</th><th>Brand</th><th>Location</th><th class="right">System stock</th><th class="right">Counted</th><th class="right">Difference</th></tr></thead><tbody>'
+    + (SC.rows.length ? shown.slice(0, 1000).map((p, i) => scRowHtml(p, i)).join('') : '<tr><td colspan="7" class="empty">No products here.</td></tr>') + '</tbody></table></div>'
+    + (shown.length > 1000 ? '<p class="muted small">First 1000 shown — narrow the search or the filters (category / brand) to count the rest.</p>' : '');
+  if (keep && keep.c) { const el = host.querySelector('input[data-c="' + keep.c + '"][data-i="' + keep.i + '"]'); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} } }
+}
+function scRowHtml(p, i){
+  const m = p['Model / Part No.'], e = SC.edits[m] || {}, c = scChange(p), sys = scSys(p);
+  const dq = c && c.qty !== undefined ? Math.round((c.qty - sys) * 1000) / 1000 : null;
+  return '<tr class="' + (c && (c.qty !== undefined || c.loc !== undefined) ? 'sc-chg' : c && c.same ? 'sc-ok' : '') + '" data-m="' + esc(m) + '"><td><a class="model-link" onclick="productDetail(\'' + encA(m) + '\')">' + esc(m) + '</a></td><td>' + esc(p.Description) + '</td><td>' + esc(p.Brand || '') + '</td>'
+    + '<td><input class="sc-in sc-loc' + (c && c.loc !== undefined ? ' ed' : '') + '" data-c="loc" data-i="' + i + '" value="' + esc(e.loc !== undefined ? e.loc : (p.Location || '')) + '" placeholder="—" oninput="scEdit(this)" onkeydown="scKey_(event,this)"></td>'
+    + '<td class="right">' + sys + upBadge(p) + '</td>'
+    + '<td class="right"><input class="sc-in sc-qty' + (c && c.qty !== undefined ? ' ed' : '') + '" data-c="qty" data-i="' + i + '" inputmode="decimal" value="' + esc(e.qty !== undefined ? e.qty : '') + '" placeholder="' + sys + '" oninput="scEdit(this)" onkeydown="scKey_(event,this)"></td>'
+    + '<td class="right sc-d">' + (dq === null ? (c && c.same ? '<span class="up">✓ correct</span>' : '') : '<b class="' + (dq > 0 ? 'up' : 'dn') + '">' + (dq > 0 ? '+' : '') + dq + '</b>') + '</td></tr>';
+}
+function scEdit(el){
+  const tr = el.closest('tr'), m = tr.dataset.m, p = scProd(m); if (!p) return;
+  const e = SC.edits[m] || (SC.edits[m] = {});
+  if (el.dataset.c === 'qty') { const v = el.value.trim(); if (v === '') delete e.qty; else if (!/^[\d,]*\.?\d*$/.test(v)) { el.classList.add('bad'); return; } else e.qty = v; el.classList.remove('bad'); }
+  else { if (el.value.trim() === String(p.Location || '').trim()) delete e.loc; else e.loc = el.value; }
+  if (e.qty === undefined && e.loc === undefined) delete SC.edits[m];
+  scStore();
+  /* repaint this row's state + the bar without losing the cursor */
+  const c = scChange(p), sys = scSys(p), dq = c && c.qty !== undefined ? Math.round((c.qty - sys) * 1000) / 1000 : null;
+  tr.className = c && (c.qty !== undefined || c.loc !== undefined) ? 'sc-chg' : c && c.same ? 'sc-ok' : '';
+  tr.querySelector('.sc-qty').classList.toggle('ed', !!(c && c.qty !== undefined)); tr.querySelector('.sc-loc').classList.toggle('ed', !!(c && c.loc !== undefined));
+  tr.querySelector('.sc-d').innerHTML = dq === null ? (c && c.same ? '<span class="up">✓ correct</span>' : '') : '<b class="' + (dq > 0 ? 'up' : 'dn') + '">' + (dq > 0 ? '+' : '') + dq + '</b>';
+  const st = scStats(), ap = document.querySelector('#scHost .sc-btns .btn.primary');
+  if (ap) { ap.disabled = !st.n; ap.textContent = 'Apply ' + st.n + ' change' + (st.n === 1 ? '' : 's'); }
+  const sg = document.querySelectorAll('#scHost .sc-sum .db2-seg button')[1]; if (sg) sg.textContent = 'Changed (' + st.n + ')';
+  const sm = document.querySelector('#scHost .sc-sum .muted'); if (sm) sm.textContent = st.counted + ' counted · ' + st.q + ' stock change' + (st.q === 1 ? '' : 's') + ' · ' + st.l + ' location change' + (st.l === 1 ? '' : 's') + ' · draft kept on this computer';
+}
+function scKey_(ev, el){
+  const k = ev.key, i = Number(el.dataset.i);
+  let to = null;
+  if (k === 'Enter' || k === 'ArrowDown') to = i + 1; else if (k === 'ArrowUp') to = i - 1;
+  if (to === null) return;
+  ev.preventDefault();
+  const n = document.querySelector('#scHost input[data-c="' + el.dataset.c + '"][data-i="' + to + '"]');
+  if (n) { n.focus(); n.select(); }
+}
+function scDiscard(){
+  if (!confirm('Discard the counted quantities and locations typed so far? (Nothing was applied yet.)')) return;
+  SC.edits = {}; scStore(); renderProducts();
+}
+/* ---------- Excel ---------- */
+function scList(){
+  /* the products as filtered on the page (same filters as the list) */
+  const keep = SC.on; SC.on = false; let L = [];
+  try { const old = window.__scCollect; window.__scCollect = a => { L = a; }; renderProducts(); window.__scCollect = old; } finally { SC.on = keep; renderProducts(); }
+  return L;
+}
+function scDownload(){
+  const L = scList();
+  if (!L.length) return toast('No products in this list.', true);
+  const filt = [$('pc') && $('pc').value, $('pb') && $('pb').value, $('ps') && $('ps').value && 'search “' + $('ps').value + '”'].filter(Boolean).join(', ');
+  sfsXlDownload('Stock count sheet ' + todayStr(), [{name:'Stock count', title:'SFS stock count sheet — ' + fmtDate(new Date()) + (filt ? ' — ' + filt : '') + ' — fill in “Counted qty” and “New location”, leave blank for no change, then upload it on Products → Stock Count',
+    rows:[['Part No.', 'Description', 'Category', 'Brand', 'Location', 'System stock', 'Counted qty', 'New location']].concat(L.map(p => { const e = SC.edits[p['Model / Part No.']] || {}; return [String(p['Model / Part No.']), p.Description || '', p.Category || '', p.Brand || '', p.Location || '', scSys(p), e.qty !== undefined ? Number(String(e.qty).replace(/,/g, '')) : '', e.loc !== undefined ? e.loc : '']; }))}]);
+  toast('Count sheet downloaded — ' + L.length + ' products.');
+}
+function scPick(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.xls';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) scRead(f); };
+  inp.click();
+}
+async function scRead(file){
+  const buf = await file.arrayBuffer();
+  let wb = null; try { wb = await oiReadXlsx(buf); } catch (e) { wb = null; }
+  if (!wb) { let XL; try { XL = await oiLoadXlsx(); const w = XL.read(buf, {type:'array'}); wb = {SheetNames:w.SheetNames, rows:{}}; w.SheetNames.forEach(n => wb.rows[n] = XL.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''})); } catch (e) { return toast('This file could not be read. Save it as .xlsx and try again.', true); } }
+  let got = 0, qn = 0, ln = 0, bad = [], unknown = [], found = false;
+  const byKey = {}; (S.products || []).forEach(p => { byKey[xrKey(p['Model / Part No.'])] = p; });
+  wb.SheetNames.forEach(n => {
+    const rows = (wb.rows[n] || []).map(r => (r || []).map(oiCell)), low = v => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    let hr = -1, C = {};
+    for (let r = 0; r < Math.min(rows.length, 15) && hr < 0; r++) { const m = {}; rows[r].forEach((v, c) => { const t = low(v); if (/^(part no\.?|part number|model( \/ part no\.?)?)$/.test(t)) m.model = c; else if (/^counted/.test(t)) m.qty = c; else if (/^new location$/.test(t)) m.loc = c; }); if (m.model !== undefined && (m.qty !== undefined || m.loc !== undefined)) { hr = r; C = m; } }
+    if (hr < 0) return; found = true;
+    for (let r = hr + 1; r < rows.length; r++) {
+      const model = String(rows[r][C.model] || '').trim(); if (!model) continue;
+      const q = C.qty !== undefined ? String(rows[r][C.qty] == null ? '' : rows[r][C.qty]).trim() : '', l = C.loc !== undefined ? String(rows[r][C.loc] == null ? '' : rows[r][C.loc]).trim() : '';
+      if (!q && !l) continue;
+      const p = byKey[xrKey(model)]; if (!p) { unknown.push(model); continue; }
+      const m = p['Model / Part No.'], e = SC.edits[m] || (SC.edits[m] = {});
+      if (q) { const v = oiNum(q); if (isNaN(v) || v < 0) { bad.push(model + ' (' + q + ')'); } else { e.qty = String(v); qn++; } }
+      if (l) { e.loc = l; ln++; }
+      if (e.qty === undefined && e.loc === undefined) delete SC.edits[m]; else got++;
+    }
+  });
+  if (!found) return toast('This is not a count sheet — it needs the columns “Part No.” and “Counted qty” / “New location”. Download the count sheet first.', true);
+  scStore(); SC.show = 'changed'; renderProducts();
+  const st = scStats();
+  modal('Count sheet uploaded', '<p><b>' + got + '</b> line' + (got === 1 ? '' : 's') + ' read — ' + qn + ' counted quantit' + (qn === 1 ? 'y' : 'ies') + ', ' + ln + ' location' + (ln === 1 ? '' : 's') + '.</p>'
+    + '<p>' + st.q + ' product' + (st.q === 1 ? '' : 's') + ' will get a new stock and ' + st.l + ' a new location. The list now shows only the changes — check them, then press <b>Apply</b>.</p>'
+    + (unknown.length ? '<p class="muted small"><b>Not in Products (' + unknown.length + '):</b> ' + esc(unknown.slice(0, 30).join(', ')) + (unknown.length > 30 ? '…' : '') + '</p>' : '')
+    + (bad.length ? '<p class="muted small" style="color:#C8102E"><b>Not a number (skipped):</b> ' + esc(bad.slice(0, 20).join(', ')) + '</p>' : '')
+    + '<div class="actions"><button class="btn primary" onclick="closeModal()">OK</button></div>');
+}
+/* ---------- apply ---------- */
+function scReview(){
+  const L = Object.keys(SC.edits).map(m => { const p = scProd(m); const c = p && scChange(p); return c && (c.qty !== undefined || c.loc !== undefined) ? {m:m, p:p, c:c} : null; }).filter(Boolean);
+  if (!L.length) return toast('Nothing to apply.', true);
+  const plus = L.filter(x => x.c.qty !== undefined && x.c.qty > scSys(x.p)).length, minus = L.filter(x => x.c.qty !== undefined && x.c.qty < scSys(x.p)).length;
+  modal('Apply stock count — ' + L.length + ' product' + (L.length === 1 ? '' : 's'), '<div class="sc-rv"><p>' + plus + ' up · ' + minus + ' down · ' + L.filter(x => x.c.loc !== undefined).length + ' location change(s). Each stock change is saved as a <b>Stock Adjustment</b> (shown in the product\'s stock history).</p>'
+    + '<label>Reason<input id="scReason" value="' + esc(SC.reason) + '" maxlength="120" oninput="SC.reason=this.value;scStore()"></label>'
+    + '<div class="table-wrap" style="max-height:48vh;overflow:auto"><table class="pt-t"><thead><tr><th>Part No.</th><th>Location</th><th class="r">Stock</th><th class="r">Counted</th><th class="r">Difference</th></tr></thead><tbody>'
+    + L.map(x => { const sys = scSys(x.p), d = x.c.qty !== undefined ? Math.round((x.c.qty - sys) * 1000) / 1000 : null; return '<tr><td><b>' + esc(x.m) + '</b><div class="pt-sm">' + esc(String(x.p.Description || '').slice(0, 60)) + '</div></td><td>' + (x.c.loc !== undefined ? '<s class="muted">' + esc(x.p.Location || '—') + '</s> → <b>' + esc(x.c.loc || '(blank)') + '</b>' : esc(x.p.Location || '')) + '</td>'
+      + '<td class="r">' + sys + '</td><td class="r">' + (x.c.qty !== undefined ? '<b>' + x.c.qty + '</b>' : '—') + '</td><td class="r">' + (d === null ? '' : '<b class="' + (d > 0 ? 'up' : 'dn') + '">' + (d > 0 ? '+' : '') + d + '</b>') + '</td></tr>'; }).join('')
+    + '</tbody></table></div><div class="actions"><button class="btn" onclick="closeModal()">Back</button><button class="btn primary" id="scGo" onclick="scApply()">Apply ' + L.length + ' change' + (L.length === 1 ? '' : 's') + '</button></div></div>');
+}
+async function scApply(){
+  const L = Object.keys(SC.edits).map(m => { const p = scProd(m); const c = p && scChange(p); return c && (c.qty !== undefined || c.loc !== undefined) ? {model:m, qty:c.qty !== undefined ? c.qty : '', location:c.loc !== undefined ? c.loc : undefined, seen:c.qty !== undefined ? scSys(p) : ''} : null; }).filter(Boolean);
+  if (!L.length) return;
+  const b = $('scGo'); if (b) { b.disabled = true; b.textContent = 'Applying…'; }
+  const reason = ($('scReason') && $('scReason').value.trim()) || SC.reason || 'Stock count';
+  let q = 0, l = 0, miss = [], drift = [], err = '';
+  for (let i = 0; i < L.length; i += 300) {
+    const part = L.slice(i, i + 300);
+    const r = await api('stockCount', {rows:part, reason:reason});
+    if (!r || !r.ok) { err = (r && r.error) || 'Could not save.'; if (r && /unknown action/i.test(err)) err += ' — paste the new Code.gs in Apps Script and deploy a New version.'; break; }
+    q += r.qtyChanged || 0; l += r.locChanged || 0; miss = miss.concat(r.missing || []); drift = drift.concat(r.drift || []);
+    part.forEach(x => { delete SC.edits[x.model]; });   /* applied: off the draft */
+    scStore();
+  }
+  await refresh();
+  if (err) { toast(err + (q || l ? ' (' + q + ' stock and ' + l + ' location changes were applied before this.)' : ''), true); if (b) { b.disabled = false; b.textContent = 'Apply again'; } return; }
+  SC.show = 'all'; renderProducts();
+  modal('Stock count applied', '<p>✓ <b>' + q + '</b> stock quantit' + (q === 1 ? 'y' : 'ies') + ' and <b>' + l + '</b> location' + (l === 1 ? '' : 's') + ' updated.</p>'
+    + (drift.length ? '<p class="muted small"><b>Note:</b> the stock of ' + drift.length + ' product(s) changed while you were counting (a DC / invoice / import). The counted quantity was set anyway: ' + esc(drift.slice(0, 15).map(x => x.model + ' ' + x.seen + '→' + x.now).join(', ')) + '</p>' : '')
+    + (miss.length ? '<p class="muted small">Not found: ' + esc(miss.join(', ')) + '</p>' : '')
+    + '<div class="actions"><button class="btn primary" onclick="closeModal()">OK</button></div>');
+}
+Object.assign(window, {SC, scToggle, scEdit, scKey_, scDiscard, scDownload, scPick, scReview, scApply});
 
 
 /* ============================================================
