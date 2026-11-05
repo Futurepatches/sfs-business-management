@@ -2097,3 +2097,4 @@ tr.inc-click{cursor:pointer}tr.inc-click:hover td{background:#f3f6fb}
 .pt-t td .xref{white-space:normal}
 @media (max-width:860px){.pt .ph-sub{display:none}.pt-tiles{grid-template-columns:1fr 1fr}.pt-tile{min-height:76px;padding:10px 12px}.pt-tile .ic{display:none}.pt{overflow-x:auto}.pt-t td,.pt-t th{padding:6px 8px}}
 @media (max-width:860px){.pt .pt-hm{display:none}}
+.doc-qr:not([data-signed]){display:none}
